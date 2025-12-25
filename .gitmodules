@@ -1,0 +1,32 @@
+[submodule "library/borealis"]
+	path = library/borealis
+	url = git@github.com:xlanor/borealis.git
+[submodule "library/chiaki-ng"]
+	path = library/chiaki-ng
+	url = https://github.com/xlanor/chiaki-ng.git
+	branch = libnx
+[submodule "library/curl-libnx"]
+	path = library/curl-libnx
+	url = https://github.com/xlanor/curl.git
+	branch = libnx-vtls
+[submodule "references/wiliwili"]
+	path = references/wiliwili
+	url = https://github.com/xfangfang/wiliwili.git
+[submodule "references/chiaki-docker-switch"]
+	path = references/chiaki-docker-switch
+	url = https://github.com/xlanor/chiaki-docker-switch.git
+[submodule "references/switchfin"]
+	path = references/switchfin
+	url = https://github.com/dragonflylee/switchfin
+[submodule "references/moonlight-switch"]
+	path = references/moonlight-switch
+	url = git@github.com:XITRIX/Moonlight-Switch.git
+[submodule "references/nxmp"]
+	path = references/nxmp
+	url = git@github.com:proconsule/nxmp.git
+[submodule "references/deko3d"]
+	path = references/deko3d
+	url = git@github.com:devkitPro/deko3d.git
+[submodule "references/psn-api"]
+	path = references/psn-api
+	url = git@github.com:achievements-app/psn-api.git

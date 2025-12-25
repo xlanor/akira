@@ -1,0 +1,117 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    grow="1.0">
+
+    <brls:ScrollingFrame
+        width="auto"
+        height="auto"
+        grow="1.0">
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            paddingTop="@style/brls/tab_frame/content_padding_top_bottom"
+            paddingBottom="@style/brls/tab_frame/content_padding_top_bottom"
+            paddingLeft="@style/brls/tab_frame/content_padding_sides"
+            paddingRight="@style/brls/tab_frame/content_padding_sides">
+
+        <brls:Header
+            title="Video Settings"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30">
+
+            <brls:SelectorCell
+                id="settings/resolution"
+                title="Resolution"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SelectorCell
+                id="settings/fps"
+                title="Frame Rate"
+                marginLeft="15"
+                marginRight="15"/>
+
+        </brls:Box>
+
+        <brls:Header
+            title="Controller"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30">
+
+            <brls:SelectorCell
+                id="settings/haptic"
+                title="Haptic Feedback"
+                marginLeft="15"
+                marginRight="15"/>
+
+        </brls:Box>
+
+        <brls:Header
+            title="PSN Account"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30"
+            paddingTop="15"
+            paddingBottom="15">
+
+            <brls:InputCell
+                id="settings/psnOnlineId"
+                title="PSN Online ID"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="row"
+                justifyContent="center"
+                marginTop="10"
+                marginBottom="10">
+
+                <brls:Button
+                    id="settings/lookupBtn"
+                    text="Look Up Account ID"
+                    style="bordered"
+                    width="200"/>
+
+            </brls:Box>
+
+            <brls:InputCell
+                id="settings/psnAccountId"
+                title="Account ID (Base64)"
+                marginLeft="15"
+                marginRight="15"/>
+
+        </brls:Box>
+
+        </brls:Box>
+
+    </brls:ScrollingFrame>
+
+</brls:Box>

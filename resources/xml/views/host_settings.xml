@@ -1,0 +1,100 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    grow="1.0"
+    paddingTop="@style/brls/tab_frame/content_padding_top_bottom"
+    paddingLeft="@style/brls/tab_frame/content_padding_sides"
+    paddingRight="@style/brls/tab_frame/content_padding_sides"
+    paddingBottom="@style/brls/tab_frame/content_padding_top_bottom"
+    justifyContent="flexStart"
+    alignItems="center">
+
+    <brls:Label
+        id="host_settings/title"
+        text="Host Settings"
+        fontSize="24"
+        marginBottom="30"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="column"
+        grow="1.0"
+        backgroundColor="@theme/color/card"
+        cornerRadius="8"
+        marginBottom="30"
+        paddingTop="15"
+        paddingBottom="15">
+
+        <brls:InputCell
+            id="host_settings/psnAccountId"
+            title="PSN Account ID"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:InputCell
+            id="host_settings/psnOnlineId"
+            title="Look up by Online ID"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            justifyContent="center"
+            marginTop="10"
+            marginBottom="10">
+
+            <brls:Button
+                id="host_settings/lookupBtn"
+                text="Look Up"
+                style="bordered"
+                width="150"/>
+
+        </brls:Box>
+
+        <brls:InputCell
+            id="host_settings/consolePIN"
+            title="Console PIN"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:SelectorCell
+            id="host_settings/haptic"
+            title="Haptic Feedback"
+            marginLeft="15"
+            marginRight="15"/>
+
+    </brls:Box>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="row"
+        justifyContent="center"
+        marginBottom="15">
+
+        <brls:Button
+            id="host_settings/cancelBtn"
+            text="Cancel"
+            style="bordered"
+            width="150"
+            marginRight="15"/>
+
+        <brls:Button
+            id="host_settings/saveBtn"
+            text="Save"
+            style="primary"
+            width="150"/>
+
+    </brls:Box>
+
+    <brls:Label
+        id="host_settings/hint"
+        text="Leave PSN Account ID empty to use global setting"
+        fontSize="12"
+        textColor="#888888"/>
+
+</brls:Box>

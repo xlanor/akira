@@ -1,0 +1,80 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - '*'
+      - '!docker-*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Extract version from CMakeLists.txt
+        id: version
+        run: |
+          VERSION_MAJOR=$(grep 'set(VERSION_MAJOR' CMakeLists.txt | sed 's/[^0-9]*//g')
+          VERSION_MINOR=$(grep 'set(VERSION_MINOR' CMakeLists.txt | sed 's/[^0-9]*//g')
+          VERSION_REVISION=$(grep 'set(VERSION_REVISION' CMakeLists.txt | sed 's/[^0-9]*//g')
+          VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REVISION}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Detected version: ${VERSION}"
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Akira
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/build" \
+            -w /build \
+            ghcr.io/${{ github.repository_owner }}/akira-builder:latest \
+            bash -c "
+              set -e
+              git config --global --add safe.directory /build
+              git config --global --add safe.directory /build/library/borealis
+              git config --global --add safe.directory /build/library/chiaki-ng
+              git config --global --add safe.directory /build/library/curl-libnx
+              chmod +x /build/scripts/build-docker.sh
+              /build/scripts/build-docker.sh
+            "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: akira-nro
+          path: build/akira.nro
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: akira-nro
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: akira.nro
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}

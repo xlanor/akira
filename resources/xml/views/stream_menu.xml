@@ -1,0 +1,88 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    justifyContent="center"
+    alignItems="center"
+    backgroundColor="@theme/brls/backdrop">
+
+    <brls:Box
+        width="400"
+        height="auto"
+        axis="column"
+        cornerRadius="4"
+        backgroundColor="@theme/brls/background">
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            justifyContent="center"
+            alignItems="center"
+            paddingTop="30"
+            paddingBottom="20"
+            paddingLeft="30"
+            paddingRight="30">
+
+            <brls:Label
+                width="auto"
+                height="auto"
+                text="Stream Menu"
+                fontSize="24"/>
+
+        </brls:Box>
+
+        <brls:Rectangle
+            width="auto"
+            height="1"
+            color="@theme/brls/sidebar/separator"/>
+
+        <brls:Button
+            id="stream_menu/stats"
+            width="auto"
+            height="72"
+            focusable="true"
+            justifyContent="center"
+            alignItems="center"
+            highlightCornerRadius="6"
+            style="borderless"
+            textColor="@theme/brls/accent"
+            text="Show Stats"/>
+
+        <brls:Rectangle
+            width="auto"
+            height="1"
+            color="@theme/brls/sidebar/separator"/>
+
+        <brls:Button
+            id="stream_menu/disconnect"
+            width="auto"
+            height="72"
+            focusable="true"
+            justifyContent="center"
+            alignItems="center"
+            highlightCornerRadius="6"
+            style="borderless"
+            textColor="@theme/brls/accent"
+            text="Disconnect"/>
+
+        <brls:Rectangle
+            width="auto"
+            height="1"
+            color="@theme/brls/sidebar/separator"/>
+
+        <brls:Button
+            id="stream_menu/sleep"
+            width="auto"
+            height="72"
+            focusable="true"
+            justifyContent="center"
+            alignItems="center"
+            highlightCornerRadius="6"
+            style="borderless"
+            textColor="@theme/brls/accent"
+            text="Disconnect & Sleep"/>
+
+    </brls:Box>
+
+</brls:Box>

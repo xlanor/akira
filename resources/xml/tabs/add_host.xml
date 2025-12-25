@@ -1,0 +1,62 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    grow="1.0"
+    paddingTop="@style/brls/tab_frame/content_padding_top_bottom"
+    paddingLeft="@style/brls/tab_frame/content_padding_sides"
+    paddingRight="@style/brls/tab_frame/content_padding_sides"
+    paddingBottom="@style/brls/tab_frame/content_padding_top_bottom"
+    justifyContent="flexStart"
+    alignItems="center">
+
+    <brls:Label
+        text="Add PlayStation Console"
+        fontSize="24"
+        marginBottom="30"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="column"
+        grow="1.0"
+        backgroundColor="@theme/color/card"
+        cornerRadius="8"
+        marginBottom="30"
+        paddingTop="15"
+        paddingBottom="15">
+
+        <brls:InputCell
+            id="add/hostName"
+            title="Console Name"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:InputCell
+            id="add/hostAddr"
+            title="IP Address"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:SelectorCell
+            id="add/target"
+            title="Console Type"
+            marginLeft="15"
+            marginRight="15"/>
+
+    </brls:Box>
+
+    <brls:Button
+        id="add/saveBtn"
+        text="Add Console"
+        style="primary"
+        width="200"
+        marginBottom="15"/>
+
+    <brls:Label
+        id="add/status"
+        text=""
+        fontSize="14"
+        textColor="#888888"/>
+
+</brls:Box>

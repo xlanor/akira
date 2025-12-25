@@ -1,0 +1,53 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    grow="1.0"
+    paddingTop="@style/brls/tab_frame/content_padding_top_bottom"
+    paddingLeft="@style/brls/tab_frame/content_padding_sides"
+    paddingRight="@style/brls/tab_frame/content_padding_sides"
+    paddingBottom="@style/brls/tab_frame/content_padding_top_bottom">
+
+    <brls:Label
+        text="PlayStation Consoles"
+        fontSize="24"
+        marginBottom="12"/>
+
+    <brls:ScrollingFrame
+        id="host/scroll"
+        width="auto"
+        height="auto"
+        grow="1.0">
+
+        <brls:Box
+            id="host/container"
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"/>
+
+    </brls:ScrollingFrame>
+
+    <brls:Box
+        id="empty/message"
+        width="auto"
+        height="auto"
+        axis="column"
+        grow="1.0"
+        justifyContent="center"
+        alignItems="center"
+        visibility="gone">
+
+        <brls:Label
+            text="No consoles found"
+            fontSize="20"
+            textColor="#888888"
+            marginBottom="10"/>
+
+        <brls:Label
+            text="Make sure your PlayStation is on the same network"
+            fontSize="14"
+            textColor="#666666"/>
+    </brls:Box>
+
+</brls:Box>

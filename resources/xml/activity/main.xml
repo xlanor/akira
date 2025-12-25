@@ -1,0 +1,26 @@
+<brls:AppletFrame headerHidden="false" footerHidden="false">
+    <brls:TabFrame
+        id="main/tabFrame"
+        title="Akira"
+        grow="1.0">
+
+        <brls:Tab label="Hosts">
+            <HostListTab/>
+        </brls:Tab>
+
+        <brls:Tab label="Settings">
+            <SettingsTab/>
+        </brls:Tab>
+
+        <brls:Separator/>
+
+        <brls:Tab label="Add Host">
+            <AddHostTab/>
+        </brls:Tab>
+
+        <brls:Tab label="Build Info">
+            <BuildInfoTab/>
+        </brls:Tab>
+
+    </brls:TabFrame>
+</brls:AppletFrame>

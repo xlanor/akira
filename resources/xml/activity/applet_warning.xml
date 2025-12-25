@@ -1,0 +1,14 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    justifyContent="center"
+    alignItems="center"
+    grow="1.0">
+
+    <brls:Label
+        width="auto"
+        height="auto"
+        text="Please launch Akira in application mode"
+        fontSize="28"/>
+</brls:Box>
