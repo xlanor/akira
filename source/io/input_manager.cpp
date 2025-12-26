@@ -191,9 +191,14 @@ bool InputManager::readSixAxis(ChiakiControllerState* state)
     state->gyro_x = sixaxis.angular_velocity.x * 2.0f * M_PI;
     state->gyro_y = sixaxis.angular_velocity.z * 2.0f * M_PI;
     state->gyro_z = -sixaxis.angular_velocity.y * 2.0f * M_PI;
-    state->accel_x = -sixaxis.acceleration.x;
-    state->accel_y = -sixaxis.acceleration.z;
-    state->accel_z = sixaxis.acceleration.y;
+
+    m_raw_accel_x = -sixaxis.acceleration.x;
+    m_raw_accel_y = -sixaxis.acceleration.z;
+    m_raw_accel_z = sixaxis.acceleration.y;
+
+    state->accel_x = m_raw_accel_x - m_accel_zero_x;
+    state->accel_y = m_raw_accel_y - m_accel_zero_y;
+    state->accel_z = m_raw_accel_z - m_accel_zero_z;
 
     // Convert rotation matrix to quaternion
     float (*dm)[3] = sixaxis.direction.direction;
@@ -236,4 +241,18 @@ bool InputManager::readSixAxis(ChiakiControllerState* state)
     state->orient_z = -q[2] * fac;
     state->orient_w = q[3] * fac;
     return true;
+}
+
+void InputManager::resetMotionControls()
+{
+    m_accel_zero_x = m_raw_accel_x;
+    m_accel_zero_y = m_raw_accel_y - 1.0f;
+    m_accel_zero_z = m_raw_accel_z;
+
+    for (int i = 0; i < 4; i++) {
+        hidResetSixAxisSensorFusionParameters(m_sixaxis_handles[i]);
+    }
+
+    brls::Logger::info("Motion controls reset: zero offset = ({}, {}, {})",
+        m_accel_zero_x, m_accel_zero_y, m_accel_zero_z);
 }

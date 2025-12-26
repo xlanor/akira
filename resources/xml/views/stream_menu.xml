@@ -83,6 +83,23 @@
             textColor="@theme/brls/accent"
             text="Disconnect & Sleep"/>
 
+        <brls:Rectangle
+            width="auto"
+            height="1"
+            color="@theme/brls/sidebar/separator"/>
+
+        <brls:Button
+            id="stream_menu/reset_gyro"
+            width="auto"
+            height="72"
+            focusable="true"
+            justifyContent="center"
+            alignItems="center"
+            highlightCornerRadius="6"
+            style="borderless"
+            textColor="@theme/brls/accent"
+            text="Reset Gyro (Debug)"/>
+
     </brls:Box>
 
 </brls:Box>

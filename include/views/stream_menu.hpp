@@ -12,6 +12,7 @@ public:
     void setOnStatsToggle(std::function<void(bool)> callback);
     void setOnDisconnect(std::function<void(bool sleep)> callback);
     void setOnDismiss(std::function<void()> callback);
+    void setOnGyroReset(std::function<void()> callback);
 
     void setStatsEnabled(bool enabled);
 
@@ -23,8 +24,10 @@ private:
     std::function<void(bool)> onStatsToggle;
     std::function<void(bool)> onDisconnect;
     std::function<void()> onDismiss;
+    std::function<void()> onGyroReset;
 
     BRLS_BIND(brls::Button, statsButton, "stream_menu/stats");
+    BRLS_BIND(brls::Button, resetGyroButton, "stream_menu/reset_gyro");
     BRLS_BIND(brls::Button, disconnectButton, "stream_menu/disconnect");
     BRLS_BIND(brls::Button, sleepButton, "stream_menu/sleep");
 };

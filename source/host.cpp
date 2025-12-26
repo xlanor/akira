@@ -453,6 +453,14 @@ void Host::connectionEventCallback(ChiakiEvent* event)
                 onQuit(&event->quit);
             }
             break;
+
+        case CHIAKI_EVENT_MOTION_RESET:
+            brls::Logger::info("EventCB CHIAKI_EVENT_MOTION_RESET");
+            if (onMotionReset)
+            {
+                onMotionReset();
+            }
+            break;
     }
 }
 

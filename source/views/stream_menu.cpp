@@ -31,6 +31,14 @@ StreamMenu::StreamMenu()
         return true;
     });
 
+    this->resetGyroButton->registerClickAction([this](brls::View*) {
+        brls::Logger::info("StreamMenu: reset gyro button clicked");
+        if (this->onGyroReset)
+            this->onGyroReset();
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        return true;
+    });
+
     this->disconnectButton->registerClickAction([this](brls::View*) {
         brls::Logger::info("StreamMenu: disconnect button clicked");
         if (this->onDisconnect)
@@ -75,6 +83,11 @@ void StreamMenu::setOnDisconnect(std::function<void(bool sleep)> callback)
 void StreamMenu::setOnDismiss(std::function<void()> callback)
 {
     this->onDismiss = callback;
+}
+
+void StreamMenu::setOnGyroReset(std::function<void()> callback)
+{
+    this->onGyroReset = callback;
 }
 
 void StreamMenu::setStatsEnabled(bool enabled)

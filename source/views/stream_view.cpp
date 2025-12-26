@@ -2,6 +2,7 @@
 #include "views/stream_menu.hpp"
 #include "views/enter_pin_view.hpp"
 #include "core/exception.hpp"
+#include "core/io/input_manager.hpp"
 #include <switch.h>
 
 StreamView::StreamView(Host* host)
@@ -51,6 +52,12 @@ StreamView::StreamView(Host* host)
 
     host->setOnReadController([this](ChiakiControllerState* state, std::map<uint32_t, int8_t>* fingerIdTouchId) {
         io->UpdateControllerState(state, fingerIdTouchId);
+    });
+
+    host->setOnMotionReset([this]() {
+        if (io->getInputManager()) {
+            io->getInputManager()->resetMotionControls();
+        }
     });
 
      exitSubscription = brls::Application::getExitEvent()->subscribe([this]() {
@@ -378,6 +385,15 @@ void StreamView::showDisconnectMenu()
     menu->setOnStatsToggle([this](bool enabled) {
         brls::Logger::info("Stats overlay toggled: {}", enabled);
         io->setShowStatsOverlay(enabled);
+        menuOpen = false;
+        brls::Application::blockInputs(true);
+    });
+
+    menu->setOnGyroReset([this]() {
+        brls::Logger::info("Gyro reset triggered from menu");
+        if (io->getInputManager()) {
+            io->getInputManager()->resetMotionControls();
+        }
         menuOpen = false;
         brls::Application::blockInputs(true);
     });
