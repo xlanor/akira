@@ -94,6 +94,7 @@ private:
     std::function<void()> onRegistCanceled;
     std::function<void()> onRegistFailed;
     std::function<void()> onRegistSuccess;
+    std::function<void()> onMotionReset;
 
 public:
     explicit Host(const std::string& name);
@@ -180,6 +181,7 @@ public:
     void setOnRegistCanceled(std::function<void()> callback) { onRegistCanceled = std::move(callback); }
     void setOnRegistFailed(std::function<void()> callback) { onRegistFailed = std::move(callback); }
     void setOnRegistSuccess(std::function<void()> callback) { onRegistSuccess = std::move(callback); }
+    void setOnMotionReset(std::function<void()> callback) { onMotionReset = std::move(callback); }
 };
 
 #endif // AKIRA_HOST_HPP

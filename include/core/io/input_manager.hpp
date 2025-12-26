@@ -43,6 +43,20 @@ private:
     PadState m_pad;
     HidSixAxisSensorHandle m_sixaxis_handles[4];
     int m_sixaxis_frame_counter = 0;
+
+    // Accelerometer zero offset for gyro reset
+    float m_accel_zero_x = 0.0f;
+    float m_accel_zero_y = 0.0f;
+    float m_accel_zero_z = 0.0f;
+
+    // Current raw accel values (before offset applied)
+    float m_raw_accel_x = 0.0f;
+    float m_raw_accel_y = 0.0f;
+    float m_raw_accel_z = 0.0f;
+
+public:
+    // Motion control reset (called when PS4/PS5 requests gyro recalibration)
+    void resetMotionControls();
 };
 
 #endif // AKIRA_IO_INPUT_MANAGER_HPP

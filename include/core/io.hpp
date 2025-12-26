@@ -86,6 +86,8 @@ public:
     bool getShowStatsOverlay() const { return m_show_stats_overlay; }
     void setShowStatsOverlay(bool show) { m_show_stats_overlay = show; }
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);
+
+    InputManager* getInputManager() { return m_input_manager; }
 };
 
 #endif // AKIRA_IO_HPP
