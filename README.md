@@ -1,5 +1,5 @@
 # Akira
-Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
+Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises a forked variant of [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
 
 <p align="center">
   <img src="readme/akira_hosts.jpg" width="30%">
@@ -36,7 +36,7 @@ I really do not recomend you do 1080p/60fps even though the option is there. 720
 
 This software relied extremely heavily on refrencing/taking bits from:
 
-- [Streetpea](https://github.com/streetpea/chiaki-ng) the original switch code
+- [Streetpea](https://github.com/streetpea/chiaki-ng) the original chiaki-ng code
 - [moonlight-switch](https://github.com/XITRIX/Moonlight-Switch) XITRIX's deko3d renderer for moonlight for the deko3d bits
 - [switchfin](https://github.com/dragonflylee/switchfin/blob/bbcf9037fc3b11a78f5e0b7489d9e776fff2d99c/scripts/switch/mpv/deko3d.patch#L371) The patches used by dragonflylee in switchfin
 - [wiliwili](github.com/xfangfang/wiliwili) WiliWili for how to get started with this new borealis api.
