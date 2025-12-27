@@ -4,16 +4,20 @@
 #include <borealis.hpp>
 #include <chrono>
 #include <deque>
+#include <memory>
 #include <mutex>
 
 #include "core/host.hpp"
 #include "core/io.hpp"
 #include "core/settings_manager.hpp"
 
-class StreamView : public brls::Box {
+class StreamView : public brls::Box, public std::enable_shared_from_this<StreamView> {
 public:
     explicit StreamView(Host* host);
     ~StreamView() override;
+
+    // Must be called after make_shared to enable weak_from_this()
+    void setupCallbacks();
 
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;

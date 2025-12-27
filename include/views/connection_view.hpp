@@ -4,16 +4,20 @@
 #include <borealis.hpp>
 #include <chiaki/thread.h>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <atomic>
 
 #include "core/host.hpp"
 #include "core/io.hpp"
 
-class ConnectionView : public brls::Box {
+class ConnectionView : public brls::Box, public std::enable_shared_from_this<ConnectionView> {
 public:
     explicit ConnectionView(Host* host);
     ~ConnectionView() override;
+
+    // Must be called after make_shared to enable weak_from_this() and start connection
+    void setupAndStart();
 
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override;

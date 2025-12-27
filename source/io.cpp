@@ -197,8 +197,11 @@ void IO::CleanUpHaptic()
 
 bool IO::InitAVCodec(bool is_PS5, int video_width, int video_height)
 {
+    // Recreate decoder if it was freed (e.g., after disconnect)
     if (!m_video_decoder)
-        return false;
+    {
+        m_video_decoder = new VideoDecoder();
+    }
 
     return m_video_decoder->initCodec(is_PS5, video_width, video_height);
 }

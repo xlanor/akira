@@ -1,6 +1,7 @@
 #include "views/connection_view.hpp"
 #include "views/stream_view.hpp"
 #include "core/discovery_manager.hpp"
+#include "util/shared_view_holder.hpp"
 #include <chiaki/remote/holepunch.h>
 
 ConnectionView::ConnectionView(Host* host)
@@ -15,23 +16,32 @@ ConnectionView::ConnectionView(Host* host)
     auto* titleLabel = (brls::Label*)this->getView("connection/title");
     titleLabel->setText("Connecting to " + host->getHostName());
 
+    setFocusable(true);
+}
+
+void ConnectionView::setupAndStart()
+{
+    auto weak = weak_from_this();
+
     auto* cancelBtn = (brls::Button*)this->getView("connection/cancel");
-    cancelBtn->registerClickAction([this](brls::View* view) {
-        brls::Logger::info("Connection cancelled by user");
-        if (connectionRunning) {
-            this->host->cancelHolepunch();
+    cancelBtn->registerClickAction([weak](brls::View* view) {
+        if (auto self = weak.lock()) {
+            brls::Logger::info("Connection cancelled by user");
+            if (self->connectionRunning) {
+                self->host->cancelHolepunch();
+            }
+            brls::sync([]() {
+                brls::Application::popActivity();
+            });
         }
-        brls::sync([]() {
-            brls::Application::popActivity();
-        });
         return true;
     });
 
-    setFocusable(true);
-
     logSubscription = brls::Logger::getLogEvent()->subscribe(
-        [this](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
-            addLogLine(msg, level);
+        [weak](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
+            if (auto self = weak.lock()) {
+                self->addLogLine(msg, level);
+            }
         });
 
     addLogLine("Starting connection...", brls::LogLevel::LOG_INFO);
@@ -48,6 +58,8 @@ ConnectionView::~ConnectionView()
     if (threadStarted) {
         chiaki_thread_join(&connectionThread, nullptr);
     }
+
+    SharedViewHolder::release(this);
 }
 
 brls::View* ConnectionView::create()
@@ -108,6 +120,12 @@ void ConnectionView::updateLogDisplay()
     logsNeedUpdate = false;
 }
 
+// Helper struct to pass weak_ptr through C thread API
+struct ConnectionThreadArgs {
+    std::weak_ptr<ConnectionView> weak;
+    Host* host;  // Host pointer is safe - it outlives the connection
+};
+
 void ConnectionView::startConnection()
 {
     connectionRunning = true;
@@ -115,8 +133,12 @@ void ConnectionView::startConnection()
     connectionSuccess = false;
     threadStarted = false;
 
-    ChiakiErrorCode err = chiaki_thread_create(&connectionThread, connectionThreadFunc, this);
+    // Create thread args with weak_ptr for safe access
+    auto* args = new ConnectionThreadArgs{weak_from_this(), host};
+
+    ChiakiErrorCode err = chiaki_thread_create(&connectionThread, connectionThreadFunc, args);
     if (err != CHIAKI_ERR_SUCCESS) {
+        delete args;
         connectionRunning = false;
         connectionFinished = true;
         connectionError = "Failed to create connection thread";
@@ -128,19 +150,23 @@ void ConnectionView::startConnection()
 
 void* ConnectionView::connectionThreadFunc(void* user)
 {
-    ConnectionView* view = (ConnectionView*)user;
-    Host* host = view->host;
+    auto* args = static_cast<ConnectionThreadArgs*>(user);
+    auto weak = args->weak;
+    Host* host = args->host;
+    delete args;
 
     brls::Logger::info("Connection thread started");
 
     if (host->isRemote()) {
         auto* dm = DiscoveryManager::getInstance();
         if (!dm->isPsnTokenValid()) {
-            view->connectionError = "PSN token expired. Please refresh in settings.";
-            brls::Logger::error("{}", view->connectionError);
-            view->connectionSuccess = false;
-            view->connectionFinished = true;
-            view->connectionRunning = false;
+            if (auto view = weak.lock()) {
+                view->connectionError = "PSN token expired. Please refresh in settings.";
+                brls::Logger::error("{}", view->connectionError);
+                view->connectionSuccess = false;
+                view->connectionFinished = true;
+                view->connectionRunning = false;
+            }
             return nullptr;
         }
 
@@ -148,23 +174,29 @@ void* ConnectionView::connectionThreadFunc(void* user)
 
         ChiakiErrorCode err = host->connectHolepunch();
         if (err != CHIAKI_ERR_SUCCESS) {
-            view->connectionError = std::string("Holepunch failed: ") + chiaki_error_string(err);
-            brls::Logger::error("{}", view->connectionError);
-            view->connectionSuccess = false;
-            view->connectionFinished = true;
-            view->connectionRunning = false;
+            if (auto view = weak.lock()) {
+                view->connectionError = std::string("Holepunch failed: ") + chiaki_error_string(err);
+                brls::Logger::error("{}", view->connectionError);
+                view->connectionSuccess = false;
+                view->connectionFinished = true;
+                view->connectionRunning = false;
+            }
             return nullptr;
         }
 
         brls::Logger::info("CTRL holepunch successful! Transitioning to StreamView...");
 
-        view->connectionSuccess = true;
-        view->connectionFinished = true;
-        view->connectionRunning = false;
+        if (auto view = weak.lock()) {
+            view->connectionSuccess = true;
+            view->connectionFinished = true;
+            view->connectionRunning = false;
+        }
     } else {
-        view->connectionSuccess = true;
-        view->connectionFinished = true;
-        view->connectionRunning = false;
+        if (auto view = weak.lock()) {
+            view->connectionSuccess = true;
+            view->connectionFinished = true;
+            view->connectionRunning = false;
+        }
         brls::Logger::info("Local connection - ready to stream");
     }
 
@@ -176,11 +208,12 @@ void ConnectionView::onConnectionComplete()
     if (connectionSuccess) {
         brls::Logger::info("Transitioning to stream view...");
 
-        auto* streamView = new StreamView(host);
+        auto streamView = SharedViewHolder::holdNew<StreamView>(host);
+        streamView->setupCallbacks();
 
-        brls::sync([this, streamView]() {
+        brls::sync([streamView]() {
             brls::Application::popActivity();
-            brls::Application::pushActivity(new brls::Activity(streamView));
+            brls::Application::pushActivity(new brls::Activity(streamView.get()));
             streamView->startStream();
         });
     } else {

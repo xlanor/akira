@@ -5,6 +5,7 @@
 #include "views/host_settings_view.hpp"
 #include "core/host.hpp"
 #include "core/io.hpp"
+#include "util/shared_view_holder.hpp"
 
 #include <ctime>
 
@@ -204,11 +205,13 @@ private:
             HostListTab::isActive = false;
 
             if (host->isRemote()) {
-                auto* connectionView = new ConnectionView(host);
-                brls::Application::pushActivity(new brls::Activity(connectionView));
+                auto connectionView = SharedViewHolder::holdNew<ConnectionView>(host);
+                brls::Application::pushActivity(new brls::Activity(connectionView.get()));
+                connectionView->setupAndStart();
             } else {
-                auto* streamView = new StreamView(host);
-                brls::Application::pushActivity(new brls::Activity(streamView));
+                auto streamView = SharedViewHolder::holdNew<StreamView>(host);
+                streamView->setupCallbacks();
+                brls::Application::pushActivity(new brls::Activity(streamView.get()));
                 streamView->startStream();
             }
 

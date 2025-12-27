@@ -4,6 +4,7 @@
 #include "core/exception.hpp"
 #include "core/io/input_manager.hpp"
 #include "core/discovery_manager.hpp"
+#include "util/shared_view_holder.hpp"
 #include <switch.h>
 
 StreamView::StreamView(Host* host)
@@ -13,68 +14,68 @@ StreamView::StreamView(Host* host)
     this->settings = SettingsManager::getInstance();
 
     setFocusable(true);
+}
 
-    ASYNC_RETAIN  // Creates token/tokenCounter, increments counter to 1
-    (*deletionTokenCounter)++;  // Increment for onQuit (counter = 2)
-    (*deletionTokenCounter)++;  // Increment for onLoginPinRequest (counter = 3)
+void StreamView::setupCallbacks()
+{
+    auto weak = weak_from_this();
 
-    host->setOnConnected([this, token, tokenCounter]() {
-        // Check if View was destroyed before accessing any members
-        if (*token) {
-            (*tokenCounter)--;
-            if (*tokenCounter == 0) { delete token; delete tokenCounter; }
-            return;
-        }
-        onConnected();
-    });
-
-    host->setOnQuit([this, token, tokenCounter](ChiakiQuitEvent* event) {
-        // Check if View was destroyed before accessing any members
-        if (*token) {
-            (*tokenCounter)--;
-            if (*tokenCounter == 0) { delete token; delete tokenCounter; }
-            return;
-        }
-        onQuit(event);
-    });
-
-    host->setOnRumble([this](uint8_t left, uint8_t right) {
-        onRumble(left, right);
-    });
-
-    host->setOnLoginPinRequest([this, token, tokenCounter](bool pinIncorrect) {
-        if (*token) {
-            (*tokenCounter)--;
-            if (*tokenCounter == 0) { delete token; delete tokenCounter; }
-            return;
-        }
-        onLoginPinRequest(pinIncorrect);
-    });
-
-    host->setOnReadController([this](ChiakiControllerState* state, std::map<uint32_t, int8_t>* fingerIdTouchId) {
-        io->UpdateControllerState(state, fingerIdTouchId);
-    });
-
-    host->setOnMotionReset([this]() {
-        if (io->getInputManager()) {
-            io->getInputManager()->resetMotionControls();
+    host->setOnConnected([weak]() {
+        if (auto self = weak.lock()) {
+            self->onConnected();
         }
     });
 
-    exitSubscription = brls::Application::getExitEvent()->subscribe([this]() {
-        if (this->sessionStarted) {
-            brls::Logger::info("App exiting - putting PS5 to sleep");
-            this->host->gotoBed();
+    host->setOnQuit([weak](ChiakiQuitEvent* event) {
+        if (auto self = weak.lock()) {
+            self->onQuit(event);
+        }
+    });
+
+    host->setOnRumble([weak](uint8_t left, uint8_t right) {
+        if (auto self = weak.lock()) {
+            self->onRumble(left, right);
+        }
+    });
+
+    host->setOnLoginPinRequest([weak](bool pinIncorrect) {
+        if (auto self = weak.lock()) {
+            self->onLoginPinRequest(pinIncorrect);
+        }
+    });
+
+    host->setOnReadController([weak](ChiakiControllerState* state, std::map<uint32_t, int8_t>* fingerIdTouchId) {
+        if (auto self = weak.lock()) {
+            self->io->UpdateControllerState(state, fingerIdTouchId);
+        }
+    });
+
+    host->setOnMotionReset([weak]() {
+        if (auto self = weak.lock()) {
+            if (self->io->getInputManager()) {
+                self->io->getInputManager()->resetMotionControls();
+            }
+        }
+    });
+
+    exitSubscription = brls::Application::getExitEvent()->subscribe([weak]() {
+        if (auto self = weak.lock()) {
+            if (self->sessionStarted) {
+                brls::Logger::info("App exiting - putting PS5 to sleep");
+                self->host->gotoBed();
+            }
         }
     });
 
     // Subscribe to logs for display while waiting for first frame
     logSubscription = brls::Logger::getLogEvent()->subscribe(
-        [this](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
-            std::lock_guard<std::mutex> lock(logMutex);
-            logLines.push_back(msg);
-            while (logLines.size() > MAX_LOG_LINES) {
-                logLines.pop_front();
+        [weak](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
+            if (auto self = weak.lock()) {
+                std::lock_guard<std::mutex> lock(self->logMutex);
+                self->logLines.push_back(msg);
+                while (self->logLines.size() > MAX_LOG_LINES) {
+                    self->logLines.pop_front();
+                }
             }
         });
 }
@@ -85,6 +86,9 @@ StreamView::~StreamView()
     brls::Logger::getLogEvent()->unsubscribe(logSubscription);
 
     stopStream();
+
+    // Release shared_ptr held by SharedViewHolder
+    SharedViewHolder::release(this);
 }
 
 brls::View* StreamView::create()
@@ -351,13 +355,23 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
 
     ChiakiQuitReason reason = event->reason;
 
-    brls::sync([this, reasonStr, reason]() {
-        if (!sessionStarted) {
+    auto weak = weak_from_this();
+    brls::sync([weak, reasonStr, reason]() {
+        auto self = weak.lock();
+        if (!self) {
+            brls::Logger::info("onQuit: StreamView already destroyed, skipping");
+            return;
+        }
+
+        if (!self->sessionStarted) {
             brls::Logger::info("onQuit: session already stopped via menu, skipping");
             return;
         }
 
-        stopStream();
+        self->stopStream();
+
+        // Release early to invalidate weak_ptrs before popActivity
+        SharedViewHolder::release(self.get());
 
         if (reason == CHIAKI_QUIT_REASON_STOPPED) {
             brls::Application::notify(reasonStr);
@@ -452,31 +466,42 @@ void StreamView::showDisconnectMenu()
 
     menu->setStatsEnabled(io->getShowStatsOverlay());
 
-    menu->setOnStatsToggle([this](bool enabled) {
-        brls::Logger::info("Stats overlay toggled: {}", enabled);
-        io->setShowStatsOverlay(enabled);
-        menuOpen = false;
-        brls::Application::blockInputs(true);
-    });
+menu callbacks for safety
+    auto weak = weak_from_this();
 
-    menu->setOnGyroReset([this]() {
-        brls::Logger::info("Gyro reset triggered from menu");
-        if (io->getInputManager()) {
-            io->getInputManager()->resetMotionControls();
+    menu->setOnStatsToggle([weak](bool enabled) {
+        if (auto self = weak.lock()) {
+            brls::Logger::info("Stats overlay toggled: {}", enabled);
+            self->io->setShowStatsOverlay(enabled);
+            self->menuOpen = false;
+            brls::Application::blockInputs(true);
         }
-        menuOpen = false;
-        brls::Application::blockInputs(true);
     });
 
-    menu->setOnDisconnect([this](bool sleep) {
-        brls::Logger::info("Disconnect requested, sleep={}", sleep);
-        disconnectWithSleep(sleep);
+    menu->setOnGyroReset([weak]() {
+        if (auto self = weak.lock()) {
+            brls::Logger::info("Gyro reset triggered from menu");
+            if (self->io->getInputManager()) {
+                self->io->getInputManager()->resetMotionControls();
+            }
+            self->menuOpen = false;
+            brls::Application::blockInputs(true);
+        }
     });
 
-    menu->setOnDismiss([this]() {
-        brls::Logger::info("Menu dismissed");
-        menuOpen = false;
-        brls::Application::blockInputs(true);
+    menu->setOnDisconnect([weak](bool sleep) {
+        if (auto self = weak.lock()) {
+            brls::Logger::info("Disconnect requested, sleep={}", sleep);
+            self->disconnectWithSleep(sleep);
+        }
+    });
+
+    menu->setOnDismiss([weak]() {
+        if (auto self = weak.lock()) {
+            brls::Logger::info("Menu dismissed");
+            self->menuOpen = false;
+            brls::Application::blockInputs(true);
+        }
     });
 
     brls::Application::pushActivity(new brls::Activity(menu));
@@ -493,6 +518,11 @@ void StreamView::disconnectWithSleep(bool sleep)
     }
 
     stopStream();
+
+    // Release early to invalidate weak_ptrs BEFORE activities are popped
+    // This ensures any pending brls::sync tasks from chiaki callbacks
+    // will fail weak.lock() and not access this object
+    SharedViewHolder::release(this);
 }
 
 void StreamView::renderLogs(NVGcontext* vg, float x, float y, float width, float height)
