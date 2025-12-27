@@ -466,7 +466,6 @@ void StreamView::showDisconnectMenu()
 
     menu->setStatsEnabled(io->getShowStatsOverlay());
 
-menu callbacks for safety
     auto weak = weak_from_this();
 
     menu->setOnStatsToggle([weak](bool enabled) {
