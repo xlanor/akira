@@ -70,10 +70,6 @@ jobs:
             goos: darwin
             goarch: arm64
             artifact: akira-companion-darwin-arm64
-          - os: macos-13
-            goos: darwin
-            goarch: amd64
-            artifact: akira-companion-darwin-amd64
           - os: windows-latest
             goos: windows
             goarch: amd64
