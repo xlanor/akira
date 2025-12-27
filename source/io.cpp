@@ -2,7 +2,6 @@
 #include "core/settings_manager.hpp"
 #include <borealis.hpp>
 
-// Include manager headers here (forward declared in io.hpp)
 #include "core/io/audio_manager.hpp"
 #include "core/io/haptic_manager.hpp"
 #include "core/io/input_manager.hpp"
@@ -49,7 +48,6 @@ void IO::SetLogger(ChiakiLog* log)
 
 IO::IO()
 {
-    // Logger will be set later via SetLogger()
     this->log = nullptr;
 
     m_audio_manager = new AudioManager();
@@ -80,7 +78,6 @@ IO::~IO()
 
 void IO::SetMesaConfig()
 {
-    // No-op: Mesa/OpenGL debugging removed with deko3d-only renderer
 }
 
 bool IO::VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user)
@@ -154,6 +151,7 @@ bool IO::InitVideo(int video_width, int video_height, int screen_width, int scre
 bool IO::FreeVideo()
 {
     this->quit = true;
+    m_first_frame_received = false;
 
     if (m_video_decoder)
     {
@@ -247,6 +245,11 @@ bool IO::MainLoop()
                 // Validate frame has actual data
                 if (frame && frame->data[0])
                 {
+                    if (!m_first_frame_received)
+                    {
+                        m_first_frame_received = true;
+                        brls::Logger::info("First video frame received!");
+                    }
                     if (render_attempt++ % 100 == 0)
                     {
                         brls::Logger::info("Calling draw() #{}", render_attempt);

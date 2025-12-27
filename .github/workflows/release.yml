@@ -58,23 +58,78 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
 
+  build-companion:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            artifact: akira-companion-linux-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            artifact: akira-companion-darwin-arm64
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            artifact: akira-companion-darwin-amd64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            artifact: akira-companion-windows-amd64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: apps/akira-companion/go.sum
+
+      - name: Build companion app
+        working-directory: apps/akira-companion
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: go build -ldflags="-s -w" -o ${{ matrix.artifact }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: apps/akira-companion/${{ matrix.artifact }}
+
   release:
-    needs: build
+    needs: [build, build-companion]
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Download artifact
+      - name: Download akira-nro artifact
         uses: actions/download-artifact@v4
         with:
           name: akira-nro
+
+      - name: Download companion artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: akira-companion-*
+          merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: akira.nro
+          files: |
+            akira.nro
+            akira-companion-*
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}

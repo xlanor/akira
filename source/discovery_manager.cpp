@@ -2,6 +2,7 @@
 #include "core/settings_manager.hpp"
 
 #include <borealis.hpp>
+#include <ctime>
 
 #include <cstring>
 #include <cstdlib>
@@ -102,7 +103,6 @@ void DiscoveryManager::setServiceEnabled(bool enable)
         options.cb = DiscoveryServiceCallback;
         options.cb_user = this;
 
-        // Set up broadcast address
         struct sockaddr_in addr_broadcast = {};
         addr_broadcast.sin_family = AF_INET;
         addr_broadcast.sin_addr.s_addr = addresses.broadcast;
@@ -110,7 +110,6 @@ void DiscoveryManager::setServiceEnabled(bool enable)
         memcpy(options.broadcast_addrs, &addr_broadcast, sizeof(addr_broadcast));
         options.broadcast_num = 1;
 
-        // Base broadcast address (255.255.255.255)
         struct sockaddr_in in_addr = {};
         in_addr.sin_family = AF_INET;
         in_addr.sin_addr.s_addr = 0xffffffff;
@@ -133,6 +132,16 @@ void DiscoveryManager::setServiceEnabled(bool enable)
     }
     else
     {
+        if (remoteDiscoveryEnabled.load())
+        {
+            brls::Logger::info("Stopping remote discovery thread...");
+            remoteDiscoveryEnabled.store(false);
+            chiaki_bool_pred_cond_signal(&remoteStopCond);
+            chiaki_thread_join(&remoteDiscoveryThread, nullptr);
+            chiaki_bool_pred_cond_fini(&remoteStopCond);
+            brls::Logger::info("Remote discovery thread stopped");
+        }
+
         chiaki_discovery_service_fini(&service);
     }
 }
@@ -379,4 +388,536 @@ void DiscoveryManager::lookupPsnAccountId(
 
     json_object_put(parsed_json);
     curl_easy_cleanup(curl);
+}
+
+void DiscoveryManager::fetchCompanionCredentials(
+    const std::string& host,
+    int port,
+    std::function<void(
+        const std::string& onlineId,
+        const std::string& accountId,
+        const std::string& accessToken,
+        const std::string& refreshToken,
+        int64_t expiresAt,
+        const std::string& duid
+    )> onSuccess,
+    std::function<void(const std::string&)> onError)
+{
+    CURL* curl = curl_easy_init();
+    if (!curl)
+    {
+        onError("Failed to initialize CURL");
+        return;
+    }
+
+    std::string accountId;
+    std::string onlineId;
+    std::string accessToken;
+    std::string refreshToken;
+    int64_t expiresAt = 0;
+    std::string duid;
+
+    std::string response_data;
+    long http_code = 0;
+    CURLcode res;
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+
+    std::string accountUrl = "http://" + host + ":" + std::to_string(port) + "/account";
+    curl_easy_setopt(curl, CURLOPT_URL, accountUrl.c_str());
+
+    res = curl_easy_perform(curl);
+
+    if (res != CURLE_OK)
+    {
+        onError(curl_easy_strerror(res));
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    if (http_code != 200)
+    {
+        onError("Account fetch HTTP error: " + std::to_string(http_code));
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    struct json_object* parsed_json = json_tokener_parse(response_data.c_str());
+    if (parsed_json)
+    {
+        struct json_object* account_id_obj;
+        struct json_object* online_id_obj;
+        struct json_object* error_obj;
+
+        if (json_object_object_get_ex(parsed_json, "error", &error_obj))
+        {
+            onError(json_object_get_string(error_obj));
+            json_object_put(parsed_json);
+            curl_easy_cleanup(curl);
+            return;
+        }
+
+        if (json_object_object_get_ex(parsed_json, "account_id", &account_id_obj))
+        {
+            accountId = json_object_get_string(account_id_obj);
+        }
+        if (json_object_object_get_ex(parsed_json, "online_id", &online_id_obj))
+        {
+            onlineId = json_object_get_string(online_id_obj);
+        }
+        json_object_put(parsed_json);
+    }
+
+    std::string tokenUrl = "http://" + host + ":" + std::to_string(port) + "/token";
+    response_data.clear();
+    curl_easy_setopt(curl, CURLOPT_URL, tokenUrl.c_str());
+
+    res = curl_easy_perform(curl);
+
+    if (res == CURLE_OK)
+    {
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (http_code == 200)
+        {
+            parsed_json = json_tokener_parse(response_data.c_str());
+            if (parsed_json)
+            {
+                struct json_object* access_token_obj;
+                struct json_object* refresh_token_obj;
+                struct json_object* expires_at_obj;
+
+                if (json_object_object_get_ex(parsed_json, "access_token", &access_token_obj))
+                {
+                    accessToken = json_object_get_string(access_token_obj);
+                }
+                if (json_object_object_get_ex(parsed_json, "refresh_token", &refresh_token_obj))
+                {
+                    refreshToken = json_object_get_string(refresh_token_obj);
+                }
+                if (json_object_object_get_ex(parsed_json, "expires_at", &expires_at_obj))
+                {
+                    expiresAt = json_object_get_int64(expires_at_obj);
+                }
+                json_object_put(parsed_json);
+            }
+        }
+    }
+
+    std::string duidUrl = "http://" + host + ":" + std::to_string(port) + "/duid";
+    response_data.clear();
+    curl_easy_setopt(curl, CURLOPT_URL, duidUrl.c_str());
+
+    res = curl_easy_perform(curl);
+
+    if (res == CURLE_OK)
+    {
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        if (http_code == 200)
+        {
+            parsed_json = json_tokener_parse(response_data.c_str());
+            if (parsed_json)
+            {
+                struct json_object* duid_obj;
+                if (json_object_object_get_ex(parsed_json, "duid", &duid_obj))
+                {
+                    duid = json_object_get_string(duid_obj);
+                }
+                json_object_put(parsed_json);
+            }
+        }
+    }
+
+    curl_easy_cleanup(curl);
+
+    if (accountId.empty() && onlineId.empty() && accessToken.empty() && refreshToken.empty() && duid.empty())
+    {
+        onError("No credentials available from companion");
+        return;
+    }
+
+    onSuccess(onlineId, accountId, accessToken, refreshToken, expiresAt, duid);
+}
+
+static const char* PSN_CLIENT_ID = "ba495a24-818c-472b-b12d-ff231c1b5745";
+static const char* PSN_CLIENT_SECRET = "mvaiZkRsAsI1IBkY";
+static const char* PSN_TOKEN_URL = "https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/token";
+static const char* PSN_SCOPES = "psn:clientapp referenceDataService:countryConfig.read pushNotification:webSocket.desktop.connect sessionManager:remotePlaySession.system.update";
+static const char* PSN_REDIRECT_URI = "https://remoteplay.dl.playstation.net/remoteplay/redirect";
+
+void DiscoveryManager::refreshPsnToken(
+    std::function<void()> onSuccess,
+    std::function<void(const std::string&)> onError)
+{
+    std::string refreshToken = settings->getPsnRefreshToken();
+    if (refreshToken.empty())
+    {
+        onError("No refresh token stored");
+        return;
+    }
+
+    CURL* curl = curl_easy_init();
+    if (!curl)
+    {
+        onError("Failed to initialize CURL");
+        return;
+    }
+
+    std::string credentials = std::string(PSN_CLIENT_ID) + ":" + PSN_CLIENT_SECRET;
+    char* b64Credentials = nullptr;
+    size_t b64Len = 0;
+
+    size_t credLen = credentials.length();
+    b64Len = ((4 * credLen / 3) + 3) & ~3;
+    b64Credentials = new char[b64Len + 1];
+    memset(b64Credentials, 0, b64Len + 1);
+
+    static const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    size_t i = 0, j = 0;
+    for (i = 0; i < credLen - 2; i += 3) {
+        b64Credentials[j++] = b64chars[(credentials[i] >> 2) & 0x3F];
+        b64Credentials[j++] = b64chars[((credentials[i] & 0x3) << 4) | ((credentials[i + 1] >> 4) & 0xF)];
+        b64Credentials[j++] = b64chars[((credentials[i + 1] & 0xF) << 2) | ((credentials[i + 2] >> 6) & 0x3)];
+        b64Credentials[j++] = b64chars[credentials[i + 2] & 0x3F];
+    }
+    if (i < credLen) {
+        b64Credentials[j++] = b64chars[(credentials[i] >> 2) & 0x3F];
+        if (i == credLen - 1) {
+            b64Credentials[j++] = b64chars[(credentials[i] & 0x3) << 4];
+            b64Credentials[j++] = '=';
+        } else {
+            b64Credentials[j++] = b64chars[((credentials[i] & 0x3) << 4) | ((credentials[i + 1] >> 4) & 0xF)];
+            b64Credentials[j++] = b64chars[(credentials[i + 1] & 0xF) << 2];
+        }
+        b64Credentials[j++] = '=';
+    }
+
+    std::string authHeader = "Authorization: Basic " + std::string(b64Credentials);
+    delete[] b64Credentials;
+
+    std::string postData = "grant_type=refresh_token"
+        "&refresh_token=" + refreshToken +
+        "&scope=" + std::string(PSN_SCOPES) +
+        "&redirect_uri=" + std::string(PSN_REDIRECT_URI);
+
+    std::string response_data;
+
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, authHeader.c_str());
+    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+
+    curl_easy_setopt(curl, CURLOPT_URL, PSN_TOKEN_URL);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    curl_slist_free_all(headers);
+
+    if (res != CURLE_OK)
+    {
+        onError(curl_easy_strerror(res));
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    long http_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+    if (http_code != 200)
+    {
+        brls::Logger::error("PSN token refresh failed with HTTP {}: {}", http_code, response_data);
+        onError("HTTP error: " + std::to_string(http_code));
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    struct json_object* parsed_json = json_tokener_parse(response_data.c_str());
+    if (!parsed_json)
+    {
+        onError("Failed to parse JSON response");
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    struct json_object* access_token_obj;
+    struct json_object* refresh_token_obj;
+    struct json_object* error_obj;
+
+    if (json_object_object_get_ex(parsed_json, "error", &error_obj))
+    {
+        std::string errorMsg = json_object_get_string(error_obj);
+        struct json_object* error_desc_obj;
+        if (json_object_object_get_ex(parsed_json, "error_description", &error_desc_obj))
+        {
+            errorMsg += ": " + std::string(json_object_get_string(error_desc_obj));
+        }
+        onError(errorMsg);
+        json_object_put(parsed_json);
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    std::string newAccessToken;
+    std::string newRefreshToken;
+    int expiresIn = 0;
+
+    if (json_object_object_get_ex(parsed_json, "access_token", &access_token_obj))
+    {
+        newAccessToken = json_object_get_string(access_token_obj);
+    }
+    if (json_object_object_get_ex(parsed_json, "refresh_token", &refresh_token_obj))
+    {
+        newRefreshToken = json_object_get_string(refresh_token_obj);
+    }
+
+    struct json_object* expires_in_obj;
+    if (json_object_object_get_ex(parsed_json, "expires_in", &expires_in_obj))
+    {
+        expiresIn = json_object_get_int(expires_in_obj);
+    }
+
+    json_object_put(parsed_json);
+    curl_easy_cleanup(curl);
+
+    if (newAccessToken.empty() || newRefreshToken.empty())
+    {
+        onError("Missing tokens in response");
+        return;
+    }
+
+    settings->setPsnAccessToken(newAccessToken);
+    settings->setPsnRefreshToken(newRefreshToken);
+
+    if (expiresIn > 0)
+    {
+        int64_t expiresAt = static_cast<int64_t>(std::time(nullptr)) + expiresIn;
+        settings->setPsnTokenExpiresAt(expiresAt);
+    }
+
+    settings->writeFile();
+
+    brls::Logger::info("PSN token refreshed successfully");
+    onSuccess();
+}
+
+bool DiscoveryManager::isPsnTokenValid() const
+{
+    std::string accessToken = settings->getPsnAccessToken();
+    if (accessToken.empty())
+    {
+        return false;
+    }
+
+    int64_t expiresAt = settings->getPsnTokenExpiresAt();
+    if (expiresAt <= 0)
+    {
+        return false;
+    }
+
+    int64_t now = static_cast<int64_t>(std::time(nullptr));
+    return (expiresAt - 60) > now;
+}
+
+void DiscoveryManager::refreshRemoteDevices()
+{
+    brls::Logger::info("DiscoveryManager::refreshRemoteDevices() called");
+
+    if (!isPsnTokenValid())
+    {
+        brls::Logger::info("PSN token not valid, attempting to refresh...");
+
+        std::string refreshToken = settings->getPsnRefreshToken();
+        if (refreshToken.empty())
+        {
+            brls::Logger::warning("No PSN refresh token available, cannot discover remote devices");
+            return;
+        }
+
+        refreshPsnToken(
+            [this]() {
+                brls::Logger::info("Token refresh successful, now fetching remote devices");
+                fetchRemoteDevicesFromPsn();
+            },
+            [this](const std::string& error) {
+                brls::Logger::error("Failed to refresh PSN token: {}", error);
+                brls::Logger::info("Clearing invalid PSN token data from config");
+                settings->clearPsnTokenData();
+                settings->writeFile();
+            }
+        );
+        return;
+    }
+
+    brls::Logger::info("PSN token is valid, fetching remote devices");
+    fetchRemoteDevicesFromPsn();
+}
+
+void DiscoveryManager::fetchRemoteDevicesFromPsn()
+{
+    std::string accessToken = settings->getPsnAccessToken();
+    if (accessToken.empty())
+    {
+        brls::Logger::error("No access token available for remote device discovery");
+        return;
+    }
+
+    brls::Logger::info("Querying PSN for remote devices...");
+
+    ChiakiHolepunchDeviceInfo* ps5Devices = nullptr;
+    size_t ps5Count = 0;
+    ChiakiErrorCode ps5Err = chiaki_holepunch_list_devices(
+        accessToken.c_str(),
+        CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5,
+        &ps5Devices,
+        &ps5Count,
+        log
+    );
+
+    if (ps5Err == CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::info("Found {} PS5 remote device(s)", ps5Count);
+        for (size_t i = 0; i < ps5Count; i++)
+        {
+            processRemoteDevice(&ps5Devices[i], CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5);
+        }
+        chiaki_holepunch_free_device_list(&ps5Devices);
+    }
+    else
+    {
+        brls::Logger::error("Failed to list PS5 devices: {}", chiaki_error_string(ps5Err));
+    }
+
+    ChiakiHolepunchDeviceInfo* ps4Devices = nullptr;
+    size_t ps4Count = 0;
+    ChiakiErrorCode ps4Err = chiaki_holepunch_list_devices(
+        accessToken.c_str(),
+        CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4,
+        &ps4Devices,
+        &ps4Count,
+        log
+    );
+
+    if (ps4Err == CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::info("Found {} PS4 remote device(s)", ps4Count);
+        for (size_t i = 0; i < ps4Count; i++)
+        {
+            processRemoteDevice(&ps4Devices[i], CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4);
+        }
+        chiaki_holepunch_free_device_list(&ps4Devices);
+    }
+    else
+    {
+        brls::Logger::error("Failed to list PS4 devices: {}", chiaki_error_string(ps4Err));
+    }
+}
+
+void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType)
+{
+    if (!device)
+        return;
+
+    std::string deviceName = device->device_name;
+    bool remotePlayEnabled = device->remoteplay_enabled;
+
+    char uidHex[65] = {0};
+    for (size_t j = 0; j < 32; j++)
+    {
+        snprintf(uidHex + (j * 2), 3, "%02x", device->device_uid[j]);
+    }
+    std::string deviceUid = uidHex;
+
+    brls::Logger::info("Remote device: name='{}', uid='{}', type={}, remoteplay={}",
+        deviceName, deviceUid,
+        consoleType == CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5 ? "PS5" : "PS4",
+        remotePlayEnabled ? "enabled" : "disabled");
+
+    if (!remotePlayEnabled)
+    {
+        brls::Logger::info("Skipping device '{}' - remote play not enabled", deviceName);
+        return;
+    }
+
+    brls::sync([this, deviceName, deviceUid, consoleType]() {
+        auto* hostsMap = settings->getHostsMap();
+        auto it = hostsMap->find(deviceName);
+
+        if (it == hostsMap->end() || !it->second->hasRpKey())
+        {
+            brls::Logger::debug("Skipping remote device '{}' - no registered local host", deviceName);
+            return;
+        }
+
+        Host* localHost = it->second;
+
+        if (localHost->getRemoteDuid().empty())
+        {
+            localHost->setRemoteDuid(deviceUid);
+            brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
+        }
+
+        std::string displayName = "[Remote] " + deviceName;
+        Host* host = settings->getOrCreateHost(displayName);
+
+        host->isRemoteHost = true;
+        host->discovered = true;
+        host->setRemoteDuid(deviceUid);
+
+        if (consoleType == CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5)
+            host->setChiakiTarget(CHIAKI_TARGET_PS5_1);
+        else
+            host->setChiakiTarget(CHIAKI_TARGET_PS4_10);
+
+        host->copyRegistrationFrom(localHost);
+
+        host->state = CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN;
+
+        if (onHostDiscovered)
+            onHostDiscovered(host);
+    });
+}
+
+void* DiscoveryManager::remoteDiscoveryThreadFunc(void* user)
+{
+    DiscoveryManager* dm = static_cast<DiscoveryManager*>(user);
+    dm->runRemoteDiscoveryLoop();
+    return nullptr;
+}
+
+void DiscoveryManager::runRemoteDiscoveryLoop()
+{
+    brls::Logger::info("Remote discovery loop started");
+
+    ChiakiErrorCode err = chiaki_bool_pred_cond_lock(&remoteStopCond);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Failed to lock remote discovery condition");
+        return;
+    }
+
+    err = chiaki_bool_pred_cond_timedwait(&remoteStopCond, 5000);
+
+    while (err == CHIAKI_ERR_TIMEOUT && remoteDiscoveryEnabled.load())
+    {
+        std::string refreshToken = settings->getPsnRefreshToken();
+        if (!refreshToken.empty())
+        {
+            brls::Logger::debug("Remote discovery: checking PSN devices...");
+            refreshRemoteDevices();
+        }
+
+        err = chiaki_bool_pred_cond_timedwait(&remoteStopCond, REMOTE_DISCOVERY_INTERVAL_MS);
+    }
+
+    chiaki_bool_pred_cond_unlock(&remoteStopCond);
+    brls::Logger::info("Remote discovery loop exiting");
 }

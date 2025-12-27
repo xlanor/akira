@@ -28,6 +28,9 @@ public:
 private:
     BRLS_BIND(brls::Box, hostContainer, "host/container");
     BRLS_BIND(brls::Box, emptyMessage, "empty/message");
+    BRLS_BIND(brls::Button, findRemoteBtn, "host/findRemoteBtn");
+
+    void initFindRemoteButton();
 
     SettingsManager* settings = nullptr;
     DiscoveryManager* discovery = nullptr;

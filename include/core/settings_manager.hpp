@@ -35,7 +35,16 @@ private:
     ChiakiVideoFPSPreset globalVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
     std::string globalPsnOnlineId;
     std::string globalPsnAccountId;
+    std::string globalPsnRefreshToken;
+    std::string globalPsnAccessToken;
+    int64_t globalPsnTokenExpiresAt = 0;
+    std::string globalDuid;
     HapticPreset globalHaptic = HapticPreset::Disabled;
+    bool globalInvertAB = false;
+
+    // Companion server settings
+    std::string companionHost;
+    int companionPort = 8080;
 
     enum class ConfigItem {
         Unknown,
@@ -43,6 +52,8 @@ private:
         HostAddr,
         PsnOnlineId,
         PsnAccountId,
+        PsnRefreshToken,
+        PsnAccessToken,
         ConsolePIN,
         RpKey,
         RpKeyType,
@@ -51,7 +62,12 @@ private:
         VideoFps,
         Target,
         Haptic,
-        RemoteDuid
+        RemoteDuid,
+        CompanionHost,
+        CompanionPort,
+        PsnTokenExpiresAt,
+        GlobalDuid,
+        InvertAB
     };
 
     const std::map<ConfigItem, std::regex> regexMap = {
@@ -59,6 +75,8 @@ private:
         {ConfigItem::HostAddr, std::regex("^\\s*host_(?:ip|addr)\\s*=\\s*\"?((\\d+\\.\\d+\\.\\d+\\.\\d+)|([A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+))\"?")},
         {ConfigItem::PsnOnlineId, std::regex("^\\s*psn_online_id\\s*=\\s*\"?([\\w_-]+)\"?")},
         {ConfigItem::PsnAccountId, std::regex("^\\s*psn_account_id\\s*=\\s*\"?([\\w/=+]+)\"?")},
+        {ConfigItem::PsnRefreshToken, std::regex("^\\s*psn_refresh_token\\s*=\\s*\"?([\\w._-]+)\"?")},
+        {ConfigItem::PsnAccessToken, std::regex("^\\s*psn_access_token\\s*=\\s*\"?([\\w._-]+)\"?")},
         {ConfigItem::ConsolePIN, std::regex("^\\s*console_pin\\s*=\\s*\"?(\\d{4})\"?")},
         {ConfigItem::RpKey, std::regex("^\\s*rp_key\\s*=\\s*\"?([\\w/=+]+)\"?")},
         {ConfigItem::RpKeyType, std::regex("^\\s*rp_key_type\\s*=\\s*\"?(\\d)\"?")},
@@ -67,7 +85,12 @@ private:
         {ConfigItem::VideoFps, std::regex("^\\s*video_fps\\s*=\\s*\"?(60|30)\"?")},
         {ConfigItem::Target, std::regex("^\\s*target\\s*=\\s*\"?(\\d+)\"?")},
         {ConfigItem::Haptic, std::regex("^\\s*haptic\\s*=\\s*\"?(\\d+)\"?")},
-        {ConfigItem::RemoteDuid, std::regex("^\\s*remote_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")}
+        {ConfigItem::RemoteDuid, std::regex("^\\s*remote_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
+        {ConfigItem::CompanionHost, std::regex("^\\s*companion_host\\s*=\\s*\"?([\\w.-]+)\"?")},
+        {ConfigItem::CompanionPort, std::regex("^\\s*companion_port\\s*=\\s*\"?(\\d+)\"?")},
+        {ConfigItem::PsnTokenExpiresAt, std::regex("^\\s*psn_token_expires_at\\s*=\\s*\"?(\\d+)\"?")},
+        {ConfigItem::GlobalDuid, std::regex("^\\s*global_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
+        {ConfigItem::InvertAB, std::regex("^\\s*invert_ab\\s*=\\s*\"?(true|false|1|0)\"?")}
     };
 
     ConfigItem parseLine(const std::string& line, std::string& value);
@@ -108,6 +131,19 @@ public:
     std::string getPsnAccountId(Host* host);
     void setPsnAccountId(Host* host, const std::string& id);
 
+    std::string getPsnRefreshToken() const;
+    void setPsnRefreshToken(const std::string& token);
+
+    std::string getPsnAccessToken() const;
+    void setPsnAccessToken(const std::string& token);
+
+    int64_t getPsnTokenExpiresAt() const;
+    void setPsnTokenExpiresAt(int64_t expiresAt);
+    void clearPsnTokenData();
+
+    std::string getGlobalDuid() const;
+    void setGlobalDuid(const std::string& duid);
+
     std::string getConsolePIN(Host* host);
     void setConsolePIN(Host* host, const std::string& pin);
 
@@ -135,6 +171,14 @@ public:
 
     int getHostRpKeyType(Host* host);
     bool setHostRpKeyType(Host* host, const std::string& value);
+
+    std::string getCompanionHost() const;
+    void setCompanionHost(const std::string& host);
+    int getCompanionPort() const;
+    void setCompanionPort(int port);
+
+    bool getInvertAB() const;
+    void setInvertAB(bool invert);
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP

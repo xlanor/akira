@@ -55,7 +55,6 @@ private:
     float m_raw_accel_z = 0.0f;
 
 public:
-    // Motion control reset (called when PS4/PS5 requests gyro recalibration)
     void resetMotionControls();
 };
 

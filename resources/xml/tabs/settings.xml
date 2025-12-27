@@ -63,6 +63,12 @@
                 marginLeft="15"
                 marginRight="15"/>
 
+            <brls:BooleanCell
+                id="settings/invertAB"
+                title="Invert A and B"
+                marginLeft="15"
+                marginRight="15"/>
+
         </brls:Box>
 
         <brls:Header
@@ -80,9 +86,88 @@
             paddingTop="15"
             paddingBottom="15">
 
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="row"
+                alignItems="center"
+                marginLeft="15"
+                marginRight="15">
+
+                <brls:InputCell
+                    id="settings/psnOnlineId"
+                    title="PSN Online ID"
+                    grow="1"/>
+
+                <brls:Button
+                    id="settings/lookupBtn"
+                    text="Look Up"
+                    style="bordered"
+                    marginLeft="10"/>
+
+            </brls:Box>
+
+            <brls:Label
+                text="Your account name must be publicly visible for this to work"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
             <brls:InputCell
-                id="settings/psnOnlineId"
-                title="PSN Online ID"
+                id="settings/psnAccountId"
+                title="Account ID (Base64)"
+                marginLeft="15"
+                marginRight="15"/>
+
+        </brls:Box>
+
+        <brls:Header
+            title="PSN Credentials (Read-Only)"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30">
+
+            <brls:DetailCell
+                id="settings/credOnlineId"
+                focusable="false"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:DetailCell
+                id="settings/credAccountId"
+                focusable="false"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:DetailCell
+                id="settings/credAccessToken"
+                focusable="false"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:DetailCell
+                id="settings/credRefreshToken"
+                focusable="false"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:DetailCell
+                id="settings/credTokenExpiry"
+                focusable="false"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:DetailCell
+                id="settings/credDuid"
+                focusable="false"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -90,23 +175,64 @@
                 width="auto"
                 height="auto"
                 axis="row"
-                justifyContent="center"
+                marginLeft="15"
+                marginRight="15"
                 marginTop="10"
-                marginBottom="10">
+                marginBottom="15">
 
                 <brls:Button
-                    id="settings/lookupBtn"
-                    text="Look Up Account ID"
+                    id="settings/clearPsnBtn"
+                    text="Clear All PSN Data"
                     style="bordered"
-                    width="200"/>
+                    grow="1"
+                    marginRight="10"/>
+
+                <brls:Button
+                    id="settings/refreshTokenBtn"
+                    text="Refresh Token"
+                    style="bordered"
+                    grow="1"/>
 
             </brls:Box>
 
+        </brls:Box>
+
+        <brls:Header
+            title="Companion Server"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30"
+            paddingTop="15"
+            paddingBottom="15">
+
             <brls:InputCell
-                id="settings/psnAccountId"
-                title="Account ID (Base64)"
+                id="settings/companionHost"
+                title="Companion Host"
                 marginLeft="15"
                 marginRight="15"/>
+
+            <brls:InputCell
+                id="settings/companionPort"
+                title="Companion Port"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Button
+                id="settings/fetchPsnBtn"
+                text="Fetch PSN Credentials from Companion App"
+                style="bordered"
+                grow="1"
+                marginLeft="15"
+                marginRight="15"
+                marginTop="10"
+                marginBottom="15"/>
 
         </brls:Box>
 

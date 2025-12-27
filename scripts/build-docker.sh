@@ -81,7 +81,11 @@ build_akira() {
     AKIRA_REVISION=$(grep 'set(VERSION_REVISION' ${BUILD_DIR}/CMakeLists.txt | sed 's/[^0-9]*//g')
     AKIRA_VERSION="${AKIRA_MAJOR}.${AKIRA_MINOR}.${AKIRA_REVISION}"
 
+    # Get Akira git commit SHA
+    AKIRA_COMMIT=$(cd ${BUILD_DIR} && git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
     echo "Akira ${AKIRA_VERSION}" > ${BUILD_DIR}/resources/build_info.txt
+    echo "Commit: ${AKIRA_COMMIT}" >> ${BUILD_DIR}/resources/build_info.txt
     echo "Build: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> ${BUILD_DIR}/resources/build_info.txt
     echo "" >> ${BUILD_DIR}/resources/build_info.txt
     echo "=== Custom Libraries ===" >> ${BUILD_DIR}/resources/build_info.txt

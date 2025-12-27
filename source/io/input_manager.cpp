@@ -1,4 +1,5 @@
 #include "core/io/input_manager.hpp"
+#include "core/settings_manager.hpp"
 #include <borealis.hpp>
 #include <cmath>
 #include <array>
@@ -64,8 +65,14 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
 
     state->buttons = 0;
 
-    if (buttons & HidNpadButton_A) state->buttons |= CHIAKI_CONTROLLER_BUTTON_MOON;      // A -> Circle
-    if (buttons & HidNpadButton_B) state->buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS;     // B -> Cross
+    bool invertAB = SettingsManager::getInstance()->getInvertAB();
+    if (invertAB) {
+        if (buttons & HidNpadButton_A) state->buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS;     // A -> Cross (inverted)
+        if (buttons & HidNpadButton_B) state->buttons |= CHIAKI_CONTROLLER_BUTTON_MOON;      // B -> Circle (inverted)
+    } else {
+        if (buttons & HidNpadButton_A) state->buttons |= CHIAKI_CONTROLLER_BUTTON_MOON;      // A -> Circle
+        if (buttons & HidNpadButton_B) state->buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS;     // B -> Cross
+    }
     if (buttons & HidNpadButton_X) state->buttons |= CHIAKI_CONTROLLER_BUTTON_PYRAMID;   // X -> Triangle
     if (buttons & HidNpadButton_Y) state->buttons |= CHIAKI_CONTROLLER_BUTTON_BOX;       // Y -> Square
 

@@ -6,6 +6,8 @@
 #include <switch.h>
 #include <borealis.hpp>
 #include <SDL2/SDL.h>
+#include <arpa/inet.h>
+#include <fstream>
 
 #include <chiaki/common.h>
 #include <chiaki/log.h>
@@ -16,8 +18,35 @@
 #include "views/build_info_tab.hpp"
 #include "views/stream_view.hpp"
 #include "views/enter_pin_view.hpp"
+#include "views/connection_view.hpp"
 #include "core/io.hpp"
 #include "core/settings_manager.hpp"
+
+static std::string getLocalIpAddress() {
+    u32 ip = 0;
+    Result rc = nifmGetCurrentIpAddress(&ip);
+    if (R_SUCCEEDED(rc) && ip != 0) {
+        struct in_addr addr;
+        addr.s_addr = ip;
+        return std::string(inet_ntoa(addr));
+    }
+    return "Not connected";
+}
+
+static std::string getAppVersion() {
+    std::ifstream file("romfs:/build_info.txt");
+    if (!file.is_open()) {
+        return "";
+    }
+    std::string line;
+    if (std::getline(file, line)) {
+        size_t spacePos = line.find(' ');
+        if (spacePos != std::string::npos) {
+            return "v" + line.substr(spacePos + 1);
+        }
+    }
+    return "";
+}
 
 void initCustomTheme()
 {
@@ -68,6 +97,46 @@ public:
     void onContentAvailable() override
     {
         brls::Logger::info("Main activity content available");
+
+        auto* appletFrame = dynamic_cast<brls::AppletFrame*>(this->getContentView());
+        if (appletFrame) {
+            std::string version = getAppVersion();
+            if (!version.empty()) {
+                appletFrame->setTitle("Akira " + version);
+            }
+
+            auto* header = appletFrame->getHeader();
+            if (header) {
+                auto* attribution = new brls::Label();
+                attribution->setText("Akira uses chiaki-ng for its remote capabilities");
+                attribution->setFontSize(20);
+                attribution->setTextColor(nvgRGBA(170, 170, 170, 255));
+                attribution->setMarginRight(20);
+                attribution->setGrow(1.0f);
+                attribution->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
+                header->addView(attribution);
+            }
+
+            auto* footer = appletFrame->getFooter();
+            if (footer) {
+                // Navigate BottomBar structure: Box > Box > Box (row with status items)
+                auto& outerChildren = footer->getChildren();
+                if (!outerChildren.empty()) {
+                    auto* containerBox = dynamic_cast<brls::Box*>(outerChildren[0]);
+                    if (containerBox && !containerBox->getChildren().empty()) {
+                        auto* rowBox = dynamic_cast<brls::Box*>(containerBox->getChildren()[0]);
+                        if (rowBox) {
+                            auto* ipLabel = new brls::Label();
+                            ipLabel->setText("IP: " + getLocalIpAddress());
+                            ipLabel->setFontSize(18);
+                            ipLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
+                            ipLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
+                            rowBox->addView(ipLabel);
+                        }
+                    }
+                }
+            }
+        }
     }
 };
 
@@ -140,6 +209,7 @@ int main(int argc, char* argv[])
     brls::Application::registerXMLView("BuildInfoTab", BuildInfoTab::create);
     brls::Application::registerXMLView("StreamView", StreamView::create);
     brls::Application::registerXMLView("EnterPinView", EnterPinView::create);
+    brls::Application::registerXMLView("ConnectionView", ConnectionView::create);
 
     brls::Application::createWindow("Akira");
 

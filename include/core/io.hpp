@@ -29,7 +29,6 @@ private:
     ChiakiLog* log;
     bool quit = false;
 
-    // Default Nintendo Switch resolution
     int screen_width = 1280;
     int screen_height = 720;
 
@@ -42,6 +41,9 @@ private:
 
     // Stats overlay
     bool m_show_stats_overlay = false;
+
+    // First frame tracking for connection progress display
+    bool m_first_frame_received = false;
 
     // Requested stream profile
     int m_requested_width = 0;
@@ -56,7 +58,6 @@ public:
     void operator=(const IO&) = delete;
     static IO* GetInstance();
 
-    // Access haptic settings through HapticManager (implemented in io.cpp)
     int getHapticBase() const;
     void setHapticBase(int base);
     void setRumbleStrength(float strength);
@@ -86,6 +87,9 @@ public:
     bool getShowStatsOverlay() const { return m_show_stats_overlay; }
     void setShowStatsOverlay(bool show) { m_show_stats_overlay = show; }
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);
+
+    // First frame tracking
+    bool hasReceivedFirstFrame() const { return m_first_frame_received; }
 
     InputManager* getInputManager() { return m_input_manager; }
 };

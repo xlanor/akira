@@ -8,19 +8,6 @@
     paddingRight="@style/brls/tab_frame/content_padding_sides"
     paddingBottom="@style/brls/tab_frame/content_padding_top_bottom">
 
-    <brls:Box
-        width="auto"
-        height="auto"
-        axis="row"
-        justifyContent="spaceBetween"
-        alignItems="center"
-        marginBottom="12">
-
-        <brls:Label
-            text="Build Information"
-            fontSize="24"/>
-    </brls:Box>
-
     <brls:ScrollingFrame
         width="auto"
         height="auto"
