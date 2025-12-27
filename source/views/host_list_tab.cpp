@@ -49,7 +49,7 @@ public:
         this->setAlignItems(brls::AlignItems::CENTER);
         this->setPadding(15);
         this->setMarginBottom(10);
-        this->setBackgroundColor(nvgRGBA(40, 40, 40, 255));
+        this->setBackgroundColor(brls::Application::getTheme().getColor("color/card"));
         this->setCornerRadius(8);
 
         auto* infoBox = new brls::Box();
