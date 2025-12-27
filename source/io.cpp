@@ -50,29 +50,14 @@ IO::IO()
 {
     this->log = nullptr;
 
-    m_audio_manager = new AudioManager();
-    m_haptic_manager = new HapticManager();
-    m_input_manager = new InputManager();
-    m_video_decoder = new VideoDecoder();
+    m_audio_manager = std::make_unique<AudioManager>();
+    m_haptic_manager = std::make_unique<HapticManager>();
+    m_input_manager = std::make_unique<InputManager>();
+    m_video_decoder = std::make_unique<VideoDecoder>();
 }
 
 IO::~IO()
 {
-    if (m_audio_manager)
-    {
-        delete m_audio_manager;
-        m_audio_manager = nullptr;
-    }
-    if (m_haptic_manager)
-    {
-        delete m_haptic_manager;
-        m_haptic_manager = nullptr;
-    }
-    if (m_input_manager)
-    {
-        delete m_input_manager;
-        m_input_manager = nullptr;
-    }
     FreeVideo();
 }
 
@@ -138,7 +123,7 @@ bool IO::InitVideo(int video_width, int video_height, int screen_width, int scre
     }
 
     brls::Logger::info("Creating Deko3d renderer");
-    m_video_renderer = new Deko3dRenderer();
+    m_video_renderer = std::make_unique<Deko3dRenderer>();
 
     if (!m_video_renderer->initialize(video_width, video_height, screen_width, screen_height, this->log))
     {
@@ -153,20 +138,13 @@ bool IO::FreeVideo()
     this->quit = true;
     m_first_frame_received = false;
 
-    if (m_video_decoder)
-    {
-        m_video_decoder->cleanup();
-        delete m_video_decoder;
-        m_video_decoder = nullptr;
-    }
-
-    // Now safe to destroy renderer (GPU memory no longer referenced)
     if (m_video_renderer)
     {
-        m_video_renderer->cleanup();
-        delete m_video_renderer;
-        m_video_renderer = nullptr;
+        m_video_renderer->waitIdle();
     }
+
+    m_video_decoder.reset();
+    m_video_renderer.reset();
 
     return true;
 }
@@ -197,10 +175,9 @@ void IO::CleanUpHaptic()
 
 bool IO::InitAVCodec(bool is_PS5, int video_width, int video_height)
 {
-    // Recreate decoder if it was freed (e.g., after disconnect)
     if (!m_video_decoder)
     {
-        m_video_decoder = new VideoDecoder();
+        m_video_decoder = std::make_unique<VideoDecoder>();
     }
 
     return m_video_decoder->initCodec(is_PS5, video_width, video_height);
