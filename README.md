@@ -1,40 +1,57 @@
 # Akira
 Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises a forked variant of [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
 
+<p align="center" width="100%">
+  <img src="readme/akira_hosts_114.jpg">
+</p>
+
 <p align="center">
-  <img src="readme/akira_hosts.jpg" width="30%">
   <img src="readme/akira_buildinfo.jpg" width="30%">
   <img src="readme/akira_ingame_debug.jpg" width="30%">
 </p>
 
+<p align="center">
+And some horribly compressed encodes to fit < 10mb:
+</p>
 <p align="center" width="100%">
-<video src="https://github.com/user-attachments/assets/faf40b34-0fe1-43f0-ab9b-6896671971e5" width="80%" controls></video>
+<video src="https://github.com/user-attachments/assets/1ae8a3e3-9123-43cf-ae2e-f038383ef87d" width="80%" controls></video>
+</p>
+
+<p align="center" width="100%">
+<video src="https://github.com/user-attachments/assets/13bff761-42a8-43d6-901c-4aca7dbc26f0" width="80%" controls></video>
 </p>
 
 
 ## Blurb
-I initially started working on this when FW 21 broke chiaki-ng.The changes I was going to be making was very invasive, and so I took it out of tree first, switching to a homebrew nro that wraps chiaki-ng as a dependency. I may upstream this back into chiaki-ng eventually. However, the current state of this (local discovery, wake, connect, play/stream) and general performance is good enough for me.
+I initially started working on this when FW 21 broke chiaki-ng.The changes I was going to be making was very invasive, and so I took it out of tree first, switching to a homebrew nro that wraps chiaki-ng as a dependency. I may upstream this back into chiaki-ng eventually. 
 
 At this point I'm a place where I can seat back and enjoy my christmas break to play Avatar while my partner watches something else on the telly.
 
-So far I have been testing auto discovery -> Register ->  Wake -> Connect -> Play against a PS5. My pirority has been to get the streaming bit working with deko3d well.
-
 Disconnecting etc is still problematic and crashes and will most likely require an app restart for now.
-
-Dont ask for remote because I spent over an hour refreshing PSN's login page and I was never able to get in.
-
-## Changes from in-tree
-- No longer need to compile switch-dav1d and switch-ffmpeg with hwaccel support as these have been brought into devkitpro
-- Just used the devkitpro builder docker image 
-- Used [deko3d](https://github.com/devkitPro/deko3d) for rendering rather than openGL which should have better performance (due to lower overhead)
-- Removed mbedTLS entirely and replace with libnx/software crypto/micro-ecc depending on what algorithm is needed. [forked chiaki-ng:](https://github.com/xlanor/chiaki-ng/blob/5907140e730ff975a01aa8a6eca51ac5c6ca9f41/lib/src/crypto/libnx/README.md). Mind you, I dont know if the in-tree crypto works for PSN handshakes because I could never login properly on the desktop after trying for ages.
-- Use libNX starting from 4.1.0 and used a [custom](https://github.com/xlanor/curl) version of cURL 8.18.0 with the libNX vTLS backend. I built a secondary app to test cURL functionality and it works.
-- Deprecate the original borealis version that was used and use xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) with the [yoga](https://github.com/facebook/yoga) rendering engine
-- Rather than going to the HID directly, use the built in rumble methods exposed in borealis. 
 
 I really do not recomend you do 1080p/60fps even though the option is there. 720p/60fps was enough/very enjoyable for me. The switch without being overclocked is completely horrible at 1080p/60fps. use at your own risk.
 
-This software relied extremely heavily on refrencing/taking bits from:
+## Changes from in-tree
+[Read this](https://github.com/xlanor/akira/wiki/Additional-changes)
+
+The biggest change is probably the removal of openGL and cutover to deko3d.
+
+The second biggest feature change is the addition of PSN remote play. Thanks to the hard work by Streetpea on chiaki-ng, I just call whatever he has built. You should see two screens come up if this is successful.
+
+The first screen is going to be for the CTRL holepunching, and the second screen for DATA holepunching after the session has been initalised. Rather than show an empty screen I decided to just stream the logs.
+
+
+
+## How to get started
+[Read this for local](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Local-Network))
+
+[Read this for remote](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Remote-Network))
+
+Actually, just read the whole wiki.
+
+---
+
+This software was built with reference/code from:
 
 - [Streetpea](https://github.com/streetpea/chiaki-ng) the original chiaki-ng code
 - [moonlight-switch](https://github.com/XITRIX/Moonlight-Switch) XITRIX's deko3d renderer for moonlight for the deko3d bits
