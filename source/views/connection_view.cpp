@@ -187,11 +187,8 @@ void ConnectionView::onConnectionComplete()
         std::string error = connectionError;
         brls::sync([error]() {
             auto* dialog = new brls::Dialog("Connection Failed\n\n" + error);
-            dialog->addButton("OK", [dialog]() {
-                dialog->close();
-                brls::sync([]() {
-                    brls::Application::popActivity();
-                });
+            dialog->addButton("OK", []() {
+                brls::Application::popActivity();
             });
             dialog->open();
         });

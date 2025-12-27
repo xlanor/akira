@@ -175,8 +175,7 @@ void StreamView::startStream()
         std::string errorMsg = e.what();
         brls::sync([errorMsg]() {
             auto* dialog = new brls::Dialog("Connection Failed\n\n" + errorMsg);
-            dialog->addButton("OK", [dialog]() {
-                dialog->close();
+            dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
             dialog->open();
@@ -365,8 +364,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             brls::Application::popActivity();
         } else {
             auto* dialog = new brls::Dialog("Session Ended\n\n" + reasonStr);
-            dialog->addButton("OK", [dialog]() {
-                dialog->close();
+            dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
             dialog->open();
