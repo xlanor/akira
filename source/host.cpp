@@ -190,6 +190,25 @@ void Host::applyRegistrationData(ChiakiRegisteredHost* regHost)
     brls::Logger::info("Applied registration data for {}", hostName);
 }
 
+void Host::copyRegistrationFrom(const Host* other)
+{
+    if (!other || !other->rpKeyData) return;
+
+    memcpy(serverMac, other->serverMac, sizeof(serverMac));
+    memcpy(rpRegistKey, other->rpRegistKey, sizeof(rpRegistKey));
+    rpKeyType = other->rpKeyType;
+    memcpy(rpKey, other->rpKey, sizeof(rpKey));
+
+    psnAccountId = other->psnAccountId;
+    psnOnlineId = other->psnOnlineId;
+    consolePIN = other->consolePIN;
+
+    registered = true;
+    rpKeyData = true;
+
+    brls::Logger::info("Copied registration data from '{}' to '{}'", other->hostName, hostName);
+}
+
 int Host::registerHost(int pin)
 {
     std::string accountId = settings->getPsnAccountId(this);
@@ -202,7 +221,6 @@ int Host::registerHost(int pin)
 
     if (target >= CHIAKI_TARGET_PS4_9)
     {
-        // Use AccountID for PS4 > 7.0
         if (accountId.length() > 0)
         {
             chiaki_base64_decode(accountId.c_str(), accountId.length(),
@@ -261,9 +279,6 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
 {
     chiaki_connect_video_profile_preset(&videoProfile, videoResolution, videoFps);
 
-    // Override bitrates for Switch
-    // I can guarantee you you will not have a good time trying to do
-    // 10000 for 720p on switch.
     switch (videoResolution)
     {
         case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p:
@@ -291,7 +306,31 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
     connectInfo.host = hostAddr.c_str();
     connectInfo.video_profile = videoProfile;
     connectInfo.video_profile_auto_downgrade = true;
-    connectInfo.holepunch_session = holepunch; 
+    connectInfo.holepunch_session = holepunch;
+
+    if (holepunch)
+    {
+        std::string accountId = settings->getPsnAccountId(this);
+        if (!accountId.empty())
+        {
+            size_t accountIdSize = CHIAKI_PSN_ACCOUNT_ID_SIZE;
+            ChiakiErrorCode err = chiaki_base64_decode(
+                accountId.c_str(), accountId.length(),
+                connectInfo.psn_account_id, &accountIdSize);
+            if (err == CHIAKI_ERR_SUCCESS && accountIdSize == CHIAKI_PSN_ACCOUNT_ID_SIZE)
+            {
+                brls::Logger::info("Host::initSession: PSN account ID set for holepunch");
+            }
+            else
+            {
+                brls::Logger::error("Host::initSession: Failed to decode PSN account ID");
+            }
+        }
+        else
+        {
+            brls::Logger::warning("Host::initSession: No PSN account ID for holepunch session");
+        }
+    }
 
     if (isPS5())
     {
@@ -513,7 +552,134 @@ void Host::registCallback(ChiakiRegistEvent* event)
         }
     }
 
-    // Close registration socket
     chiaki_regist_stop(&regist);
     chiaki_regist_fini(&regist);
+}
+
+ChiakiErrorCode Host::initHolepunchSession()
+{
+    if (holepunchSession)
+    {
+        brls::Logger::warning("Holepunch session already initialized");
+        return CHIAKI_ERR_SUCCESS;
+    }
+
+    std::string accessToken = settings->getPsnAccessToken();
+    if (accessToken.empty())
+    {
+        brls::Logger::error("No PSN access token available for holepunch");
+        return CHIAKI_ERR_INVALID_DATA;
+    }
+
+    holepunchSession = chiaki_holepunch_session_init(accessToken.c_str(), log);
+    if (!holepunchSession)
+    {
+        brls::Logger::error("Failed to initialize holepunch session");
+        return CHIAKI_ERR_MEMORY;
+    }
+
+    brls::Logger::info("Holepunch session initialized for {}", hostName);
+    return CHIAKI_ERR_SUCCESS;
+}
+
+ChiakiErrorCode Host::connectHolepunch()
+{
+    if (!holepunchSession)
+    {
+        ChiakiErrorCode err = initHolepunchSession();
+        if (err != CHIAKI_ERR_SUCCESS)
+            return err;
+    }
+
+    if (remoteDuid.empty())
+    {
+        brls::Logger::error("No remote DUID available for holepunch");
+        return CHIAKI_ERR_INVALID_DATA;
+    }
+
+    size_t duidLen = remoteDuid.size();
+    size_t duidBytesLen = duidLen / 2;
+    uint8_t duidBytes[32] = {0};
+
+    for (size_t i = 0; i < duidBytesLen && i < 32; i++)
+    {
+        unsigned int byte;
+        if (sscanf(remoteDuid.c_str() + (i * 2), "%02x", &byte) == 1)
+        {
+            duidBytes[i] = static_cast<uint8_t>(byte);
+        }
+    }
+
+    ChiakiHolepunchConsoleType consoleType = isPS5() ?
+        CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5 : CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4;
+
+    brls::Logger::info("Starting holepunch connection sequence for {} ({})",
+        hostName, isPS5() ? "PS5" : "PS4");
+
+    ChiakiErrorCode err = chiaki_holepunch_upnp_discover(holepunchSession);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::warning("UPNP discovery failed (non-fatal): {}", chiaki_error_string(err));
+    }
+    else
+    {
+        brls::Logger::info("UPNP discovery completed");
+    }
+
+    brls::Logger::info("Creating holepunch session on PSN...");
+    err = chiaki_holepunch_session_create(holepunchSession);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Failed to create holepunch session: {}", chiaki_error_string(err));
+        return err;
+    }
+    brls::Logger::info("Holepunch session created on PSN");
+
+    brls::Logger::info("Creating CTRL offer...");
+    err = holepunch_session_create_offer(holepunchSession);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Failed to create CTRL offer: {}", chiaki_error_string(err));
+        return err;
+    }
+    brls::Logger::info("CTRL offer created");
+
+    brls::Logger::info("Starting holepunch session for device...");
+    err = chiaki_holepunch_session_start(holepunchSession, duidBytes, consoleType);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Failed to start holepunch session: {}", chiaki_error_string(err));
+        return err;
+    }
+    brls::Logger::info("Holepunch session started for device");
+
+    brls::Logger::info("Punching CTRL hole...");
+    err = chiaki_holepunch_session_punch_hole(holepunchSession, CHIAKI_HOLEPUNCH_PORT_TYPE_CTRL);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Failed to punch CTRL hole: {}", chiaki_error_string(err));
+        return err;
+    }
+    brls::Logger::info("CTRL hole punched successfully!");
+
+    return CHIAKI_ERR_SUCCESS;
+}
+
+void Host::cancelHolepunch()
+{
+    if (holepunchSession)
+    {
+        brls::Logger::info("Canceling holepunch session");
+        chiaki_holepunch_main_thread_cancel(holepunchSession, true);
+    }
+}
+
+void Host::cleanupHolepunch()
+{
+    if (holepunchSession)
+    {
+        brls::Logger::info("Cleaning up holepunch session");
+        chiaki_holepunch_session_fini(holepunchSession);
+        holepunchSession = nullptr;
+    }
 }

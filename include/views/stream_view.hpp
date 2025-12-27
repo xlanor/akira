@@ -3,6 +3,8 @@
 
 #include <borealis.hpp>
 #include <chrono>
+#include <deque>
+#include <mutex>
 
 #include "core/host.hpp"
 #include "core/io.hpp"
@@ -20,6 +22,7 @@ public:
 
     void startStream();
     void stopStream();
+    void setSessionAlreadyStarted(bool started) { sessionPreStarted = started; }
 
     static brls::View* create();
 
@@ -29,11 +32,18 @@ private:
     SettingsManager* settings = nullptr;
     bool streamActive = false;
     bool sessionStarted = false;
+    bool sessionPreStarted = false;
 
     bool menuOpen = false;
     std::chrono::steady_clock::time_point minusHoldStart;
     bool minusWasHeld = false;
     brls::Event<>::Subscription exitSubscription;
+
+    std::deque<std::string> logLines;
+    std::mutex logMutex;
+    brls::Event<brls::Logger::TimePoint, brls::LogLevel, std::string>::Subscription logSubscription;
+    static constexpr size_t MAX_LOG_LINES = 30;
+    void renderLogs(NVGcontext* vg, float x, float y, float width, float height);
 
     void onConnected();
     void onQuit(ChiakiQuitEvent* event);

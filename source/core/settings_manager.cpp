@@ -65,8 +65,6 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
     Host* host = hosts.at(hostName);
 
     if (created) {
-        // Copy global defaults to newly created host
-        // Note: haptic defaults to -1 (inherit from global), so we don't copy it
         setPsnOnlineId(host, globalPsnOnlineId);
         setPsnAccountId(host, globalPsnAccountId);
         setVideoResolution(host, globalVideoResolution);
@@ -137,6 +135,14 @@ void SettingsManager::parseFile() {
                 setPsnAccountId(currentHost, value);
                 break;
 
+            case ConfigItem::PsnRefreshToken:
+                globalPsnRefreshToken = value;
+                break;
+
+            case ConfigItem::PsnAccessToken:
+                globalPsnAccessToken = value;
+                break;
+
             case ConfigItem::ConsolePIN:
                 if (currentHost) {
                     currentHost->consolePIN = value;
@@ -176,6 +182,9 @@ void SettingsManager::parseFile() {
             case ConfigItem::RemoteDuid:
                 if (currentHost) {
                     currentHost->remoteDuid = value;
+                    if (!value.empty() && currentHost->getHostName().rfind("[Remote] ", 0) == 0) {
+                        currentHost->isRemoteHost = true;
+                    }
                 }
                 break;
 
@@ -183,6 +192,29 @@ void SettingsManager::parseFile() {
                 if (currentHost) {
                     setChiakiTarget(currentHost, value);
                 }
+                break;
+
+            case ConfigItem::CompanionHost:
+                companionHost = value;
+                break;
+
+            case ConfigItem::CompanionPort:
+                companionPort = std::atoi(value.c_str());
+                if (companionPort <= 0 || companionPort > 65535) {
+                    companionPort = 8080;
+                }
+                break;
+
+            case ConfigItem::PsnTokenExpiresAt:
+                globalPsnTokenExpiresAt = std::atoll(value.c_str());
+                break;
+
+            case ConfigItem::GlobalDuid:
+                globalDuid = value;
+                break;
+
+            case ConfigItem::InvertAB:
+                globalInvertAB = (value == "true" || value == "1");
                 break;
         }
 
@@ -206,7 +238,6 @@ int SettingsManager::writeFile() {
         return -1;
     }
 
-    // Write global settings
     if (globalVideoResolution) {
         configFile << "video_resolution = \"" << resolutionToString(globalVideoResolution) << "\"\n";
     }
@@ -222,8 +253,30 @@ int SettingsManager::writeFile() {
     if (!globalPsnAccountId.empty()) {
         configFile << "psn_account_id = \"" << globalPsnAccountId << "\"\n";
     }
+    if (!globalPsnRefreshToken.empty()) {
+        configFile << "psn_refresh_token = \"" << globalPsnRefreshToken << "\"\n";
+    }
+    if (!globalPsnAccessToken.empty()) {
+        configFile << "psn_access_token = \"" << globalPsnAccessToken << "\"\n";
+    }
+    if (globalPsnTokenExpiresAt > 0) {
+        configFile << "psn_token_expires_at = " << globalPsnTokenExpiresAt << "\n";
+    }
+    if (!globalDuid.empty()) {
+        configFile << "global_duid = \"" << globalDuid << "\"\n";
+    }
 
-    // Write per-host settings
+    if (!companionHost.empty()) {
+        configFile << "companion_host = \"" << companionHost << "\"\n";
+    }
+    if (companionPort != 8080) {
+        configFile << "companion_port = " << companionPort << "\n";
+    }
+
+    if (globalInvertAB) {
+        configFile << "invert_ab = true\n";
+    }
+
     for (const auto& [name, host] : hosts) {
         brls::Logger::debug("Writing host config: {}", name);
 
@@ -257,7 +310,6 @@ int SettingsManager::writeFile() {
             configFile << "remote_duid = \"" << host->remoteDuid << "\"\n";
         }
 
-        // Only write per-host haptic if explicitly set (not inherit)
         if (host->haptic >= 0) {
             configFile << "haptic = " << host->haptic << "\n";
         }
@@ -267,7 +319,6 @@ int SettingsManager::writeFile() {
     return 0;
 }
 
-// Resolution helpers
 std::string SettingsManager::resolutionToString(ChiakiVideoResolutionPreset resolution) {
     switch (resolution) {
         case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return "360p";
@@ -319,7 +370,6 @@ ChiakiVideoFPSPreset SettingsManager::stringToFps(const std::string& value) {
     return CHIAKI_VIDEO_FPS_PRESET_60;
 }
 
-// Host info getters/setters
 std::string SettingsManager::getHostName(Host* host) {
     if (host) return host->getHostName();
     brls::Logger::error("Cannot getHostName from nullptr");
@@ -340,7 +390,6 @@ void SettingsManager::setHostAddr(Host* host, const std::string& addr) {
     }
 }
 
-// PSN settings
 std::string SettingsManager::getPsnOnlineId(Host* host) {
     if (!host || host->psnOnlineId.empty()) {
         return globalPsnOnlineId;
@@ -371,7 +420,6 @@ void SettingsManager::setPsnAccountId(Host* host, const std::string& id) {
     }
 }
 
-// Console PIN (per-host only, no global)
 std::string SettingsManager::getConsolePIN(Host* host) {
     if (host) return host->consolePIN;
     return "";
@@ -385,7 +433,6 @@ void SettingsManager::setConsolePIN(Host* host, const std::string& pin) {
     }
 }
 
-// Video settings
 ChiakiVideoResolutionPreset SettingsManager::getVideoResolution(Host* host) {
     if (host) return host->videoResolution;
     return globalVideoResolution;
@@ -420,10 +467,8 @@ void SettingsManager::setVideoFPS(Host* host, const std::string& value) {
     setVideoFPS(host, stringToFps(value));
 }
 
-// Haptic settings
 HapticPreset SettingsManager::getHaptic(Host* host) {
     if (!host) return globalHaptic;
-    // -1 means inherit from global
     if (host->haptic < 0) return globalHaptic;
     switch (host->haptic) {
         case 0: return HapticPreset::Disabled;
@@ -448,7 +493,6 @@ void SettingsManager::setHaptic(Host* host, const std::string& value) {
     setHaptic(host, preset);
 }
 
-// Target settings
 ChiakiTarget SettingsManager::getChiakiTarget(Host* host) {
     if (host) return host->getChiakiTarget();
     return CHIAKI_TARGET_PS4_UNKNOWN;
@@ -467,7 +511,6 @@ bool SettingsManager::setChiakiTarget(Host* host, const std::string& value) {
     return setChiakiTarget(host, static_cast<ChiakiTarget>(std::atoi(value.c_str())));
 }
 
-// RP key management
 std::string SettingsManager::getHostRpKey(Host* host) {
     if (!host) {
         brls::Logger::error("Cannot getHostRpKey from nullptr");
@@ -568,4 +611,69 @@ bool SettingsManager::setHostRpKeyType(Host* host, const std::string& value) {
         return true;
     }
     return false;
+}
+
+std::string SettingsManager::getCompanionHost() const {
+    return companionHost;
+}
+
+void SettingsManager::setCompanionHost(const std::string& host) {
+    companionHost = host;
+}
+
+int SettingsManager::getCompanionPort() const {
+    return companionPort;
+}
+
+void SettingsManager::setCompanionPort(int port) {
+    if (port > 0 && port <= 65535) {
+        companionPort = port;
+    }
+}
+
+std::string SettingsManager::getPsnRefreshToken() const {
+    return globalPsnRefreshToken;
+}
+
+void SettingsManager::setPsnRefreshToken(const std::string& token) {
+    globalPsnRefreshToken = token;
+}
+
+std::string SettingsManager::getPsnAccessToken() const {
+    return globalPsnAccessToken;
+}
+
+void SettingsManager::setPsnAccessToken(const std::string& token) {
+    globalPsnAccessToken = token;
+}
+
+int64_t SettingsManager::getPsnTokenExpiresAt() const {
+    return globalPsnTokenExpiresAt;
+}
+
+void SettingsManager::setPsnTokenExpiresAt(int64_t expiresAt) {
+    globalPsnTokenExpiresAt = expiresAt;
+}
+
+void SettingsManager::clearPsnTokenData() {
+    globalPsnAccessToken.clear();
+    globalPsnRefreshToken.clear();
+    globalPsnTokenExpiresAt = 0;
+    brls::Logger::info("PSN token data cleared");
+}
+
+std::string SettingsManager::getGlobalDuid() const {
+    return globalDuid;
+}
+
+void SettingsManager::setGlobalDuid(const std::string& duid) {
+    globalDuid = duid;
+}
+
+bool SettingsManager::getInvertAB() const {
+    return globalInvertAB;
+}
+
+void SettingsManager::setInvertAB(bool invert) {
+    globalInvertAB = invert;
 }

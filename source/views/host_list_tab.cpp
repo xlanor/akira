@@ -1,9 +1,38 @@
 #include "views/host_list_tab.hpp"
 #include "views/stream_view.hpp"
+#include "views/connection_view.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/host_settings_view.hpp"
 #include "core/host.hpp"
 #include "core/io.hpp"
+
+#include <ctime>
+
+static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
+    .shadowType              = brls::ShadowType::GENERIC,
+    .hideHighlightBackground = true,
+    .highlightPadding = "",
+    .borderThickness  = "",
+    .enabledBackgroundColor = "",
+    .enabledLabelColor      = "brls/button/primary_enabled_text",
+    .enabledBorderColor     = "",
+    .disabledBackgroundColor = "",
+    .disabledLabelColor      = "brls/button/primary_disabled_text",
+    .disabledBorderColor     = "",
+};
+
+static const brls::ButtonStyle BUTTONSTYLE_ORANGE = {
+    .shadowType              = brls::ShadowType::GENERIC,
+    .hideHighlightBackground = true,
+    .highlightPadding = "",
+    .borderThickness  = "",
+    .enabledBackgroundColor = "",
+    .enabledLabelColor      = "brls/button/primary_enabled_text",
+    .enabledBorderColor     = "",
+    .disabledBackgroundColor = "",
+    .disabledLabelColor      = "brls/button/primary_disabled_text",
+    .disabledBorderColor     = "",
+};
 
 HostListTab* HostListTab::currentInstance = nullptr;
 bool HostListTab::isConnecting = false;
@@ -22,15 +51,44 @@ public:
         this->setBackgroundColor(nvgRGBA(40, 40, 40, 255));
         this->setCornerRadius(8);
 
-        // Left side: Host info
         auto* infoBox = new brls::Box();
         infoBox->setAxis(brls::Axis::COLUMN);
+        infoBox->setGrow(1);
+        infoBox->setShrink(1);
+
+        auto* nameRow = new brls::Box();
+        nameRow->setAxis(brls::Axis::ROW);
+        nameRow->setAlignItems(brls::AlignItems::CENTER);
+        nameRow->setMarginBottom(5);
 
         nameLabel = new brls::Label();
-        nameLabel->setText(host->getHostName());
+        std::string displayName = host->getHostName();
+        if (displayName.rfind("[Remote] ", 0) == 0) {
+            displayName = displayName.substr(9);
+        }
+        nameLabel->setText(displayName);
         nameLabel->setFontSize(18);
-        nameLabel->setMarginBottom(5);
-        infoBox->addView(nameLabel);
+        nameRow->addView(nameLabel);
+
+        remoteBadge = new brls::Box();
+        remoteBadge->setBackgroundColor(nvgRGBA(59, 130, 246, 255));
+        remoteBadge->setCornerRadius(4);
+        remoteBadge->setPaddingTop(2);
+        remoteBadge->setPaddingBottom(2);
+        remoteBadge->setPaddingLeft(6);
+        remoteBadge->setPaddingRight(6);
+        remoteBadge->setMarginLeft(8);
+        remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+
+        auto* badgeLabel = new brls::Label();
+        badgeLabel->setText("Remote");
+        badgeLabel->setFontSize(11);
+        badgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
+        remoteBadge->addView(badgeLabel);
+
+        nameRow->addView(remoteBadge);
+
+        infoBox->addView(nameRow);
 
         addrLabel = new brls::Label();
         addrLabel->setText(host->getHostAddr());
@@ -47,6 +105,7 @@ public:
 
         buttonBox = new brls::Box();
         buttonBox->setAxis(brls::Axis::ROW);
+        buttonBox->setShrink(0);
 
         createConnectButton();
         createWakeButton();
@@ -66,11 +125,18 @@ public:
         }
         statusLabel->setText(status);
 
-        addrLabel->setText(host->getHostAddr());
+        remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
-        bool showConnect = host->isReady() && host->hasRpKey();
-        bool showWake = host->isStandby() && host->hasRpKey();
-        bool showRegister = host->isDiscovered() && !host->hasRpKey();
+        if (host->isRemote()) {
+            addrLabel->setText("PSN Remote Play");
+        } else {
+            addrLabel->setText(host->getHostAddr());
+        }
+
+        bool showConnect = (host->isReady() && host->hasRpKey()) ||
+                           (host->isRemote() && host->hasRpKey());
+        bool showWake = host->isStandby() && host->hasRpKey() && !host->isRemote();
+        bool showRegister = host->isDiscovered() && !host->hasRpKey() && !host->isRemote();
         bool showSettings = host->hasRpKey();
         bool showDelete = host->hasRpKey() || !host->isDiscovered();
 
@@ -86,6 +152,7 @@ public:
 private:
     Host* host;
     brls::Label* nameLabel;
+    brls::Box* remoteBadge;
     brls::Label* addrLabel;
     brls::Label* statusLabel;
     brls::Box* buttonBox;
@@ -99,6 +166,7 @@ private:
         connectBtn = new brls::Button();
         connectBtn->setText("Connect");
         connectBtn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
+        connectBtn->setShrink(0);
         connectBtn->setMarginRight(10);
         connectBtn->registerClickAction([this](brls::View* view) {
             if (HostListTab::isConnecting) {
@@ -135,9 +203,14 @@ private:
             HostListTab::isConnecting = true;
             HostListTab::isActive = false;
 
-            auto* streamView = new StreamView(host);
-            brls::Application::pushActivity(new brls::Activity(streamView));
-            streamView->startStream();
+            if (host->isRemote()) {
+                auto* connectionView = new ConnectionView(host);
+                brls::Application::pushActivity(new brls::Activity(connectionView));
+            } else {
+                auto* streamView = new StreamView(host);
+                brls::Application::pushActivity(new brls::Activity(streamView));
+                streamView->startStream();
+            }
 
             HostListTab::isConnecting = false;
 
@@ -149,8 +222,11 @@ private:
     void createWakeButton() {
         wakeBtn = new brls::Button();
         wakeBtn->setText("Wake");
-        wakeBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
+        wakeBtn->setStyle(&BUTTONSTYLE_ORANGE);
+        wakeBtn->setShrink(0);
         wakeBtn->setMarginRight(10);
+        wakeBtn->setBackgroundColor(nvgRGBA(255, 203, 92, 255));
+
         wakeBtn->registerClickAction([this](brls::View* view) {
             brls::Logger::info("Wake {}", host->getHostName());
 
@@ -170,6 +246,7 @@ private:
         registerBtn = new brls::Button();
         registerBtn->setText("Register");
         registerBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
+        registerBtn->setShrink(0);
         registerBtn->setMarginRight(10);
         registerBtn->registerClickAction([this](brls::View* view) {
             if (HostListTab::isRegistering) {
@@ -179,7 +256,6 @@ private:
             brls::Logger::info("Register button clicked for {}", host->getHostName());
             HostListTab::isRegistering = true;
 
-            // Capture host pointer for callbacks
             Host* hostPtr = host;
 
             host->setOnRegistSuccess([hostPtr]() {
@@ -249,6 +325,7 @@ private:
         settingsBtn = new brls::Button();
         settingsBtn->setText("Settings");
         settingsBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
+        settingsBtn->setShrink(0);
         settingsBtn->setMarginRight(10);
         settingsBtn->registerClickAction([this](brls::View* view) {
             brls::Logger::info("Settings button clicked for {}", host->getHostName());
@@ -271,6 +348,7 @@ private:
         deleteBtn = new brls::Button();
         deleteBtn->setText("Delete");
         deleteBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
+        deleteBtn->setShrink(0);
         std::string hostName = host->getHostName();
         deleteBtn->registerClickAction([hostName](brls::View* view) {
             brls::Logger::info("Delete button clicked for {}", hostName);
@@ -315,7 +393,48 @@ HostListTab::HostListTab() {
     if (!discovery->isServiceEnabled()) {
         discovery->setServiceEnabled(true);
     }
+
+    initFindRemoteButton();
     syncHostList();
+}
+
+void HostListTab::initFindRemoteButton() {
+    findRemoteBtn->setStyle(&BUTTONSTYLE_BLUE);
+    findRemoteBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
+
+    findRemoteBtn->registerClickAction([this](brls::View* view) {
+        std::string refreshToken = settings->getPsnRefreshToken();
+
+        if (refreshToken.empty()) {
+            brls::Application::notify("No PSN token set");
+            return true;
+        }
+
+        int64_t expiresAt = settings->getPsnTokenExpiresAt();
+        int64_t now = std::time(nullptr);
+
+        if (expiresAt > 0 && now > expiresAt) {
+            brls::Application::notify("Token expired, refreshing...");
+            discovery->refreshPsnToken(
+                [this]() {
+                    brls::sync([this]() {
+                        brls::Application::notify("Finding remote devices...");
+                        discovery->refreshRemoteDevices();
+                    });
+                },
+                [](const std::string& error) {
+                    brls::sync([error]() {
+                        brls::Application::notify("Token refresh failed: " + error);
+                    });
+                }
+            );
+        } else {
+            brls::Application::notify("Finding remote devices...");
+            discovery->refreshRemoteDevices();
+        }
+
+        return true;
+    });
 }
 
 HostListTab::~HostListTab() {
@@ -326,7 +445,6 @@ HostListTab::~HostListTab() {
     hostItems.clear();
 
     discovery->setOnHostDiscovered(nullptr);
-    // Don't stop discovery
 }
 
 void HostListTab::willAppear(bool resetState) {

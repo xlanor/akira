@@ -76,6 +76,9 @@ private:
     bool registered = false;
     bool rpKeyData = false;
     bool sessionInit = false;
+    bool isRemoteHost = false;
+
+    ChiakiHolepunchSession holepunchSession = nullptr;
 
     // Session components
     ChiakiSession session;
@@ -122,6 +125,7 @@ public:
     bool hasRpKey() const { return rpKeyData; }
     bool isReady() const { return state == CHIAKI_DISCOVERY_HOST_STATE_READY; }
     bool isPS5() const;
+    bool isRemote() const { return isRemoteHost; }
 
     // Console state helpers
     bool isStandby() const { return state == CHIAKI_DISCOVERY_HOST_STATE_STANDBY; }
@@ -161,10 +165,18 @@ public:
     int finiSession();
     void sendFeedbackState();
 
+    // Holepunch connection for remote play
+    ChiakiErrorCode initHolepunchSession();
+    ChiakiErrorCode connectHolepunch();
+    void cancelHolepunch();
+    void cleanupHolepunch();
+    ChiakiHolepunchSession getHolepunchSession() const { return holepunchSession; }
+
     // Wakeup and registration
     int wakeup();
     int registerHost(int pin);
     void applyRegistrationData(ChiakiRegisteredHost* regHost);
+    void copyRegistrationFrom(const Host* other);
 
     // Event callbacks from chiaki
     void connectionEventCallback(ChiakiEvent* event);

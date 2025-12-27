@@ -1,6 +1,20 @@
 #include "views/host_settings_view.hpp"
 #include "core/discovery_manager.hpp"
 
+// Custom button style with colored background, no border
+static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
+    .shadowType              = brls::ShadowType::GENERIC,
+    .hideHighlightBackground = true,
+    .highlightPadding = "",
+    .borderThickness  = "",
+    .enabledBackgroundColor = "",
+    .enabledLabelColor      = "brls/button/primary_enabled_text",
+    .enabledBorderColor     = "",
+    .disabledBackgroundColor = "",
+    .disabledLabelColor      = "brls/button/primary_disabled_text",
+    .disabledBorderColor     = "",
+};
+
 HostSettingsView::HostSettingsView(Host* host)
     : host(host)
 {
@@ -62,6 +76,10 @@ void HostSettingsView::initLookupButton()
         "Enter PSN username",
         "Look up account ID from PSN username"
     );
+
+    // Style lookup button with blue
+    lookupBtn->setStyle(&BUTTONSTYLE_BLUE);
+    lookupBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
 
     lookupBtn->registerClickAction([this](brls::View* view) {
         std::string onlineId = psnOnlineIdInput->getValue();

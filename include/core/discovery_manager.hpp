@@ -4,9 +4,12 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include <chiaki/discoveryservice.h>
 #include <chiaki/log.h>
+#include <chiaki/thread.h>
+#include <chiaki/remote/holepunch.h>
 
 #include "host.hpp"
 
@@ -35,43 +38,69 @@ private:
 
     NetworkAddresses getIPv4BroadcastAddr();
 
-    // Singleton
+    void fetchRemoteDevicesFromPsn();
+    void processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType);
+
+    ChiakiThread remoteDiscoveryThread;
+    ChiakiBoolPredCond remoteStopCond;
+    std::atomic<bool> remoteDiscoveryEnabled{false};
+    static constexpr uint64_t REMOTE_DISCOVERY_INTERVAL_MS = 45000;
+
+    static void* remoteDiscoveryThreadFunc(void* user);
+    void runRemoteDiscoveryLoop();
+
     static DiscoveryManager* instance;
     DiscoveryManager();
 
 public:
-    // Singleton access
     static DiscoveryManager* getInstance();
 
     ~DiscoveryManager();
 
-    // Logger
     void setLogger(ChiakiLog* logger) { this->log = logger; }
     ChiakiLog* getLogger() const { return log; }
 
-    // Service control
     void setServiceEnabled(bool enable);
     bool isServiceEnabled() const { return serviceEnabled; }
 
-    // Discovery methods
     int sendDiscovery();
     int sendDiscovery(const char* ipAddress);
     int sendDiscovery(struct sockaddr* addr, size_t addrLen);
 
-    // Callback from chiaki discovery
     void discoveryCallback(ChiakiDiscoveryHost* discoveredHost);
 
-    // Set callback for when a host is discovered
     void setOnHostDiscovered(HostDiscoveredCallback callback) {
         onHostDiscovered = std::move(callback);
     }
 
-    // PSN Account ID lookup
     void lookupPsnAccountId(
         const std::string& username,
         std::function<void(const std::string&)> onSuccess,
         std::function<void(const std::string&)> onError
     );
+
+    void fetchCompanionCredentials(
+        const std::string& host,
+        int port,
+        std::function<void(
+            const std::string& onlineId,
+            const std::string& accountId,
+            const std::string& accessToken,
+            const std::string& refreshToken,
+            int64_t expiresAt,
+            const std::string& duid
+        )> onSuccess,
+        std::function<void(const std::string&)> onError
+    );
+
+    void refreshPsnToken(
+        std::function<void()> onSuccess,
+        std::function<void(const std::string&)> onError
+    );
+
+    bool isPsnTokenValid() const;
+
+    void refreshRemoteDevices();
 };
 
 #endif // AKIRA_DISCOVERY_MANAGER_HPP

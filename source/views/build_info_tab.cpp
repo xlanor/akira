@@ -40,12 +40,12 @@ void BuildInfoTab::addInfoRow(const std::string& text, bool isHeader) {
     label->setText(text);
 
     if (isHeader) {
-        label->setFontSize(18);
+        label->setFontSize(22);
         label->setTextColor(nvgRGBA(100, 180, 255, 255));
-        label->setMarginTop(10);
-        label->setMarginBottom(5);
+        label->setMarginTop(20);
+        label->setMarginBottom(10);
     } else {
-        label->setFontSize(14);
+        label->setFontSize(22);
         label->setTextColor(nvgRGBA(200, 200, 200, 255));
     }
 

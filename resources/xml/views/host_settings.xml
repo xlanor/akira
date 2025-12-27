@@ -33,25 +33,25 @@
             marginLeft="15"
             marginRight="15"/>
 
-        <brls:InputCell
-            id="host_settings/psnOnlineId"
-            title="Look up by Online ID"
-            marginLeft="15"
-            marginRight="15"/>
-
         <brls:Box
             width="auto"
             height="auto"
             axis="row"
-            justifyContent="center"
-            marginTop="10"
-            marginBottom="10">
+            alignItems="center"
+            marginLeft="15"
+            marginRight="15">
+
+            <brls:InputCell
+                id="host_settings/psnOnlineId"
+                title="Look up by Online ID"
+                grow="1"/>
 
             <brls:Button
                 id="host_settings/lookupBtn"
                 text="Look Up"
                 style="bordered"
-                width="150"/>
+                width="120"
+                marginLeft="10"/>
 
         </brls:Box>
 

@@ -1,0 +1,6 @@
+# Built binary
+akira-companion
+akira-companion.exe
+
+# State file (contains tokens)
+state.json

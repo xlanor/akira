@@ -8,11 +8,6 @@
     paddingRight="@style/brls/tab_frame/content_padding_sides"
     paddingBottom="@style/brls/tab_frame/content_padding_top_bottom">
 
-    <brls:Label
-        text="PlayStation Consoles"
-        fontSize="24"
-        marginBottom="12"/>
-
     <brls:ScrollingFrame
         id="host/scroll"
         width="auto"
@@ -20,11 +15,38 @@
         grow="1.0">
 
         <brls:Box
-            id="host/container"
             width="auto"
             height="auto"
             axis="column"
-            grow="1.0"/>
+            grow="1.0">
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="row"
+                justifyContent="spaceBetween"
+                alignItems="center"
+                marginBottom="12">
+
+                <brls:Label
+                    text="PlayStation Consoles"
+                    fontSize="24"/>
+
+                <brls:Button
+                    id="host/findRemoteBtn"
+                    text="Find Remote"
+                    style="bordered"/>
+
+            </brls:Box>
+
+            <brls:Box
+                id="host/container"
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"/>
+
+        </brls:Box>
 
     </brls:ScrollingFrame>
 

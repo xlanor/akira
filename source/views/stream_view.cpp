@@ -3,6 +3,7 @@
 #include "views/enter_pin_view.hpp"
 #include "core/exception.hpp"
 #include "core/io/input_manager.hpp"
+#include "core/discovery_manager.hpp"
 #include <switch.h>
 
 StreamView::StreamView(Host* host)
@@ -60,17 +61,28 @@ StreamView::StreamView(Host* host)
         }
     });
 
-     exitSubscription = brls::Application::getExitEvent()->subscribe([this]() {
-         if (this->sessionStarted) {
+    exitSubscription = brls::Application::getExitEvent()->subscribe([this]() {
+        if (this->sessionStarted) {
             brls::Logger::info("App exiting - putting PS5 to sleep");
-             this->host->gotoBed();
-         }
+            this->host->gotoBed();
+        }
     });
+
+    // Subscribe to logs for display while waiting for first frame
+    logSubscription = brls::Logger::getLogEvent()->subscribe(
+        [this](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
+            std::lock_guard<std::mutex> lock(logMutex);
+            logLines.push_back(msg);
+            while (logLines.size() > MAX_LOG_LINES) {
+                logLines.pop_front();
+            }
+        });
 }
 
 StreamView::~StreamView()
 {
     brls::Application::getExitEvent()->unsubscribe(exitSubscription);
+    brls::Logger::getLogEvent()->unsubscribe(logSubscription);
 
     stopStream();
 }
@@ -88,6 +100,16 @@ void StreamView::startStream()
         return;
     }
 
+    if (sessionPreStarted)
+    {
+        brls::Logger::info("Session already started by ConnectionView, activating stream...");
+        sessionStarted = true;
+        streamActive = true;
+        brls::Application::blockInputs(true);
+        brls::Logger::info("Stream activated successfully");
+        return;
+    }
+
     brls::Logger::info("Starting stream to {}", host->getHostName());
 
     try
@@ -98,7 +120,40 @@ void StreamView::startStream()
             throw Exception("Failed to initialize controller");
         }
 
-        host->initSession(io);
+        if (host->isRemote())
+        {
+            if (host->getHolepunchSession() != nullptr)
+            {
+                brls::Logger::info("Holepunch already completed, initializing session...");
+            }
+            else
+            {
+                brls::Logger::info("Remote host detected, initiating holepunch connection...");
+
+                auto* dm = DiscoveryManager::getInstance();
+                if (!dm->isPsnTokenValid())
+                {
+                    brls::Logger::error("PSN token not valid for remote connection");
+                    throw Exception("PSN token expired. Please refresh in settings.");
+                }
+
+                ChiakiErrorCode err = host->connectHolepunch();
+                if (err != CHIAKI_ERR_SUCCESS)
+                {
+                    brls::Logger::error("Holepunch connection failed: {}", chiaki_error_string(err));
+                    throw Exception((std::string("Remote connection failed: ") + chiaki_error_string(err)).c_str());
+                }
+
+                brls::Logger::info("Holepunch successful!");
+            }
+
+            brls::Logger::info("Initializing session with holepunch...");
+            host->initSessionWithHolepunch(io, host->getHolepunchSession());
+        }
+        else
+        {
+            host->initSession(io);
+        }
 
         host->startSession();
 
@@ -114,13 +169,13 @@ void StreamView::startStream()
         brls::Logger::error("Failed to start stream: {}", e.what());
 
         io->FreeController();
+        host->cleanupHolepunch();
         host->finiSession();
 
         std::string errorMsg = e.what();
         brls::sync([errorMsg]() {
             auto* dialog = new brls::Dialog("Connection Failed\n\n" + errorMsg);
-            dialog->addButton("OK", [dialog]() {
-                dialog->close();
+            dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
             dialog->open();
@@ -143,6 +198,7 @@ void StreamView::stopStream()
 
     host->stopSession();
     host->finiSession();
+    host->cleanupHolepunch();
 
     io->FreeController();
     io->FreeVideo();
@@ -160,7 +216,6 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
         nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
         nvgFill(vg);
 
-        // Draw "Connecting..." text
         nvgFontSize(vg, 24);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
@@ -200,9 +255,25 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
         return;
     }
 
+    // Show logs while waiting for first video frame
+    // This doesnt seem to make much sense but its mostly for remote
+    // so that people dont think that its a black screen doing nothing.
+    if (!io->hasReceivedFirstFrame())
+    {
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, width, height);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
+        nvgFill(vg);
+
+        renderLogs(vg, x, y, width, height);
+
+        // Still process frames so we detect when first one arrives
+        io->MainLoop();
+        return;
+    }
+
     host->sendFeedbackState();
 
-    // Render the video stream via IO
     if (!io->MainLoop())
     {
         brls::Logger::info("Quit requested via controller");
@@ -293,8 +364,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             brls::Application::popActivity();
         } else {
             auto* dialog = new brls::Dialog("Session Ended\n\n" + reasonStr);
-            dialog->addButton("OK", [dialog]() {
-                dialog->close();
+            dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
             dialog->open();
@@ -423,4 +493,29 @@ void StreamView::disconnectWithSleep(bool sleep)
     }
 
     stopStream();
+}
+
+void StreamView::renderLogs(NVGcontext* vg, float x, float y, float width, float height)
+{
+    std::lock_guard<std::mutex> lock(logMutex);
+
+    nvgFontSize(vg, 16);
+    nvgFillColor(vg, nvgRGBA(200, 200, 200, 255));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+
+    float lineHeight = 20;
+    float startY = y + 20;
+
+    // Show logs from bottom up (most recent at bottom)
+    size_t startIdx = 0;
+    size_t maxVisibleLines = static_cast<size_t>((height - 40) / lineHeight);
+    if (logLines.size() > maxVisibleLines) {
+        startIdx = logLines.size() - maxVisibleLines;
+    }
+
+    float currentY = startY;
+    for (size_t i = startIdx; i < logLines.size(); i++) {
+        nvgText(vg, x + 20, currentY, logLines[i].c_str(), nullptr);
+        currentY += lineHeight;
+    }
 }
