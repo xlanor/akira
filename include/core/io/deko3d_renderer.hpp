@@ -6,6 +6,7 @@
 #include "core/io/video_renderer.hpp"
 
 #include <deko3d.hpp>
+#include <memory>
 #include <optional>
 
 #include <borealis.hpp>
@@ -31,33 +32,30 @@ public:
     bool isInitialized() const override { return m_initialized; }
     void draw(AVFrame* frame) override;
     void cleanup() override;
+    void waitIdle() override;
 
     void setShowStatsOverlay(bool show) override { m_show_stats = show; }
     void setStreamStats(const StreamStats& stats) override { m_stats = stats; }
 
 private:
-    // Stats overlay rendering
+    std::optional<CMemPool> m_pool_code;
+    std::optional<CMemPool> m_pool_data;
+
+    // Begin debug menu
     void initTextRendering();
     void renderStatsOverlay();
     void cleanupTextRendering();
 
-    // Font stuff for overlaying
     CShader m_text_vertex_shader;
     CShader m_text_fragment_shader;
     bool m_text_initialized = false;
 
-    // textures
     dk::Image m_font_image;
     dk::ImageLayout m_font_layout;
     dk::ImageDescriptor m_font_desc;
     dk::MemBlock m_font_memblock; 
     int m_font_texture_id = 0;
 
-    // Samples
-    dk::SamplerDescriptor m_font_sampler_desc;
-    CDescriptorSet<1>* m_font_sampler_set = nullptr;
-
-    // vertex buffers buffers
     CMemPool::Handle m_text_vertex_buffer;
     static constexpr size_t MAX_TEXT_VERTICES = 1024;
 
@@ -76,9 +74,6 @@ private:
     brls::SwitchVideoContext* m_vctx = nullptr;
     dk::Device m_device;
     dk::Queue m_queue;
-
-    std::optional<CMemPool> m_pool_code;
-    std::optional<CMemPool> m_pool_data;
 
     dk::UniqueCmdBuf m_cmdbuf;
 

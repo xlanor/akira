@@ -80,6 +80,17 @@ Deko3dRenderer::Deko3dRenderer()
 Deko3dRenderer::~Deko3dRenderer()
 {
     cleanup();
+
+    if (m_font_memblock) {
+        dkMemBlockDestroy(m_font_memblock);
+        m_font_memblock = nullptr;
+    }
+    m_text_vertex_buffer.destroy();
+
+    m_vertex_shader.destroy();
+    m_fragment_shader.destroy();
+    m_text_vertex_shader.destroy();
+    m_text_fragment_shader.destroy();
 }
 
 bool Deko3dRenderer::initialize(int frame_width, int frame_height, int screen_width, int screen_height, ChiakiLog* log)
@@ -458,6 +469,16 @@ void Deko3dRenderer::cleanup()
     // Destroy vertex buffer
     m_vertex_buffer.destroy();
 
+    // Free video texture IDs from borealis before destroying backing memory
+    if (m_luma_texture_id) {
+        m_vctx->freeImageIndex(m_luma_texture_id);
+        m_luma_texture_id = 0;
+    }
+    if (m_chroma_texture_id) {
+        m_vctx->freeImageIndex(m_chroma_texture_id);
+        m_chroma_texture_id = 0;
+    }
+
     // Destroy GPU memory block for video frames
     if (m_mapping_memblock)
     {
@@ -465,15 +486,7 @@ void Deko3dRenderer::cleanup()
         m_mapping_memblock = nullptr;
     }
 
-    // Reset memory pools
-    m_pool_code.reset();
-    m_pool_data.reset();
-
-    // Reset texture IDs 
-    m_luma_texture_id = 0;
-    m_chroma_texture_id = 0;
-
-    // Reset image state to prevent stale descriptors on next connection
+    // Reset image state
     m_luma = dk::Image{};
     m_chroma = dk::Image{};
     m_luma_desc = dk::ImageDescriptor{};
@@ -490,6 +503,14 @@ void Deko3dRenderer::cleanup()
     m_first_frame = true;
     m_ready_fence = {};  // Reset fences to clean state
     m_done_fence = {};
+}
+
+void Deko3dRenderer::waitIdle()
+{
+    if (m_initialized)
+    {
+        m_queue.waitIdle();
+    }
 }
 
 void Deko3dRenderer::initTextRendering()
@@ -619,28 +640,6 @@ void Deko3dRenderer::initTextRendering()
             m_queue.waitIdle();
         }
 
-        // Create sampler for font texture (nearest filtering, clamp to edge)
-        brls::Logger::info("Creating font sampler...");
-        dk::Sampler fontSampler;
-        fontSampler.setFilter(DkFilter_Nearest, DkFilter_Nearest, DkMipFilter_None);
-        fontSampler.setWrapMode(DkWrapMode_ClampToEdge, DkWrapMode_ClampToEdge);
-        m_font_sampler_desc.initialize(fontSampler);
-
-        // Create sampler descriptor set
-        m_font_sampler_set = new CDescriptorSet<1>();
-        m_font_sampler_set->allocate(*m_pool_data);
-
-        // Update sampler descriptor set
-        m_cmdbuf.clear();
-        m_font_sampler_set->update(m_cmdbuf, 0, m_font_sampler_desc);
-        list = m_cmdbuf.finishList();
-        if (list)
-        {
-            m_queue.submitCommands(list);
-            m_queue.waitIdle();
-        }
-        brls::Logger::info("Font sampler created");
-
         // Allocate text vertex buffer
         m_text_vertex_buffer = m_pool_data->allocate(MAX_TEXT_VERTICES * sizeof(TextVertex), alignof(TextVertex));
 
@@ -670,23 +669,10 @@ void Deko3dRenderer::cleanupTextRendering()
     if (!m_text_initialized)
         return;
 
-    m_text_vertex_buffer.destroy();
-
-    // Destroy sampler descriptor set
-    if (m_font_sampler_set)
-    {
-        delete m_font_sampler_set;
-        m_font_sampler_set = nullptr;
+    if (m_font_texture_id) {
+        m_vctx->freeImageIndex(m_font_texture_id);
+        m_font_texture_id = 0;
     }
-
-    // Destroy font memory block
-    if (m_font_memblock)
-    {
-        dkMemBlockDestroy(m_font_memblock);
-        m_font_memblock = nullptr;
-    }
-
-    m_font_texture_id = 0;
     m_text_initialized = false;
 }
 
@@ -891,13 +877,13 @@ void Deko3dRenderer::renderStatsOverlay()
     // Bind text shaders
     m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
 
-    // Bind BOTH descriptor sets (required for texture sampling in deko3d)
-    // Image descriptor set contains the texture, sampler descriptor set contains sampler config
     m_image_descriptor_set->bindForImages(m_cmdbuf);
-    m_font_sampler_set->bindForSamplers(m_cmdbuf);
 
-    // Bind font texture (using sampler index 0 from our sampler set)
-    m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 0));
+    // Bind font texture using NanoVG's pre-existing sampler index 2 (Nearest filter, ClampToEdge)
+    // NanoVG creates 16 samplers at startup with bit-flag indices:
+    //   Bit 0 (1): MipFilter, Bit 1 (2): Nearest, Bit 2 (4): RepeatX, Bit 3 (8): RepeatY
+    // Index 2 = SamplerType_Nearest = nearest filter, clamp to edge (what we need for font)
+    m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
 
     // Bind vertex buffer
     m_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));

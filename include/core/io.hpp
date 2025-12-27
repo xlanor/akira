@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 
 #include <chiaki/session.h>
 #include <chiaki/controller.h>
@@ -32,20 +33,16 @@ private:
     int screen_width = 1280;
     int screen_height = 720;
 
-    // Managers
-    AudioManager* m_audio_manager = nullptr;
-    HapticManager* m_haptic_manager = nullptr;
-    InputManager* m_input_manager = nullptr;
-    VideoDecoder* m_video_decoder = nullptr;
-    IVideoRenderer* m_video_renderer = nullptr;
+    std::unique_ptr<AudioManager> m_audio_manager;
+    std::unique_ptr<HapticManager> m_haptic_manager;
+    std::unique_ptr<InputManager> m_input_manager;
+    std::unique_ptr<VideoDecoder> m_video_decoder;
+    std::unique_ptr<IVideoRenderer> m_video_renderer;
 
-    // Stats overlay
     bool m_show_stats_overlay = false;
 
-    // First frame tracking for connection progress display
     bool m_first_frame_received = false;
 
-    // Requested stream profile
     int m_requested_width = 0;
     int m_requested_height = 0;
     int m_requested_fps = 0;
@@ -82,16 +79,14 @@ public:
     void SetLogger(ChiakiLog* log);
     ChiakiLog* GetLogger() { return this->log; }
 
-    // Stats overlay
     StreamStats getStreamStats() const;
     bool getShowStatsOverlay() const { return m_show_stats_overlay; }
     void setShowStatsOverlay(bool show) { m_show_stats_overlay = show; }
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);
 
-    // First frame tracking
     bool hasReceivedFirstFrame() const { return m_first_frame_received; }
 
-    InputManager* getInputManager() { return m_input_manager; }
+    InputManager* getInputManager() { return m_input_manager.get(); }
 };
 
 #endif // AKIRA_IO_HPP

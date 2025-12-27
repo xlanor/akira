@@ -390,6 +390,14 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
         throw Exception(chiaki_error_string(err));
     }
 
+    // check chiaki session.c: 
+    // chiaki_holepunch_session_fini(session->holepunch_session);
+    // dont hold to it because we might double free it.
+    if (holepunch)
+    {
+        holepunchSession = nullptr;
+    }
+
     sessionInit = true;
 
     brls::Logger::info("Host::initSession: Setting up callbacks...");
