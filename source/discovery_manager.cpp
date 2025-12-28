@@ -887,8 +887,11 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
 
         host->state = CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN;
 
+        brls::Logger::info("Calling onHostDiscovered for '{}'", host->getHostName());
         if (onHostDiscovered)
             onHostDiscovered(host);
+        else
+            brls::Logger::warning("onHostDiscovered callback is null");
     });
 }
 

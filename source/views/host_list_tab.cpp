@@ -404,13 +404,16 @@ private:
                     settings->writeFile();
 
                     if (HostListTab::currentInstance) {
-                        if (HostListTab::currentInstance->findRemoteBtn) {
-                            brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
-                        }
                         HostListTab::currentInstance->syncHostList();
                     }
 
                     brls::Application::notify("Linked to " + remoteName);
+
+                    brls::sync([]() {
+                        if (HostListTab::currentInstance && HostListTab::currentInstance->findRemoteBtn) {
+                            brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                        }
+                    });
                 }
             );
             brls::Application::pushActivity(new brls::Activity(dropdown));
@@ -486,8 +489,18 @@ HostListTab::HostListTab() {
     discovery = DiscoveryManager::getInstance();
 
     discovery->setOnHostDiscovered([](Host* host) {
-        if (!host || !HostListTab::isActive) return;
-        if (!HostListTab::currentInstance) return;
+        if (!host) {
+            brls::Logger::warning("onHostDiscovered: host is null");
+            return;
+        }
+        if (!HostListTab::isActive) {
+            brls::Logger::debug("onHostDiscovered: isActive=false, skipping {}", host->getHostName());
+            return;
+        }
+        if (!HostListTab::currentInstance) {
+            brls::Logger::warning("onHostDiscovered: currentInstance is null");
+            return;
+        }
         brls::Logger::info("Host discovered/updated: {}", host->getHostName());
         HostListTab::currentInstance->updateHostItem(host);
     });
@@ -598,7 +611,11 @@ void HostListTab::syncHostList() {
         emptyMessage->setVisibility(hasHosts ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
     }
 
-    brls::Application::giveFocus(hostContainer);
+    if (hasHosts) {
+        brls::Application::giveFocus(hostContainer);
+    } else if (findRemoteBtn) {
+        brls::Application::giveFocus(findRemoteBtn);
+    }
 
     brls::Logger::debug("Host list sync complete, {} hosts", hostItems.size());
 }
