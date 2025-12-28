@@ -16,6 +16,7 @@
 #include "views/settings_tab.hpp"
 #include "views/add_host_tab.hpp"
 #include "views/build_info_tab.hpp"
+#include "views/config_view_tab.hpp"
 #include "views/stream_view.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/connection_view.hpp"
@@ -207,6 +208,7 @@ int main(int argc, char* argv[])
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
     brls::Application::registerXMLView("AddHostTab", AddHostTab::create);
     brls::Application::registerXMLView("BuildInfoTab", BuildInfoTab::create);
+    brls::Application::registerXMLView("ConfigViewTab", ConfigViewTab::create);
     brls::Application::registerXMLView("StreamView", StreamView::create);
     brls::Application::registerXMLView("EnterPinView", EnterPinView::create);
     brls::Application::registerXMLView("ConnectionView", ConnectionView::create);
