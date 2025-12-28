@@ -43,7 +43,7 @@ bool HostListTab::isActive = true;
 
 class HostItemView : public brls::Box {
 public:
-    HostItemView(Host* host) : host(host) {
+    HostItemView(Host* host) : host(host), hostName(host->getHostName()) {
         this->setAxis(brls::Axis::ROW);
         this->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
         this->setAlignItems(brls::AlignItems::CENTER);
@@ -149,9 +149,11 @@ public:
     }
 
     Host* getHost() { return host; }
+    std::string getHostName() const { return hostName; }
 
 private:
     Host* host;
+    std::string hostName;
     brls::Label* nameLabel;
     brls::Box* remoteBadge;
     brls::Label* addrLabel;
@@ -503,9 +505,7 @@ void HostListTab::syncHostList() {
     auto* hostsMap = settings->getHostsMap();
 
     for (auto it = hostItems.begin(); it != hostItems.end(); ) {
-        Host* host = it->first;
-        std::string hostName = host->getHostName();
-
+        std::string hostName = it->second->getHostName();
         bool hostExists = hostsMap && hostsMap->find(hostName) != hostsMap->end();
 
         if (!hostExists) {
