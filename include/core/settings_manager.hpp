@@ -41,6 +41,7 @@ private:
     std::string globalDuid;
     HapticPreset globalHaptic = HapticPreset::Disabled;
     bool globalInvertAB = false;
+    int globalVideoBitrate = 5000;
 
     // Companion server settings
     std::string companionHost;
@@ -77,6 +78,9 @@ public:
     static int fpsToInt(ChiakiVideoFPSPreset fps);
     static ChiakiVideoFPSPreset stringToFps(const std::string& value);
 
+    static int getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res);
+    static int getMaxBitrateForResolution(ChiakiVideoResolutionPreset res);
+
     std::string getHostName(Host* host);
     std::string getHostAddr(Host* host);
     void setHostAddr(Host* host, const std::string& addr);
@@ -111,6 +115,9 @@ public:
     ChiakiVideoFPSPreset getVideoFPS(Host* host);
     void setVideoFPS(Host* host, ChiakiVideoFPSPreset value);
     void setVideoFPS(Host* host, const std::string& value);
+
+    int getVideoBitrate() const;
+    void setVideoBitrate(int value);
 
     HapticPreset getHaptic(Host* host);
     void setHaptic(Host* host, HapticPreset value);

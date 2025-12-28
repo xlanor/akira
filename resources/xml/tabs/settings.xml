@@ -42,6 +42,20 @@
                 marginLeft="15"
                 marginRight="15"/>
 
+            <brls:SliderCell
+                id="settings/bitrate"
+                title="Bitrate"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Higher bitrate may result in a trade-off with performance"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
         </brls:Box>
 
         <brls:Header

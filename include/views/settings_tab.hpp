@@ -14,6 +14,7 @@ public:
 private:
     BRLS_BIND(brls::SelectorCell, resolutionSelector, "settings/resolution");
     BRLS_BIND(brls::SelectorCell, fpsSelector, "settings/fps");
+    BRLS_BIND(brls::SliderCell, bitrateSlider, "settings/bitrate");
     BRLS_BIND(brls::SelectorCell, hapticSelector, "settings/haptic");
     BRLS_BIND(brls::BooleanCell, invertABToggle, "settings/invertAB");
     BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
@@ -39,6 +40,8 @@ private:
 
     void initResolutionSelector();
     void initFpsSelector();
+    void initBitrateSlider();
+    void updateBitrateSlider();
     void initHapticSelector();
     void initInvertABToggle();
     void initPsnAccountSection();

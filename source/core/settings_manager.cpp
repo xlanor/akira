@@ -142,6 +142,10 @@ void SettingsManager::parseTomlFile() {
             companionHost = *val;
         if (auto val = config["companion_port"].value<int64_t>())
             companionPort = static_cast<int>(*val);
+        if (auto val = config["video_bitrate"].value<int64_t>())
+            globalVideoBitrate = static_cast<int>(*val);
+        else
+            globalVideoBitrate = getDefaultBitrateForResolution(globalVideoResolution);
 
         for (auto& [key, value] : config) {
             if (!value.is_table()) continue;
@@ -344,6 +348,7 @@ int SettingsManager::writeFile() {
         config.insert("video_resolution", resolutionToString(globalVideoResolution));
     if (globalVideoFPS)
         config.insert("video_fps", fpsToInt(globalVideoFPS));
+    config.insert("video_bitrate", globalVideoBitrate);
     if (globalHaptic != HapticPreset::Disabled)
         config.insert("haptic", static_cast<int>(globalHaptic));
     if (!globalPsnOnlineId.empty())
@@ -460,6 +465,26 @@ ChiakiVideoFPSPreset SettingsManager::stringToFps(const std::string& value) {
     return CHIAKI_VIDEO_FPS_PRESET_60;
 }
 
+int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res) {
+    switch (res) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 7000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 5000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 3000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 1500;
+        default: return 5000;
+    }
+}
+
+int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) {
+    switch (res) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 15000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 10000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 5000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 3000;
+        default: return 10000;
+    }
+}
+
 std::string SettingsManager::getHostName(Host* host) {
     if (host) return host->getHostName();
     brls::Logger::error("Cannot getHostName from nullptr");
@@ -561,6 +586,14 @@ void SettingsManager::setVideoFPS(Host* host, ChiakiVideoFPSPreset value) {
 
 void SettingsManager::setVideoFPS(Host* host, const std::string& value) {
     setVideoFPS(host, stringToFps(value));
+}
+
+int SettingsManager::getVideoBitrate() const {
+    return globalVideoBitrate;
+}
+
+void SettingsManager::setVideoBitrate(int value) {
+    globalVideoBitrate = value;
 }
 
 HapticPreset SettingsManager::getHaptic(Host* host) {

@@ -39,6 +39,7 @@ SettingsTab::SettingsTab() {
 
     initResolutionSelector();
     initFpsSelector();
+    initBitrateSlider();
     initHapticSelector();
     initInvertABToggle();
     initPsnAccountSection();
@@ -77,6 +78,7 @@ void SettingsTab::initResolutionSelector() {
                 default: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
             }
             settings->setVideoResolution(nullptr, preset);
+            updateBitrateSlider();
             settings->writeFile();
             brls::Logger::info("Resolution set to {}", SettingsManager::resolutionToString(preset));
         }
@@ -103,6 +105,47 @@ void SettingsTab::initFpsSelector() {
             brls::Logger::info("FPS set to {}", SettingsManager::fpsToString(preset));
         }
     );
+}
+
+void SettingsTab::initBitrateSlider() {
+    auto resolution = settings->getVideoResolution(nullptr);
+    int maxBitrate = SettingsManager::getMaxBitrateForResolution(resolution);
+    int minBitrate = 1000;
+    int currentBitrate = settings->getVideoBitrate();
+
+    float normalizedValue = static_cast<float>(currentBitrate - minBitrate) / (maxBitrate - minBitrate);
+    normalizedValue = std::max(0.0f, std::min(1.0f, normalizedValue));
+
+    bitrateSlider->detail->setWidth(100);
+    bitrateSlider->detail->setShrink(0);
+    bitrateSlider->init(
+        "Bitrate",
+        normalizedValue,
+        [this, minBitrate](float value) {
+            auto resolution = settings->getVideoResolution(nullptr);
+            int maxBitrate = SettingsManager::getMaxBitrateForResolution(resolution);
+            int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
+            settings->setVideoBitrate(bitrate);
+            bitrateSlider->detail->setText(std::to_string(bitrate) + " kbps");
+            settings->writeFile();
+            brls::Logger::info("Bitrate set to {}", bitrate);
+        }
+    );
+
+    bitrateSlider->detail->setText(std::to_string(currentBitrate) + " kbps");
+}
+
+void SettingsTab::updateBitrateSlider() {
+    auto resolution = settings->getVideoResolution(nullptr);
+    int defaultBitrate = SettingsManager::getDefaultBitrateForResolution(resolution);
+    int maxBitrate = SettingsManager::getMaxBitrateForResolution(resolution);
+    int minBitrate = 1000;
+
+    settings->setVideoBitrate(defaultBitrate);
+
+    float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
+    bitrateSlider->slider->setProgress(normalizedValue);
+    bitrateSlider->detail->setText(std::to_string(defaultBitrate) + " kbps");
 }
 
 void SettingsTab::initHapticSelector() {
