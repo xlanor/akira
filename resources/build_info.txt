@@ -1,6 +1,6 @@
-Akira 0.1.4
-Commit: eb40bb5
-Build: 2025-12-26 23:35:33 UTC
+Akira 0.1.8
+Commit: 57ff905
+Build: 2025-12-28 02:37:15 UTC
 
 === Custom Libraries ===
 chiaki-ng 

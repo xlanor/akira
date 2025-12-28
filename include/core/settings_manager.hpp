@@ -124,6 +124,7 @@ public:
     std::string getHostName(Host* host);
     std::string getHostAddr(Host* host);
     void setHostAddr(Host* host, const std::string& addr);
+    void setDiscovered(Host* host, bool value);
 
     std::string getPsnOnlineId(Host* host);
     void setPsnOnlineId(Host* host, const std::string& id);

@@ -134,8 +134,7 @@ public:
             addrLabel->setText(host->getHostAddr());
         }
 
-        bool showConnect = (host->isReady() && host->hasRpKey()) ||
-                           (host->isRemote() && host->hasRpKey());
+        bool showConnect = host->hasRpKey() && !host->isStandby();
         bool showWake = host->isStandby() && host->hasRpKey() && !host->isRemote();
         bool showRegister = host->isDiscovered() && !host->hasRpKey() && !host->isRemote();
         bool showSettings = host->hasRpKey();
@@ -267,7 +266,7 @@ private:
             std::string onlineId = settings->getPsnOnlineId(host);
 
             if (needsAccountId && accountId.empty()) {
-                auto* dialog = new brls::Dialog("PSN Account ID Required\n\nPlease configure your PSN Account ID in Settings before registering.\n\nYou can obtain this by logging in with your PSN account.");
+                auto* dialog = new brls::Dialog("PSN Account ID Required\n\nPlease configure your PSN Account ID in Settings before registering.\n");
                 dialog->addButton("OK", [dialog]() {
                     dialog->close();
                 });
@@ -384,16 +383,19 @@ private:
             brls::Logger::info("Delete button clicked for {}", hostName);
 
             auto* dialog = new brls::Dialog("Delete \"" + hostName + "\"?\n\nThis will remove the host and its registration data.");
-            dialog->addButton("Cancel", [dialog]() {
-                dialog->close();
-            });
-            dialog->addButton("Delete", [hostName, dialog]() {
+            dialog->addButton("Cancel", []() {});
+            dialog->addButton("Delete", [hostName]() {
                 auto* settings = SettingsManager::getInstance();
                 settings->removeHost(hostName);
                 settings->writeFile();
                 brls::Application::notify("Host deleted");
-                dialog->close();
                 if (HostListTab::currentInstance) {
+                    // If this was the last host, give focus to Find Remote button first
+                    // to avoid dangling focus pointer when host list becomes empty
+                    if (HostListTab::currentInstance->hostItems.size() <= 1 &&
+                        HostListTab::currentInstance->findRemoteBtn) {
+                        brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                    }
                     HostListTab::currentInstance->syncHostList();
                 }
             });
@@ -501,38 +503,23 @@ void HostListTab::syncHostList() {
         brls::Logger::error("syncHostList: hostContainer is null");
         return;
     }
+    // borealis really hates it when you remove a view.
+    // just rebuild the damn thing.
+    brls::Application::giveFocus(this);
+
+    hostContainer->clearViews();
+    hostItems.clear();
 
     auto* hostsMap = settings->getHostsMap();
-
-    for (auto it = hostItems.begin(); it != hostItems.end(); ) {
-        std::string hostName = it->second->getHostName();
-        bool hostExists = hostsMap && hostsMap->find(hostName) != hostsMap->end();
-
-        if (!hostExists) {
-            brls::Logger::debug("Removing item for deleted host: {}", hostName);
-            hostContainer->removeView(it->second);
-            it = hostItems.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
     if (hostsMap) {
         for (auto& [name, host] : *hostsMap) {
             if (!host) {
                 brls::Logger::error("Null host in hosts map for key: {}", name);
                 continue;
             }
-
-            auto it = hostItems.find(host);
-            if (it == hostItems.end()) {
-                brls::Logger::debug("Creating item for new host: {}", name);
-                auto* item = new HostItemView(host);
-                hostItems[host] = item;
-                hostContainer->addView(item);
-            } else {
-                it->second->updateState();
-            }
+            auto* item = new HostItemView(host);
+            hostItems[host] = item;
+            hostContainer->addView(item);
         }
     }
 
@@ -540,6 +527,8 @@ void HostListTab::syncHostList() {
     if (emptyMessage) {
         emptyMessage->setVisibility(hasHosts ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
     }
+
+    brls::Application::giveFocus(hostContainer);
 
     brls::Logger::debug("Host list sync complete, {} hosts", hostItems.size());
 }

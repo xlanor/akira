@@ -390,6 +390,12 @@ void SettingsManager::setHostAddr(Host* host, const std::string& addr) {
     }
 }
 
+void SettingsManager::setDiscovered(Host* host, bool value) {
+    if (host) {
+        host->discovered = value;
+    }
+}
+
 std::string SettingsManager::getPsnOnlineId(Host* host) {
     if (!host || host->psnOnlineId.empty()) {
         return globalPsnOnlineId;

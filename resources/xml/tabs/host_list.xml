@@ -58,6 +58,7 @@
         grow="1.0"
         justifyContent="center"
         alignItems="center"
+        paddingBottom="80"
         visibility="gone">
 
         <brls:Label
