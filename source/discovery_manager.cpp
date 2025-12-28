@@ -732,7 +732,7 @@ bool DiscoveryManager::isPsnTokenValid() const
     return (expiresAt - 60) > now;
 }
 
-void DiscoveryManager::refreshRemoteDevices()
+void DiscoveryManager::refreshRemoteDevices(std::function<void()> onComplete)
 {
     brls::Logger::info("DiscoveryManager::refreshRemoteDevices() called");
 
@@ -744,34 +744,37 @@ void DiscoveryManager::refreshRemoteDevices()
         if (refreshToken.empty())
         {
             brls::Logger::warning("No PSN refresh token available, cannot discover remote devices");
+            if (onComplete) onComplete();
             return;
         }
 
         refreshPsnToken(
-            [this]() {
+            [this, onComplete]() {
                 brls::Logger::info("Token refresh successful, now fetching remote devices");
-                fetchRemoteDevicesFromPsn();
+                fetchRemoteDevicesFromPsn(onComplete);
             },
-            [this](const std::string& error) {
+            [this, onComplete](const std::string& error) {
                 brls::Logger::error("Failed to refresh PSN token: {}", error);
                 brls::Logger::info("Clearing invalid PSN token data from config");
                 settings->clearPsnTokenData();
                 settings->writeFile();
+                if (onComplete) onComplete();
             }
         );
         return;
     }
 
     brls::Logger::info("PSN token is valid, fetching remote devices");
-    fetchRemoteDevicesFromPsn();
+    fetchRemoteDevicesFromPsn(onComplete);
 }
 
-void DiscoveryManager::fetchRemoteDevicesFromPsn()
+void DiscoveryManager::fetchRemoteDevicesFromPsn(std::function<void()> onComplete)
 {
     std::string accessToken = settings->getPsnAccessToken();
     if (accessToken.empty())
     {
         brls::Logger::error("No access token available for remote device discovery");
+        if (onComplete) onComplete();
         return;
     }
 
@@ -823,6 +826,13 @@ void DiscoveryManager::fetchRemoteDevicesFromPsn()
     else
     {
         brls::Logger::error("Failed to list PS4 devices: {}", chiaki_error_string(ps4Err));
+    }
+
+    if (onComplete)
+    {
+        brls::sync([onComplete]() {
+            onComplete();
+        });
     }
 }
 

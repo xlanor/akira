@@ -585,13 +585,20 @@ void HostListTab::initFindRemoteButton() {
         int64_t expiresAt = settings->getPsnTokenExpiresAt();
         int64_t now = std::time(nullptr);
 
+        auto onComplete = [this]() {
+            syncHostList();
+            if (findRemoteBtn) {
+                brls::Application::giveFocus(findRemoteBtn);
+            }
+        };
+
         if (expiresAt > 0 && now > expiresAt) {
             brls::Application::notify("Token expired, refreshing...");
             discovery->refreshPsnToken(
-                [this]() {
-                    brls::sync([this]() {
+                [this, onComplete]() {
+                    brls::sync([this, onComplete]() {
                         brls::Application::notify("Finding remote devices...");
-                        discovery->refreshRemoteDevices();
+                        discovery->refreshRemoteDevices(onComplete);
                     });
                 },
                 [](const std::string& error) {
@@ -602,7 +609,7 @@ void HostListTab::initFindRemoteButton() {
             );
         } else {
             brls::Application::notify("Finding remote devices...");
-            discovery->refreshRemoteDevices();
+            discovery->refreshRemoteDevices(onComplete);
         }
 
         return true;
