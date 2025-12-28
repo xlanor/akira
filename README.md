@@ -1,6 +1,7 @@
 # Akira
 Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises a forked variant of [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
 
+This is still considered unstable/beta
 <p align="center" width="100%">
   <img src="readme/akira_hosts_114.jpg">
 </p>
