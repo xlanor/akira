@@ -257,6 +257,31 @@ private:
             }
 
             brls::Logger::info("Register button clicked for {}", host->getHostName());
+
+            auto* settings = SettingsManager::getInstance();
+            bool isPS5 = host->isPS5();
+            bool needsAccountId = isPS5 || host->getChiakiTarget() >= CHIAKI_TARGET_PS4_9;
+            std::string accountId = settings->getPsnAccountId(host);
+            std::string onlineId = settings->getPsnOnlineId(host);
+
+            if (needsAccountId && accountId.empty()) {
+                auto* dialog = new brls::Dialog("PSN Account ID Required\n\nPlease configure your PSN Account ID in Settings before registering.\n\nYou can obtain this by logging in with your PSN account.");
+                dialog->addButton("OK", [dialog]() {
+                    dialog->close();
+                });
+                dialog->open();
+                return true;
+            }
+
+            if (!needsAccountId && onlineId.empty()) {
+                auto* dialog = new brls::Dialog("PSN Online ID Required\n\nFor PS4 firmware < 9.0, please enter your PSN username in Settings before registering.");
+                dialog->addButton("OK", [dialog]() {
+                    dialog->close();
+                });
+                dialog->open();
+                return true;
+            }
+
             HostListTab::isRegistering = true;
 
             Host* hostPtr = host;
