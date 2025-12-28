@@ -37,6 +37,7 @@ private:
     bool streamActive = false;
     bool sessionStarted = false;
     bool sessionPreStarted = false;
+    bool wakeAttempted = false;
 
     bool menuOpen = false;
     std::chrono::steady_clock::time_point minusHoldStart;
@@ -57,6 +58,7 @@ private:
     void checkMenuTrigger();
     void showDisconnectMenu();
     void disconnectWithSleep(bool sleep);
+    void retryWithWake();
 };
 
 #endif // AKIRA_STREAM_VIEW_HPP
