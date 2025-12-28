@@ -112,6 +112,7 @@ public:
     Host* getOrCreateHost(const std::string& hostName);
     Host* findHostByDuid(const std::string& duid);
     void removeHost(const std::string& hostName);
+    void renameHost(const std::string& oldName, const std::string& newName);
 
     static std::string resolutionToString(ChiakiVideoResolutionPreset resolution);
     static int resolutionToInt(ChiakiVideoResolutionPreset resolution);
@@ -124,6 +125,7 @@ public:
     std::string getHostName(Host* host);
     std::string getHostAddr(Host* host);
     void setHostAddr(Host* host, const std::string& addr);
+    void setDiscovered(Host* host, bool value);
 
     std::string getPsnOnlineId(Host* host);
     void setPsnOnlineId(Host* host, const std::string& id);

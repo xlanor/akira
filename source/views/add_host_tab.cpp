@@ -60,6 +60,7 @@ void AddHostTab::onSaveClicked() {
 
     Host* host = settings->getOrCreateHost(name);
     settings->setHostAddr(host, addr);
+    settings->setDiscovered(host, true);
 
     ChiakiTarget target = targetIndex == 0 ? CHIAKI_TARGET_PS4_10 : CHIAKI_TARGET_PS5_1;
     settings->setChiakiTarget(host, target);

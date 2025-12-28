@@ -43,7 +43,7 @@ bool HostListTab::isActive = true;
 
 class HostItemView : public brls::Box {
 public:
-    HostItemView(Host* host) : host(host) {
+    HostItemView(Host* host) : host(host), hostName(host->getHostName()) {
         this->setAxis(brls::Axis::ROW);
         this->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
         this->setAlignItems(brls::AlignItems::CENTER);
@@ -111,6 +111,7 @@ public:
         createConnectButton();
         createWakeButton();
         createRegisterButton();
+        createLinkButton();
         createSettingsButton();
         createDeleteButton();
 
@@ -134,13 +135,14 @@ public:
             addrLabel->setText(host->getHostAddr());
         }
 
-        bool showConnect = (host->isReady() && host->hasRpKey()) ||
-                           (host->isRemote() && host->hasRpKey());
+        bool showLink = host->isRemote() && host->needsLink();
+        bool showConnect = host->hasRpKey() && !host->isStandby() && !host->needsLink();
         bool showWake = host->isStandby() && host->hasRpKey() && !host->isRemote();
         bool showRegister = host->isDiscovered() && !host->hasRpKey() && !host->isRemote();
-        bool showSettings = host->hasRpKey();
-        bool showDelete = host->hasRpKey() || !host->isDiscovered();
+        bool showSettings = host->hasRpKey() && !host->needsLink();
+        bool showDelete = (host->hasRpKey() || !host->isDiscovered()) && !host->needsLink();
 
+        linkBtn->setVisibility(showLink ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         connectBtn->setVisibility(showConnect ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         wakeBtn->setVisibility(showWake ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         registerBtn->setVisibility(showRegister ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
@@ -149,9 +151,11 @@ public:
     }
 
     Host* getHost() { return host; }
+    std::string getHostName() const { return hostName; }
 
 private:
     Host* host;
+    std::string hostName;
     brls::Label* nameLabel;
     brls::Box* remoteBadge;
     brls::Label* addrLabel;
@@ -160,6 +164,7 @@ private:
     brls::Button* connectBtn;
     brls::Button* wakeBtn;
     brls::Button* registerBtn;
+    brls::Button* linkBtn;
     brls::Button* settingsBtn;
     brls::Button* deleteBtn;
 
@@ -257,6 +262,31 @@ private:
             }
 
             brls::Logger::info("Register button clicked for {}", host->getHostName());
+
+            auto* settings = SettingsManager::getInstance();
+            bool isPS5 = host->isPS5();
+            bool needsAccountId = isPS5 || host->getChiakiTarget() >= CHIAKI_TARGET_PS4_9;
+            std::string accountId = settings->getPsnAccountId(host);
+            std::string onlineId = settings->getPsnOnlineId(host);
+
+            if (needsAccountId && accountId.empty()) {
+                auto* dialog = new brls::Dialog("PSN Account ID Required\n\nPlease configure your PSN Account ID in Settings before registering.\n");
+                dialog->addButton("OK", [dialog]() {
+                    dialog->close();
+                });
+                dialog->open();
+                return true;
+            }
+
+            if (!needsAccountId && onlineId.empty()) {
+                auto* dialog = new brls::Dialog("PSN Online ID Required\n\nFor PS4 firmware < 9.0, please enter your PSN username in Settings before registering.");
+                dialog->addButton("OK", [dialog]() {
+                    dialog->close();
+                });
+                dialog->open();
+                return true;
+            }
+
             HostListTab::isRegistering = true;
 
             Host* hostPtr = host;
@@ -324,6 +354,75 @@ private:
         buttonBox->addView(registerBtn);
     }
 
+    void createLinkButton() {
+        linkBtn = new brls::Button();
+        linkBtn->setText("Link");
+        linkBtn->setStyle(&BUTTONSTYLE_BLUE);
+        linkBtn->setShrink(0);
+        linkBtn->setMarginRight(10);
+        linkBtn->setBackgroundColor(nvgRGBA(59, 130, 246, 255));
+        linkBtn->registerClickAction([this](brls::View* view) {
+            brls::Logger::info("Link button clicked for {}", host->getHostName());
+
+            auto* settings = SettingsManager::getInstance();
+            auto* hostsMap = settings->getHostsMap();
+
+            std::vector<std::string> hostNames;
+            std::vector<Host*> hostPtrs;
+            for (auto& [name, h] : *hostsMap) {
+                if (h && h->hasRpKey() && !h->isRemote()) {
+                    hostNames.push_back(name);
+                    hostPtrs.push_back(h);
+                }
+            }
+
+            if (hostNames.empty()) {
+                brls::Application::notify("No registered hosts to link");
+                return true;
+            }
+
+            Host* remoteHost = host;
+            auto* dropdown = new brls::Dropdown(
+                "Select host to link",
+                hostNames,
+                [remoteHost, hostPtrs, hostNames](int selected) {
+                    if (selected < 0 || selected >= (int)hostPtrs.size()) return;
+
+                    Host* localHost = hostPtrs[selected];
+                    std::string oldName = hostNames[selected];
+                    auto* settings = SettingsManager::getInstance();
+
+                    std::string remoteName = remoteHost->getHostName();
+                    if (remoteName.rfind("[Remote] ", 0) == 0) {
+                        remoteName = remoteName.substr(9);
+                    }
+
+                    settings->renameHost(oldName, remoteName);
+                    remoteHost->copyRegistrationFrom(localHost);
+                    remoteHost->setNeedsLink(false);
+                    localHost->setRemoteDuid(remoteHost->getRemoteDuid());
+                    settings->writeFile();
+
+                    if (HostListTab::currentInstance) {
+                        HostListTab::currentInstance->syncHostList();
+                    }
+
+                    brls::Application::notify("Linked to " + remoteName);
+
+                    brls::sync([]() {
+                        if (HostListTab::currentInstance && HostListTab::currentInstance->findRemoteBtn) {
+                            brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                        }
+                    });
+                }
+            );
+            brls::Application::pushActivity(new brls::Activity(dropdown));
+
+            return true;
+        });
+        buttonBox->addView(linkBtn);
+    }
+
     void createSettingsButton() {
         settingsBtn = new brls::Button();
         settingsBtn->setText("Settings");
@@ -357,16 +456,19 @@ private:
             brls::Logger::info("Delete button clicked for {}", hostName);
 
             auto* dialog = new brls::Dialog("Delete \"" + hostName + "\"?\n\nThis will remove the host and its registration data.");
-            dialog->addButton("Cancel", [dialog]() {
-                dialog->close();
-            });
-            dialog->addButton("Delete", [hostName, dialog]() {
+            dialog->addButton("Cancel", []() {});
+            dialog->addButton("Delete", [hostName]() {
                 auto* settings = SettingsManager::getInstance();
                 settings->removeHost(hostName);
                 settings->writeFile();
                 brls::Application::notify("Host deleted");
-                dialog->close();
                 if (HostListTab::currentInstance) {
+                    // If this was the last host, give focus to Find Remote button first
+                    // to avoid dangling focus pointer when host list becomes empty
+                    if (HostListTab::currentInstance->hostItems.size() <= 1 &&
+                        HostListTab::currentInstance->findRemoteBtn) {
+                        brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                    }
                     HostListTab::currentInstance->syncHostList();
                 }
             });
@@ -387,8 +489,18 @@ HostListTab::HostListTab() {
     discovery = DiscoveryManager::getInstance();
 
     discovery->setOnHostDiscovered([](Host* host) {
-        if (!host || !HostListTab::isActive) return;
-        if (!HostListTab::currentInstance) return;
+        if (!host) {
+            brls::Logger::warning("onHostDiscovered: host is null");
+            return;
+        }
+        if (!HostListTab::isActive) {
+            brls::Logger::debug("onHostDiscovered: isActive=false, skipping {}", host->getHostName());
+            return;
+        }
+        if (!HostListTab::currentInstance) {
+            brls::Logger::warning("onHostDiscovered: currentInstance is null");
+            return;
+        }
         brls::Logger::info("Host discovered/updated: {}", host->getHostName());
         HostListTab::currentInstance->updateHostItem(host);
     });
@@ -474,46 +586,35 @@ void HostListTab::syncHostList() {
         brls::Logger::error("syncHostList: hostContainer is null");
         return;
     }
+    // borealis really hates it when you remove a view.
+    // just rebuild the damn thing.
+    brls::Application::giveFocus(this);
+
+    hostContainer->clearViews();
+    hostItems.clear();
 
     auto* hostsMap = settings->getHostsMap();
-
-    for (auto it = hostItems.begin(); it != hostItems.end(); ) {
-        Host* host = it->first;
-        std::string hostName = host->getHostName();
-
-        bool hostExists = hostsMap && hostsMap->find(hostName) != hostsMap->end();
-
-        if (!hostExists) {
-            brls::Logger::debug("Removing item for deleted host: {}", hostName);
-            hostContainer->removeView(it->second);
-            it = hostItems.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
     if (hostsMap) {
         for (auto& [name, host] : *hostsMap) {
             if (!host) {
                 brls::Logger::error("Null host in hosts map for key: {}", name);
                 continue;
             }
-
-            auto it = hostItems.find(host);
-            if (it == hostItems.end()) {
-                brls::Logger::debug("Creating item for new host: {}", name);
-                auto* item = new HostItemView(host);
-                hostItems[host] = item;
-                hostContainer->addView(item);
-            } else {
-                it->second->updateState();
-            }
+            auto* item = new HostItemView(host);
+            hostItems[host] = item;
+            hostContainer->addView(item);
         }
     }
 
     bool hasHosts = !hostItems.empty();
     if (emptyMessage) {
         emptyMessage->setVisibility(hasHosts ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
+    }
+
+    if (hasHosts) {
+        brls::Application::giveFocus(hostContainer);
+    } else if (findRemoteBtn) {
+        brls::Application::giveFocus(findRemoteBtn);
     }
 
     brls::Logger::debug("Host list sync complete, {} hosts", hostItems.size());
