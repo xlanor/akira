@@ -30,7 +30,7 @@ At this point I'm a place where I can seat back and enjoy my christmas break to 
 
 Disconnecting etc is still problematic and crashes and will most likely require an app restart for now.
 
-I really do not recomend you do 1080p/60fps even though the option is there. 720p/60fps was enough/very enjoyable for me. The switch without being overclocked is completely horrible at 1080p/60fps. use at your own risk.
+bitrate settings are low while I try and smoothen out the decoder.
 
 ## Changes from in-tree
 [Read this](https://github.com/xlanor/akira/wiki/Additional-changes)
