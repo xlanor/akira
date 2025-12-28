@@ -71,12 +71,12 @@ private:
     uint32_t rpKeyType = 0;
     uint8_t rpKey[0x10] = {0};
 
-    // Internal state flags
     bool discovered = false;
     bool registered = false;
     bool rpKeyData = false;
     bool sessionInit = false;
     bool isRemoteHost = false;
+    bool needsLinking = false;
 
     ChiakiHolepunchSession holepunchSession = nullptr;
 
@@ -126,6 +126,8 @@ public:
     bool isReady() const { return state == CHIAKI_DISCOVERY_HOST_STATE_READY; }
     bool isPS5() const;
     bool isRemote() const { return isRemoteHost; }
+    bool needsLink() const { return needsLinking; }
+    void setNeedsLink(bool value) { needsLinking = value; }
 
     // Console state helpers
     bool isStandby() const { return state == CHIAKI_DISCOVERY_HOST_STATE_STANDBY; }

@@ -112,6 +112,7 @@ public:
     Host* getOrCreateHost(const std::string& hostName);
     Host* findHostByDuid(const std::string& duid);
     void removeHost(const std::string& hostName);
+    void renameHost(const std::string& oldName, const std::string& newName);
 
     static std::string resolutionToString(ChiakiVideoResolutionPreset resolution);
     static int resolutionToInt(ChiakiVideoResolutionPreset resolution);

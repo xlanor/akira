@@ -82,6 +82,16 @@ void SettingsManager::removeHost(const std::string& hostName) {
     }
 }
 
+void SettingsManager::renameHost(const std::string& oldName, const std::string& newName) {
+    auto it = hosts.find(oldName);
+    if (it == hosts.end()) return;
+
+    Host* host = it->second;
+    hosts.erase(it);
+    host->hostName = newName;
+    hosts[newName] = host;
+}
+
 Host* SettingsManager::findHostByDuid(const std::string& duid) {
     if (duid.empty()) {
         return nullptr;

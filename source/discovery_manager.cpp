@@ -849,20 +849,17 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
 
     brls::sync([this, deviceName, deviceUid, consoleType]() {
         auto* hostsMap = settings->getHostsMap();
+        Host* localHost = nullptr;
+
         auto it = hostsMap->find(deviceName);
-
-        if (it == hostsMap->end() || !it->second->hasRpKey())
+        if (it != hostsMap->end() && it->second->hasRpKey())
         {
-            brls::Logger::debug("Skipping remote device '{}' - no registered local host", deviceName);
-            return;
-        }
-
-        Host* localHost = it->second;
-
-        if (localHost->getRemoteDuid().empty())
-        {
-            localHost->setRemoteDuid(deviceUid);
-            brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
+            localHost = it->second;
+            if (localHost->getRemoteDuid().empty())
+            {
+                localHost->setRemoteDuid(deviceUid);
+                brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
+            }
         }
 
         std::string displayName = "[Remote] " + deviceName;
@@ -877,7 +874,16 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         else
             host->setChiakiTarget(CHIAKI_TARGET_PS4_10);
 
-        host->copyRegistrationFrom(localHost);
+        if (localHost)
+        {
+            host->copyRegistrationFrom(localHost);
+            host->setNeedsLink(false);
+        }
+        else
+        {
+            host->setNeedsLink(true);
+            brls::Logger::info("Remote device '{}' needs linking to a local host", deviceName);
+        }
 
         host->state = CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN;
 

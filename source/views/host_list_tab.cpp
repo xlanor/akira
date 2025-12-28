@@ -111,6 +111,7 @@ public:
         createConnectButton();
         createWakeButton();
         createRegisterButton();
+        createLinkButton();
         createSettingsButton();
         createDeleteButton();
 
@@ -134,12 +135,14 @@ public:
             addrLabel->setText(host->getHostAddr());
         }
 
-        bool showConnect = host->hasRpKey() && !host->isStandby();
+        bool showLink = host->isRemote() && host->needsLink();
+        bool showConnect = host->hasRpKey() && !host->isStandby() && !host->needsLink();
         bool showWake = host->isStandby() && host->hasRpKey() && !host->isRemote();
         bool showRegister = host->isDiscovered() && !host->hasRpKey() && !host->isRemote();
-        bool showSettings = host->hasRpKey();
-        bool showDelete = host->hasRpKey() || !host->isDiscovered();
+        bool showSettings = host->hasRpKey() && !host->needsLink();
+        bool showDelete = (host->hasRpKey() || !host->isDiscovered()) && !host->needsLink();
 
+        linkBtn->setVisibility(showLink ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         connectBtn->setVisibility(showConnect ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         wakeBtn->setVisibility(showWake ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         registerBtn->setVisibility(showRegister ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
@@ -161,6 +164,7 @@ private:
     brls::Button* connectBtn;
     brls::Button* wakeBtn;
     brls::Button* registerBtn;
+    brls::Button* linkBtn;
     brls::Button* settingsBtn;
     brls::Button* deleteBtn;
 
@@ -348,6 +352,72 @@ private:
             return true;
         });
         buttonBox->addView(registerBtn);
+    }
+
+    void createLinkButton() {
+        linkBtn = new brls::Button();
+        linkBtn->setText("Link");
+        linkBtn->setStyle(&BUTTONSTYLE_BLUE);
+        linkBtn->setShrink(0);
+        linkBtn->setMarginRight(10);
+        linkBtn->setBackgroundColor(nvgRGBA(59, 130, 246, 255));
+        linkBtn->registerClickAction([this](brls::View* view) {
+            brls::Logger::info("Link button clicked for {}", host->getHostName());
+
+            auto* settings = SettingsManager::getInstance();
+            auto* hostsMap = settings->getHostsMap();
+
+            std::vector<std::string> hostNames;
+            std::vector<Host*> hostPtrs;
+            for (auto& [name, h] : *hostsMap) {
+                if (h && h->hasRpKey() && !h->isRemote()) {
+                    hostNames.push_back(name);
+                    hostPtrs.push_back(h);
+                }
+            }
+
+            if (hostNames.empty()) {
+                brls::Application::notify("No registered hosts to link");
+                return true;
+            }
+
+            Host* remoteHost = host;
+            auto* dropdown = new brls::Dropdown(
+                "Select host to link",
+                hostNames,
+                [remoteHost, hostPtrs, hostNames](int selected) {
+                    if (selected < 0 || selected >= (int)hostPtrs.size()) return;
+
+                    Host* localHost = hostPtrs[selected];
+                    std::string oldName = hostNames[selected];
+                    auto* settings = SettingsManager::getInstance();
+
+                    std::string remoteName = remoteHost->getHostName();
+                    if (remoteName.rfind("[Remote] ", 0) == 0) {
+                        remoteName = remoteName.substr(9);
+                    }
+
+                    settings->renameHost(oldName, remoteName);
+                    remoteHost->copyRegistrationFrom(localHost);
+                    remoteHost->setNeedsLink(false);
+                    localHost->setRemoteDuid(remoteHost->getRemoteDuid());
+                    settings->writeFile();
+
+                    if (HostListTab::currentInstance) {
+                        if (HostListTab::currentInstance->findRemoteBtn) {
+                            brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                        }
+                        HostListTab::currentInstance->syncHostList();
+                    }
+
+                    brls::Application::notify("Linked to " + remoteName);
+                }
+            );
+            brls::Application::pushActivity(new brls::Activity(dropdown));
+
+            return true;
+        });
+        buttonBox->addView(linkBtn);
     }
 
     void createSettingsButton() {
