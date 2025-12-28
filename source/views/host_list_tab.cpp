@@ -66,6 +66,10 @@ public:
         std::string displayName = host->getHostName();
         if (displayName.rfind("[Remote] ", 0) == 0) {
             displayName = displayName.substr(9);
+        } else if (displayName.rfind("[Auto] ", 0) == 0) {
+            displayName = displayName.substr(7);
+        } else if (displayName.rfind("[Manual] ", 0) == 0) {
+            displayName = displayName.substr(9);
         }
         nameLabel->setText(displayName);
         nameLabel->setFontSize(18);
@@ -81,13 +85,51 @@ public:
         remoteBadge->setMarginLeft(8);
         remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
-        auto* badgeLabel = new brls::Label();
-        badgeLabel->setText("Remote");
-        badgeLabel->setFontSize(11);
-        badgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
-        remoteBadge->addView(badgeLabel);
+        auto* remoteBadgeLabel = new brls::Label();
+        remoteBadgeLabel->setText("Remote");
+        remoteBadgeLabel->setFontSize(11);
+        remoteBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
+        remoteBadge->addView(remoteBadgeLabel);
 
         nameRow->addView(remoteBadge);
+
+        autoBadge = new brls::Box();
+        autoBadge->setBackgroundColor(nvgRGBA(6, 182, 212, 255));
+        autoBadge->setCornerRadius(4);
+        autoBadge->setPaddingTop(2);
+        autoBadge->setPaddingBottom(2);
+        autoBadge->setPaddingLeft(6);
+        autoBadge->setPaddingRight(6);
+        autoBadge->setMarginLeft(8);
+        bool isAuto = host->getHostName().rfind("[Auto] ", 0) == 0;
+        autoBadge->setVisibility(isAuto ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+
+        auto* autoBadgeLabel = new brls::Label();
+        autoBadgeLabel->setText("Auto");
+        autoBadgeLabel->setFontSize(11);
+        autoBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
+        autoBadge->addView(autoBadgeLabel);
+
+        nameRow->addView(autoBadge);
+
+        manualBadge = new brls::Box();
+        manualBadge->setBackgroundColor(nvgRGBA(168, 85, 247, 255));
+        manualBadge->setCornerRadius(4);
+        manualBadge->setPaddingTop(2);
+        manualBadge->setPaddingBottom(2);
+        manualBadge->setPaddingLeft(6);
+        manualBadge->setPaddingRight(6);
+        manualBadge->setMarginLeft(8);
+        bool isManual = host->getHostName().rfind("[Manual] ", 0) == 0;
+        manualBadge->setVisibility(isManual ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+
+        auto* manualBadgeLabel = new brls::Label();
+        manualBadgeLabel->setText("Manual");
+        manualBadgeLabel->setFontSize(11);
+        manualBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
+        manualBadge->addView(manualBadgeLabel);
+
+        nameRow->addView(manualBadge);
 
         infoBox->addView(nameRow);
 
@@ -129,6 +171,11 @@ public:
 
         remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
+        bool isAuto = host->getHostName().rfind("[Auto] ", 0) == 0;
+        bool isManual = host->getHostName().rfind("[Manual] ", 0) == 0;
+        autoBadge->setVisibility(isAuto ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        manualBadge->setVisibility(isManual ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+
         if (host->isRemote()) {
             addrLabel->setText("PSN Remote Play");
         } else {
@@ -158,6 +205,8 @@ private:
     std::string hostName;
     brls::Label* nameLabel;
     brls::Box* remoteBadge;
+    brls::Box* autoBadge;
+    brls::Box* manualBadge;
     brls::Label* addrLabel;
     brls::Label* statusLabel;
     brls::Box* buttonBox;
@@ -397,7 +446,13 @@ private:
                         remoteName = remoteName.substr(9);
                     }
 
-                    settings->renameHost(oldName, remoteName);
+                    std::string prefix = "";
+                    if (oldName.rfind("[Auto] ", 0) == 0) {
+                        prefix = "[Auto] ";
+                    } else if (oldName.rfind("[Manual] ", 0) == 0) {
+                        prefix = "[Manual] ";
+                    }
+                    settings->renameHost(oldName, prefix + remoteName);
                     remoteHost->copyRegistrationFrom(localHost);
                     remoteHost->setNeedsLink(false);
                     localHost->setRemoteDuid(remoteHost->getRemoteDuid());

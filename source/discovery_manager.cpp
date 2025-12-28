@@ -294,7 +294,17 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
     brls::Logger::info("--");
 
     brls::sync([this, data, target]() {
-        Host* host = settings->getOrCreateHost(data->hostName);
+        std::string manualName = "[Manual] " + data->hostName;
+        auto* hostsMap = settings->getHostsMap();
+        auto manualIt = hostsMap->find(manualName);
+
+        Host* host;
+        if (manualIt != hostsMap->end()) {
+            host = manualIt->second;
+        } else {
+            std::string hostKey = "[Auto] " + data->hostName;
+            host = settings->getOrCreateHost(hostKey);
+        }
 
         host->state = data->state;
         host->discovered = true;
@@ -307,11 +317,6 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
         if (!data->hostAddr.empty())
         {
             host->hostAddr = data->hostAddr;
-        }
-
-        if (!data->hostName.empty())
-        {
-            host->hostName = data->hostName;
         }
 
         if (!data->hostId.empty())
@@ -851,14 +856,24 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         auto* hostsMap = settings->getHostsMap();
         Host* localHost = nullptr;
 
-        auto it = hostsMap->find(deviceName);
+        std::string autoName = "[Auto] " + deviceName;
+        std::string manualName = "[Manual] " + deviceName;
+
+        auto it = hostsMap->find(autoName);
+        if (it == hostsMap->end()) {
+            it = hostsMap->find(manualName);
+        }
+        if (it == hostsMap->end()) {
+            it = hostsMap->find(deviceName);
+        }
+
         if (it != hostsMap->end() && it->second->hasRpKey())
         {
             localHost = it->second;
             if (localHost->getRemoteDuid().empty())
             {
                 localHost->setRemoteDuid(deviceUid);
-                brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
+                brls::Logger::info("Updated local host '{}' with remote DUID", it->first);
             }
         }
 

@@ -58,7 +58,8 @@ void AddHostTab::onSaveClicked() {
         return;
     }
 
-    Host* host = settings->getOrCreateHost(name);
+    std::string hostKey = "[Manual] " + name;
+    Host* host = settings->getOrCreateHost(hostKey);
     settings->setHostAddr(host, addr);
     settings->setDiscovered(host, true);
 
@@ -70,7 +71,7 @@ void AddHostTab::onSaveClicked() {
     statusLabel->setText("Console added successfully!");
     statusLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
 
-    brls::Logger::info("Added host: {} at {}", name, addr);
+    brls::Logger::info("Added host: {} at {}", hostKey, addr);
 
     hostNameInput->setValue("");
     hostAddrInput->setValue("");
