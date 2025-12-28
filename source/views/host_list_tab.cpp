@@ -458,15 +458,14 @@ private:
                     localHost->setRemoteDuid(remoteHost->getRemoteDuid());
                     settings->writeFile();
 
-                    if (HostListTab::currentInstance) {
-                        HostListTab::currentInstance->syncHostList();
-                    }
-
                     brls::Application::notify("Linked to " + remoteName);
 
                     brls::sync([]() {
-                        if (HostListTab::currentInstance && HostListTab::currentInstance->findRemoteBtn) {
-                            brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                        if (HostListTab::currentInstance) {
+                            HostListTab::currentInstance->syncHostList();
+                            if (HostListTab::currentInstance->findRemoteBtn) {
+                                brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                            }
                         }
                     });
                 }
@@ -548,8 +547,11 @@ HostListTab::HostListTab() {
             brls::Logger::warning("onHostDiscovered: host is null");
             return;
         }
+        brls::Logger::info("onHostDiscovered: isActive={}, currentInstance={}",
+            HostListTab::isActive ? "true" : "false",
+            HostListTab::currentInstance ? "valid" : "null");
         if (!HostListTab::isActive) {
-            brls::Logger::debug("onHostDiscovered: isActive=false, skipping {}", host->getHostName());
+            brls::Logger::info("onHostDiscovered: isActive=false, skipping {}", host->getHostName());
             return;
         }
         if (!HostListTab::currentInstance) {
