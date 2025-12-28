@@ -564,6 +564,9 @@ void SettingsManager::setVideoResolution(Host* host, ChiakiVideoResolutionPreset
         host->videoResolution = value;
     } else {
         globalVideoResolution = value;
+        for (auto& [name, h] : hosts) {
+            h->videoResolution = value;
+        }
     }
 }
 
@@ -581,6 +584,9 @@ void SettingsManager::setVideoFPS(Host* host, ChiakiVideoFPSPreset value) {
         host->videoFps = value;
     } else {
         globalVideoFPS = value;
+        for (auto& [name, h] : hosts) {
+            h->videoFps = value;
+        }
     }
 }
 
