@@ -294,7 +294,17 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
     brls::Logger::info("--");
 
     brls::sync([this, data, target]() {
-        Host* host = settings->getOrCreateHost(data->hostName);
+        std::string manualName = "[Manual] " + data->hostName;
+        auto* hostsMap = settings->getHostsMap();
+        auto manualIt = hostsMap->find(manualName);
+
+        Host* host;
+        if (manualIt != hostsMap->end()) {
+            host = manualIt->second;
+        } else {
+            std::string hostKey = "[Auto] " + data->hostName;
+            host = settings->getOrCreateHost(hostKey);
+        }
 
         host->state = data->state;
         host->discovered = true;
@@ -307,11 +317,6 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
         if (!data->hostAddr.empty())
         {
             host->hostAddr = data->hostAddr;
-        }
-
-        if (!data->hostName.empty())
-        {
-            host->hostName = data->hostName;
         }
 
         if (!data->hostId.empty())
@@ -727,7 +732,7 @@ bool DiscoveryManager::isPsnTokenValid() const
     return (expiresAt - 60) > now;
 }
 
-void DiscoveryManager::refreshRemoteDevices()
+void DiscoveryManager::refreshRemoteDevices(std::function<void()> onComplete)
 {
     brls::Logger::info("DiscoveryManager::refreshRemoteDevices() called");
 
@@ -739,34 +744,37 @@ void DiscoveryManager::refreshRemoteDevices()
         if (refreshToken.empty())
         {
             brls::Logger::warning("No PSN refresh token available, cannot discover remote devices");
+            if (onComplete) onComplete();
             return;
         }
 
         refreshPsnToken(
-            [this]() {
+            [this, onComplete]() {
                 brls::Logger::info("Token refresh successful, now fetching remote devices");
-                fetchRemoteDevicesFromPsn();
+                fetchRemoteDevicesFromPsn(onComplete);
             },
-            [this](const std::string& error) {
+            [this, onComplete](const std::string& error) {
                 brls::Logger::error("Failed to refresh PSN token: {}", error);
                 brls::Logger::info("Clearing invalid PSN token data from config");
                 settings->clearPsnTokenData();
                 settings->writeFile();
+                if (onComplete) onComplete();
             }
         );
         return;
     }
 
     brls::Logger::info("PSN token is valid, fetching remote devices");
-    fetchRemoteDevicesFromPsn();
+    fetchRemoteDevicesFromPsn(onComplete);
 }
 
-void DiscoveryManager::fetchRemoteDevicesFromPsn()
+void DiscoveryManager::fetchRemoteDevicesFromPsn(std::function<void()> onComplete)
 {
     std::string accessToken = settings->getPsnAccessToken();
     if (accessToken.empty())
     {
         brls::Logger::error("No access token available for remote device discovery");
+        if (onComplete) onComplete();
         return;
     }
 
@@ -819,6 +827,13 @@ void DiscoveryManager::fetchRemoteDevicesFromPsn()
     {
         brls::Logger::error("Failed to list PS4 devices: {}", chiaki_error_string(ps4Err));
     }
+
+    if (onComplete)
+    {
+        brls::sync([onComplete]() {
+            onComplete();
+        });
+    }
 }
 
 void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType)
@@ -851,14 +866,24 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         auto* hostsMap = settings->getHostsMap();
         Host* localHost = nullptr;
 
-        auto it = hostsMap->find(deviceName);
+        std::string autoName = "[Auto] " + deviceName;
+        std::string manualName = "[Manual] " + deviceName;
+
+        auto it = hostsMap->find(autoName);
+        if (it == hostsMap->end()) {
+            it = hostsMap->find(manualName);
+        }
+        if (it == hostsMap->end()) {
+            it = hostsMap->find(deviceName);
+        }
+
         if (it != hostsMap->end() && it->second->hasRpKey())
         {
             localHost = it->second;
             if (localHost->getRemoteDuid().empty())
             {
                 localHost->setRemoteDuid(deviceUid);
-                brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
+                brls::Logger::info("Updated local host '{}' with remote DUID", it->first);
             }
         }
 

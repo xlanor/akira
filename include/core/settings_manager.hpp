@@ -2,7 +2,6 @@
 #define AKIRA_SETTINGS_MANAGER_HPP
 
 #include <map>
-#include <regex>
 #include <string>
 
 #include <chiaki/common.h>
@@ -25,7 +24,8 @@ protected:
 
 private:
     static constexpr const char* CONFIG_DIR = "sdmc:/switch/akira";
-    static constexpr const char* CONFIG_FILE = "sdmc:/switch/akira/akira.conf";
+    static constexpr const char* TOML_CONFIG_FILE = "sdmc:/switch/akira/akira.toml";
+    static constexpr const char* LEGACY_CONFIG_FILE = "sdmc:/switch/akira/akira.conf";
 
     ChiakiLog* log = nullptr;
     std::map<std::string, Host*> hosts;
@@ -41,60 +41,16 @@ private:
     std::string globalDuid;
     HapticPreset globalHaptic = HapticPreset::Disabled;
     bool globalInvertAB = false;
+    int globalVideoBitrate = 5000;
 
     // Companion server settings
     std::string companionHost;
     int companionPort = 8080;
 
-    enum class ConfigItem {
-        Unknown,
-        HostName,
-        HostAddr,
-        PsnOnlineId,
-        PsnAccountId,
-        PsnRefreshToken,
-        PsnAccessToken,
-        ConsolePIN,
-        RpKey,
-        RpKeyType,
-        RpRegistKey,
-        VideoResolution,
-        VideoFps,
-        Target,
-        Haptic,
-        RemoteDuid,
-        CompanionHost,
-        CompanionPort,
-        PsnTokenExpiresAt,
-        GlobalDuid,
-        InvertAB
-    };
-
-    const std::map<ConfigItem, std::regex> regexMap = {
-        {ConfigItem::HostName, std::regex("^\\[\\s*(.+)\\s*\\]")},
-        {ConfigItem::HostAddr, std::regex("^\\s*host_(?:ip|addr)\\s*=\\s*\"?((\\d+\\.\\d+\\.\\d+\\.\\d+)|([A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+))\"?")},
-        {ConfigItem::PsnOnlineId, std::regex("^\\s*psn_online_id\\s*=\\s*\"?([\\w_-]+)\"?")},
-        {ConfigItem::PsnAccountId, std::regex("^\\s*psn_account_id\\s*=\\s*\"?([\\w/=+]+)\"?")},
-        {ConfigItem::PsnRefreshToken, std::regex("^\\s*psn_refresh_token\\s*=\\s*\"?([\\w._-]+)\"?")},
-        {ConfigItem::PsnAccessToken, std::regex("^\\s*psn_access_token\\s*=\\s*\"?([\\w._-]+)\"?")},
-        {ConfigItem::ConsolePIN, std::regex("^\\s*console_pin\\s*=\\s*\"?(\\d{4})\"?")},
-        {ConfigItem::RpKey, std::regex("^\\s*rp_key\\s*=\\s*\"?([\\w/=+]+)\"?")},
-        {ConfigItem::RpKeyType, std::regex("^\\s*rp_key_type\\s*=\\s*\"?(\\d)\"?")},
-        {ConfigItem::RpRegistKey, std::regex("^\\s*rp_regist_key\\s*=\\s*\"?([\\w/=+]+)\"?")},
-        {ConfigItem::VideoResolution, std::regex("^\\s*video_resolution\\s*=\\s*\"?(1080p|720p|540p|360p)\"?")},
-        {ConfigItem::VideoFps, std::regex("^\\s*video_fps\\s*=\\s*\"?(60|30)\"?")},
-        {ConfigItem::Target, std::regex("^\\s*target\\s*=\\s*\"?(\\d+)\"?")},
-        {ConfigItem::Haptic, std::regex("^\\s*haptic\\s*=\\s*\"?(\\d+)\"?")},
-        {ConfigItem::RemoteDuid, std::regex("^\\s*remote_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
-        {ConfigItem::CompanionHost, std::regex("^\\s*companion_host\\s*=\\s*\"?([\\w.-]+)\"?")},
-        {ConfigItem::CompanionPort, std::regex("^\\s*companion_port\\s*=\\s*\"?(\\d+)\"?")},
-        {ConfigItem::PsnTokenExpiresAt, std::regex("^\\s*psn_token_expires_at\\s*=\\s*\"?(\\d+)\"?")},
-        {ConfigItem::GlobalDuid, std::regex("^\\s*global_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
-        {ConfigItem::InvertAB, std::regex("^\\s*invert_ab\\s*=\\s*\"?(true|false|1|0)\"?")}
-    };
-
-    ConfigItem parseLine(const std::string& line, std::string& value);
+    void parseTomlFile();
+    void parseLegacyFile();
     static size_t getB64EncodeSize(size_t inputSize);
+    static bool fileExists(const char* path);
 
 public:
     SettingsManager(const SettingsManager&) = delete;
@@ -121,6 +77,9 @@ public:
     static std::string fpsToString(ChiakiVideoFPSPreset fps);
     static int fpsToInt(ChiakiVideoFPSPreset fps);
     static ChiakiVideoFPSPreset stringToFps(const std::string& value);
+
+    static int getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res);
+    static int getMaxBitrateForResolution(ChiakiVideoResolutionPreset res);
 
     std::string getHostName(Host* host);
     std::string getHostAddr(Host* host);
@@ -156,6 +115,9 @@ public:
     ChiakiVideoFPSPreset getVideoFPS(Host* host);
     void setVideoFPS(Host* host, ChiakiVideoFPSPreset value);
     void setVideoFPS(Host* host, const std::string& value);
+
+    int getVideoBitrate() const;
+    void setVideoBitrate(int value);
 
     HapticPreset getHaptic(Host* host);
     void setHaptic(Host* host, HapticPreset value);

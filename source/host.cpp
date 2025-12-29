@@ -278,22 +278,9 @@ int Host::initSession(IO* io)
 int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
 {
     chiaki_connect_video_profile_preset(&videoProfile, videoResolution, videoFps);
-
-    switch (videoResolution)
-    {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p:
-            videoProfile.bitrate = 7000; 
-            break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p:
-            videoProfile.bitrate = 5000; 
-            break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p:
-            videoProfile.bitrate = 3000; 
-            break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p:
-            videoProfile.bitrate = 1500; 
-            break;
-    }
+    videoProfile.bitrate = settings->getVideoBitrate();
+    brls::Logger::info("Host::initSession: videoResolution preset={}, profile={}x{}, bitrate={}",
+        static_cast<int>(videoResolution), videoProfile.width, videoProfile.height, videoProfile.bitrate);
 
     chiaki_opus_decoder_init(&opusDecoder, log);
 

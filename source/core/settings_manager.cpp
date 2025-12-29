@@ -3,9 +3,11 @@
 
 #include <borealis.hpp>
 #include <chiaki/base64.h>
+#include <toml++/toml.hpp>
 
 #include <cstdio>
 #include <fstream>
+#include <regex>
 #include <sys/stat.h>
 
 SettingsManager* SettingsManager::instance = nullptr;
@@ -32,15 +34,9 @@ void SettingsManager::ensureConfigDir() {
     mkdir(CONFIG_DIR, 0755);
 }
 
-SettingsManager::ConfigItem SettingsManager::parseLine(const std::string& line, std::string& value) {
-    std::smatch match;
-    for (const auto& [item, regex] : regexMap) {
-        if (std::regex_search(line, match, regex)) {
-            value = match[1];
-            return item;
-        }
-    }
-    return ConfigItem::Unknown;
+bool SettingsManager::fileExists(const char* path) {
+    struct stat buffer;
+    return (stat(path, &buffer) == 0);
 }
 
 size_t SettingsManager::getB64EncodeSize(size_t inputSize) {
@@ -105,13 +101,152 @@ Host* SettingsManager::findHostByDuid(const std::string& duid) {
 }
 
 void SettingsManager::parseFile() {
-    brls::Logger::info("Parsing config file: {}", CONFIG_FILE);
+    if (fileExists(TOML_CONFIG_FILE)) {
+        parseTomlFile();
+    } else if (fileExists(LEGACY_CONFIG_FILE)) {
+        brls::Logger::info("Migrating from legacy config format");
+        parseLegacyFile();
+        writeFile();
+    } else {
+        brls::Logger::info("No config file found, using defaults");
+    }
+}
 
-    std::ifstream configFile(CONFIG_FILE);
+void SettingsManager::parseTomlFile() {
+    brls::Logger::info("Parsing TOML config file: {}", TOML_CONFIG_FILE);
+
+    try {
+        auto config = toml::parse_file(TOML_CONFIG_FILE);
+
+        if (auto val = config["video_resolution"].value<std::string>())
+            globalVideoResolution = stringToResolution(*val);
+        if (auto val = config["video_fps"].value<int64_t>())
+            globalVideoFPS = stringToFps(std::to_string(*val));
+        if (auto val = config["haptic"].value<int64_t>())
+            globalHaptic = static_cast<HapticPreset>(*val);
+        if (auto val = config["psn_online_id"].value<std::string>())
+            globalPsnOnlineId = *val;
+        if (auto val = config["psn_account_id"].value<std::string>())
+            globalPsnAccountId = *val;
+        if (auto val = config["psn_refresh_token"].value<std::string>())
+            globalPsnRefreshToken = *val;
+        if (auto val = config["psn_access_token"].value<std::string>())
+            globalPsnAccessToken = *val;
+        if (auto val = config["psn_token_expires_at"].value<int64_t>())
+            globalPsnTokenExpiresAt = *val;
+        if (auto val = config["global_duid"].value<std::string>())
+            globalDuid = *val;
+        if (auto val = config["invert_ab"].value<bool>())
+            globalInvertAB = *val;
+        if (auto val = config["companion_host"].value<std::string>())
+            companionHost = *val;
+        if (auto val = config["companion_port"].value<int64_t>())
+            companionPort = static_cast<int>(*val);
+        if (auto val = config["video_bitrate"].value<int64_t>())
+            globalVideoBitrate = static_cast<int>(*val);
+        else
+            globalVideoBitrate = getDefaultBitrateForResolution(globalVideoResolution);
+
+        for (auto& [key, value] : config) {
+            if (!value.is_table()) continue;
+
+            std::string hostName(key.str());
+            auto* table = value.as_table();
+            Host* host = getOrCreateHost(hostName);
+
+            if (auto val = (*table)["host_addr"].value<std::string>())
+                host->hostAddr = *val;
+            if (auto val = (*table)["target"].value<int64_t>())
+                host->setChiakiTarget(static_cast<ChiakiTarget>(*val));
+            if (auto val = (*table)["video_resolution"].value<std::string>())
+                host->videoResolution = stringToResolution(*val);
+            if (auto val = (*table)["video_fps"].value<int64_t>())
+                host->videoFps = stringToFps(std::to_string(*val));
+            if (auto val = (*table)["psn_online_id"].value<std::string>())
+                host->psnOnlineId = *val;
+            if (auto val = (*table)["psn_account_id"].value<std::string>())
+                host->psnAccountId = *val;
+            if (auto val = (*table)["console_pin"].value<std::string>())
+                host->consolePIN = *val;
+            if (auto val = (*table)["haptic"].value<int64_t>())
+                host->haptic = static_cast<int>(*val);
+            if (auto val = (*table)["remote_duid"].value<std::string>()) {
+                host->remoteDuid = *val;
+                if (!val->empty() && hostName.rfind("[Remote] ", 0) == 0) {
+                    host->isRemoteHost = true;
+                }
+            }
+
+            bool rpKeySet = false, rpRegistKeySet = false, rpKeyTypeSet = false;
+            if (auto val = (*table)["rp_key"].value<std::string>())
+                rpKeySet = setHostRpKey(host, *val);
+            if (auto val = (*table)["rp_regist_key"].value<std::string>())
+                rpRegistKeySet = setHostRpRegistKey(host, *val);
+            if (auto val = (*table)["rp_key_type"].value<int64_t>()) {
+                host->rpKeyType = static_cast<int>(*val);
+                rpKeyTypeSet = true;
+            }
+
+            if (rpKeySet && rpRegistKeySet && rpKeyTypeSet) {
+                host->rpKeyData = true;
+            }
+        }
+
+        brls::Logger::info("Loaded {} host(s) from TOML config", hosts.size());
+    } catch (const toml::parse_error& err) {
+        brls::Logger::error("Failed to parse TOML config: {}", err.what());
+    }
+}
+
+void SettingsManager::parseLegacyFile() {
+    brls::Logger::info("Parsing legacy config file: {}", LEGACY_CONFIG_FILE);
+
+    std::ifstream configFile(LEGACY_CONFIG_FILE);
     if (!configFile.is_open()) {
-        brls::Logger::info("Config file not found, using defaults");
+        brls::Logger::error("Failed to open legacy config file");
         return;
     }
+
+    enum class ConfigItem {
+        Unknown, HostName, HostAddr, PsnOnlineId, PsnAccountId, PsnRefreshToken,
+        PsnAccessToken, ConsolePIN, RpKey, RpKeyType, RpRegistKey, VideoResolution,
+        VideoFps, Target, Haptic, RemoteDuid, CompanionHost, CompanionPort,
+        PsnTokenExpiresAt, GlobalDuid, InvertAB
+    };
+
+    const std::map<ConfigItem, std::regex> regexMap = {
+        {ConfigItem::HostName, std::regex("^\\[\\s*(.+)\\s*\\]")},
+        {ConfigItem::HostAddr, std::regex("^\\s*host_(?:ip|addr)\\s*=\\s*\"?((\\d+\\.\\d+\\.\\d+\\.\\d+)|([A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+))\"?")},
+        {ConfigItem::PsnOnlineId, std::regex("^\\s*psn_online_id\\s*=\\s*\"?([\\w_-]+)\"?")},
+        {ConfigItem::PsnAccountId, std::regex("^\\s*psn_account_id\\s*=\\s*\"?([\\w/=+]+)\"?")},
+        {ConfigItem::PsnRefreshToken, std::regex("^\\s*psn_refresh_token\\s*=\\s*\"?([\\w._-]+)\"?")},
+        {ConfigItem::PsnAccessToken, std::regex("^\\s*psn_access_token\\s*=\\s*\"?([\\w._-]+)\"?")},
+        {ConfigItem::ConsolePIN, std::regex("^\\s*console_pin\\s*=\\s*\"?(\\d{4})\"?")},
+        {ConfigItem::RpKey, std::regex("^\\s*rp_key\\s*=\\s*\"?([\\w/=+]+)\"?")},
+        {ConfigItem::RpKeyType, std::regex("^\\s*rp_key_type\\s*=\\s*\"?(\\d)\"?")},
+        {ConfigItem::RpRegistKey, std::regex("^\\s*rp_regist_key\\s*=\\s*\"?([\\w/=+]+)\"?")},
+        {ConfigItem::VideoResolution, std::regex("^\\s*video_resolution\\s*=\\s*\"?(1080p|720p|540p|360p)\"?")},
+        {ConfigItem::VideoFps, std::regex("^\\s*video_fps\\s*=\\s*\"?(60|30)\"?")},
+        {ConfigItem::Target, std::regex("^\\s*target\\s*=\\s*\"?(\\d+)\"?")},
+        {ConfigItem::Haptic, std::regex("^\\s*haptic\\s*=\\s*\"?(\\d+)\"?")},
+        {ConfigItem::RemoteDuid, std::regex("^\\s*remote_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
+        {ConfigItem::CompanionHost, std::regex("^\\s*companion_host\\s*=\\s*\"?([\\w.-]+)\"?")},
+        {ConfigItem::CompanionPort, std::regex("^\\s*companion_port\\s*=\\s*\"?(\\d+)\"?")},
+        {ConfigItem::PsnTokenExpiresAt, std::regex("^\\s*psn_token_expires_at\\s*=\\s*\"?(\\d+)\"?")},
+        {ConfigItem::GlobalDuid, std::regex("^\\s*global_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
+        {ConfigItem::InvertAB, std::regex("^\\s*invert_ab\\s*=\\s*\"?(true|false|1|0)\"?")}
+    };
+
+    auto parseLine = [&regexMap](const std::string& line, std::string& value) -> ConfigItem {
+        std::smatch match;
+        for (const auto& [item, regex] : regexMap) {
+            if (std::regex_search(line, match, regex)) {
+                value = match[1];
+                return item;
+            }
+        }
+        return ConfigItem::Unknown;
+    };
 
     std::string line;
     std::string value;
@@ -124,71 +259,46 @@ void SettingsManager::parseFile() {
         switch (item) {
             case ConfigItem::Unknown:
                 break;
-
             case ConfigItem::HostName:
-                brls::Logger::debug("Found host: {}", value);
                 currentHost = getOrCreateHost(value);
                 rpKeySet = rpRegistKeySet = rpKeyTypeSet = false;
                 break;
-
             case ConfigItem::HostAddr:
-                if (currentHost) {
-                    currentHost->hostAddr = value;
-                }
+                if (currentHost) currentHost->hostAddr = value;
                 break;
-
             case ConfigItem::PsnOnlineId:
                 setPsnOnlineId(currentHost, value);
                 break;
-
             case ConfigItem::PsnAccountId:
                 setPsnAccountId(currentHost, value);
                 break;
-
             case ConfigItem::PsnRefreshToken:
                 globalPsnRefreshToken = value;
                 break;
-
             case ConfigItem::PsnAccessToken:
                 globalPsnAccessToken = value;
                 break;
-
             case ConfigItem::ConsolePIN:
-                if (currentHost) {
-                    currentHost->consolePIN = value;
-                }
+                if (currentHost) currentHost->consolePIN = value;
                 break;
-
             case ConfigItem::RpKey:
-                if (currentHost) {
-                    rpKeySet = setHostRpKey(currentHost, value);
-                }
+                if (currentHost) rpKeySet = setHostRpKey(currentHost, value);
                 break;
-
             case ConfigItem::RpKeyType:
-                if (currentHost) {
-                    rpKeyTypeSet = setHostRpKeyType(currentHost, value);
-                }
+                if (currentHost) rpKeyTypeSet = setHostRpKeyType(currentHost, value);
                 break;
-
             case ConfigItem::RpRegistKey:
-                if (currentHost) {
-                    rpRegistKeySet = setHostRpRegistKey(currentHost, value);
-                }
+                if (currentHost) rpRegistKeySet = setHostRpRegistKey(currentHost, value);
                 break;
-
             case ConfigItem::VideoResolution:
                 setVideoResolution(currentHost, value);
                 break;
-
             case ConfigItem::VideoFps:
                 setVideoFPS(currentHost, value);
                 break;
-
             case ConfigItem::Haptic:
                 setHaptic(currentHost, value);
                 break;
-
             case ConfigItem::RemoteDuid:
                 if (currentHost) {
                     currentHost->remoteDuid = value;
@@ -197,32 +307,22 @@ void SettingsManager::parseFile() {
                     }
                 }
                 break;
-
             case ConfigItem::Target:
-                if (currentHost) {
-                    setChiakiTarget(currentHost, value);
-                }
+                if (currentHost) setChiakiTarget(currentHost, value);
                 break;
-
             case ConfigItem::CompanionHost:
                 companionHost = value;
                 break;
-
             case ConfigItem::CompanionPort:
                 companionPort = std::atoi(value.c_str());
-                if (companionPort <= 0 || companionPort > 65535) {
-                    companionPort = 8080;
-                }
+                if (companionPort <= 0 || companionPort > 65535) companionPort = 8080;
                 break;
-
             case ConfigItem::PsnTokenExpiresAt:
                 globalPsnTokenExpiresAt = std::atoll(value.c_str());
                 break;
-
             case ConfigItem::GlobalDuid:
                 globalDuid = value;
                 break;
-
             case ConfigItem::InvertAB:
                 globalInvertAB = (value == "true" || value == "1");
                 break;
@@ -234,97 +334,82 @@ void SettingsManager::parseFile() {
     }
 
     configFile.close();
-    brls::Logger::info("Loaded {} host(s) from config", hosts.size());
+    brls::Logger::info("Loaded {} host(s) from legacy config", hosts.size());
 }
 
 int SettingsManager::writeFile() {
-    brls::Logger::info("Writing config file: {}", CONFIG_FILE);
+    brls::Logger::info("Writing config file: {}", TOML_CONFIG_FILE);
 
     ensureConfigDir();
 
-    std::ofstream configFile(CONFIG_FILE, std::ios::out | std::ios::trunc);
+    toml::table config;
+
+    if (globalVideoResolution)
+        config.insert("video_resolution", resolutionToString(globalVideoResolution));
+    if (globalVideoFPS)
+        config.insert("video_fps", fpsToInt(globalVideoFPS));
+    config.insert("video_bitrate", globalVideoBitrate);
+    if (globalHaptic != HapticPreset::Disabled)
+        config.insert("haptic", static_cast<int>(globalHaptic));
+    if (!globalPsnOnlineId.empty())
+        config.insert("psn_online_id", globalPsnOnlineId);
+    if (!globalPsnAccountId.empty())
+        config.insert("psn_account_id", globalPsnAccountId);
+    if (!globalPsnRefreshToken.empty())
+        config.insert("psn_refresh_token", globalPsnRefreshToken);
+    if (!globalPsnAccessToken.empty())
+        config.insert("psn_access_token", globalPsnAccessToken);
+    if (globalPsnTokenExpiresAt > 0)
+        config.insert("psn_token_expires_at", globalPsnTokenExpiresAt);
+    if (!globalDuid.empty())
+        config.insert("global_duid", globalDuid);
+    if (!companionHost.empty())
+        config.insert("companion_host", companionHost);
+    if (companionPort != 8080)
+        config.insert("companion_port", companionPort);
+    if (globalInvertAB)
+        config.insert("invert_ab", globalInvertAB);
+
+    for (const auto& [name, host] : hosts) {
+        brls::Logger::debug("Writing host config: {}", name);
+
+        toml::table hostTable;
+        hostTable.insert("host_addr", host->getHostAddr());
+        hostTable.insert("target", static_cast<int>(host->getChiakiTarget()));
+
+        if (host->videoResolution)
+            hostTable.insert("video_resolution", resolutionToString(host->videoResolution));
+        if (host->videoFps)
+            hostTable.insert("video_fps", fpsToInt(host->videoFps));
+        if (!host->psnOnlineId.empty())
+            hostTable.insert("psn_online_id", host->psnOnlineId);
+        if (!host->psnAccountId.empty())
+            hostTable.insert("psn_account_id", host->psnAccountId);
+        if (!host->consolePIN.empty())
+            hostTable.insert("console_pin", host->consolePIN);
+
+        if (host->rpKeyData || host->registered) {
+            hostTable.insert("rp_key", getHostRpKey(host));
+            hostTable.insert("rp_regist_key", getHostRpRegistKey(host));
+            hostTable.insert("rp_key_type", host->rpKeyType);
+        }
+
+        if (!host->remoteDuid.empty())
+            hostTable.insert("remote_duid", host->remoteDuid);
+
+        if (host->haptic >= 0)
+            hostTable.insert("haptic", host->haptic);
+
+        config.insert(name, hostTable);
+    }
+
+    std::ofstream configFile(TOML_CONFIG_FILE, std::ios::out | std::ios::trunc);
     if (!configFile.is_open()) {
         brls::Logger::error("Failed to open config file for writing");
         return -1;
     }
 
-    if (globalVideoResolution) {
-        configFile << "video_resolution = \"" << resolutionToString(globalVideoResolution) << "\"\n";
-    }
-    if (globalVideoFPS) {
-        configFile << "video_fps = " << fpsToString(globalVideoFPS) << "\n";
-    }
-    if (globalHaptic != HapticPreset::Disabled) {
-        configFile << "haptic = " << static_cast<int>(globalHaptic) << "\n";
-    }
-    if (!globalPsnOnlineId.empty()) {
-        configFile << "psn_online_id = \"" << globalPsnOnlineId << "\"\n";
-    }
-    if (!globalPsnAccountId.empty()) {
-        configFile << "psn_account_id = \"" << globalPsnAccountId << "\"\n";
-    }
-    if (!globalPsnRefreshToken.empty()) {
-        configFile << "psn_refresh_token = \"" << globalPsnRefreshToken << "\"\n";
-    }
-    if (!globalPsnAccessToken.empty()) {
-        configFile << "psn_access_token = \"" << globalPsnAccessToken << "\"\n";
-    }
-    if (globalPsnTokenExpiresAt > 0) {
-        configFile << "psn_token_expires_at = " << globalPsnTokenExpiresAt << "\n";
-    }
-    if (!globalDuid.empty()) {
-        configFile << "global_duid = \"" << globalDuid << "\"\n";
-    }
-
-    if (!companionHost.empty()) {
-        configFile << "companion_host = \"" << companionHost << "\"\n";
-    }
-    if (companionPort != 8080) {
-        configFile << "companion_port = " << companionPort << "\n";
-    }
-
-    if (globalInvertAB) {
-        configFile << "invert_ab = true\n";
-    }
-
-    for (const auto& [name, host] : hosts) {
-        brls::Logger::debug("Writing host config: {}", name);
-
-        configFile << "\n[" << name << "]\n";
-        configFile << "host_addr = \"" << host->getHostAddr() << "\"\n";
-        configFile << "target = \"" << static_cast<int>(host->getChiakiTarget()) << "\"\n";
-
-        if (host->videoResolution) {
-            configFile << "video_resolution = \"" << resolutionToString(host->videoResolution) << "\"\n";
-        }
-        if (host->videoFps) {
-            configFile << "video_fps = " << fpsToString(host->videoFps) << "\n";
-        }
-        if (!host->psnOnlineId.empty()) {
-            configFile << "psn_online_id = \"" << host->psnOnlineId << "\"\n";
-        }
-        if (!host->psnAccountId.empty()) {
-            configFile << "psn_account_id = \"" << host->psnAccountId << "\"\n";
-        }
-        if (!host->consolePIN.empty()) {
-            configFile << "console_pin = \"" << host->consolePIN << "\"\n";
-        }
-
-        if (host->rpKeyData || host->registered) {
-            configFile << "rp_key = \"" << getHostRpKey(host) << "\"\n";
-            configFile << "rp_regist_key = \"" << getHostRpRegistKey(host) << "\"\n";
-            configFile << "rp_key_type = " << host->rpKeyType << "\n";
-        }
-
-        if (!host->remoteDuid.empty()) {
-            configFile << "remote_duid = \"" << host->remoteDuid << "\"\n";
-        }
-
-        if (host->haptic >= 0) {
-            configFile << "haptic = " << host->haptic << "\n";
-        }
-    }
-
+    configFile << config;
     configFile.close();
     return 0;
 }
@@ -378,6 +463,26 @@ ChiakiVideoFPSPreset SettingsManager::stringToFps(const std::string& value) {
     if (value == "60") return CHIAKI_VIDEO_FPS_PRESET_60;
     if (value == "30") return CHIAKI_VIDEO_FPS_PRESET_30;
     return CHIAKI_VIDEO_FPS_PRESET_60;
+}
+
+int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res) {
+    switch (res) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 7000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 5000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 3000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 1500;
+        default: return 5000;
+    }
+}
+
+int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) {
+    switch (res) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 15000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 10000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 5000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 3000;
+        default: return 10000;
+    }
 }
 
 std::string SettingsManager::getHostName(Host* host) {
@@ -459,6 +564,9 @@ void SettingsManager::setVideoResolution(Host* host, ChiakiVideoResolutionPreset
         host->videoResolution = value;
     } else {
         globalVideoResolution = value;
+        for (auto& [name, h] : hosts) {
+            h->videoResolution = value;
+        }
     }
 }
 
@@ -476,11 +584,22 @@ void SettingsManager::setVideoFPS(Host* host, ChiakiVideoFPSPreset value) {
         host->videoFps = value;
     } else {
         globalVideoFPS = value;
+        for (auto& [name, h] : hosts) {
+            h->videoFps = value;
+        }
     }
 }
 
 void SettingsManager::setVideoFPS(Host* host, const std::string& value) {
     setVideoFPS(host, stringToFps(value));
+}
+
+int SettingsManager::getVideoBitrate() const {
+    return globalVideoBitrate;
+}
+
+void SettingsManager::setVideoBitrate(int value) {
+    globalVideoBitrate = value;
 }
 
 HapticPreset SettingsManager::getHaptic(Host* host) {

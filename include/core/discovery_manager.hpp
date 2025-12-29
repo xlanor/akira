@@ -38,7 +38,7 @@ private:
 
     NetworkAddresses getIPv4BroadcastAddr();
 
-    void fetchRemoteDevicesFromPsn();
+    void fetchRemoteDevicesFromPsn(std::function<void()> onComplete);
     void processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType);
 
     ChiakiThread remoteDiscoveryThread;
@@ -100,7 +100,7 @@ public:
 
     bool isPsnTokenValid() const;
 
-    void refreshRemoteDevices();
+    void refreshRemoteDevices(std::function<void()> onComplete = nullptr);
 };
 
 #endif // AKIRA_DISCOVERY_MANAGER_HPP

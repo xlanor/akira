@@ -30,3 +30,6 @@
 [submodule "references/psn-api"]
 	path = references/psn-api
 	url = git@github.com:achievements-app/psn-api.git
+[submodule "library/tomlplusplus"]
+	path = library/tomlplusplus
+	url = https://github.com/marzer/tomlplusplus.git

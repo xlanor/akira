@@ -23,7 +23,7 @@ include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 project(akira)
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "1")
-set(VERSION_REVISION "8")
+set(VERSION_REVISION "9")
 set(APP_TITLE "Akira")
 set(PROJECT_AUTHOR "xlanor")
 set(PACKAGE_NAME "io.github.akira")
@@ -149,6 +149,9 @@ list(APPEND MAIN_SRC ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
 # Add borealis library
 add_subdirectory(${BOREALIS_DIR}/library borealis)
 
+# Add tomlplusplus (header-only)
+add_subdirectory(library/tomlplusplus EXCLUDE_FROM_ALL)
+
 # Main target
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
@@ -187,6 +190,7 @@ endif()
 target_link_libraries(${PROJECT_NAME} PRIVATE
     borealis
     chiaki-lib
+    tomlplusplus::tomlplusplus
     ${SDL2_LIB}
     FFMPEG::avcodec
     FFMPEG::avutil

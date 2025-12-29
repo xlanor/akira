@@ -368,6 +368,12 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             return;
         }
 
+        if (reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED && !self->wakeAttempted) {
+            brls::Logger::info("Connection refused - attempting wake and retry");
+            self->retryWithWake();
+            return;
+        }
+
         self->stopStream();
 
         // Release early to invalidate weak_ptrs before popActivity
@@ -546,5 +552,55 @@ void StreamView::renderLogs(NVGcontext* vg, float x, float y, float width, float
     for (size_t i = startIdx; i < logLines.size(); i++) {
         nvgText(vg, x + 20, currentY, logLines[i].c_str(), nullptr);
         currentY += lineHeight;
+    }
+}
+
+void StreamView::retryWithWake()
+{
+    wakeAttempted = true;
+
+    host->finiSession();
+    io->FreeController();
+
+    int wakeResult = host->wakeup();
+    if (wakeResult != 0) {
+        brls::Logger::error("Wake failed with code {}", wakeResult);
+        stopStream();
+        SharedViewHolder::release(this);
+        auto* dialog = new brls::Dialog("Failed to wake console");
+        dialog->addButton("OK", []() {
+            brls::Application::popActivity();
+        });
+        dialog->open();
+        return;
+    }
+
+    brls::Logger::info("Wake sent, retrying connection...");
+    brls::Application::notify("Waking console...");
+
+    sessionStarted = false;
+    streamActive = false;
+
+    try {
+        if (!io->InitController()) {
+            throw Exception("Failed to initialize controller");
+        }
+        host->initSession(io);
+        host->startSession();
+        sessionStarted = true;
+        streamActive = true;
+        brls::Application::blockInputs(true);
+        brls::Logger::info("Retry connection started");
+    } catch (const Exception& e) {
+        brls::Logger::error("Retry failed: {}", e.what());
+        io->FreeController();
+        host->finiSession();
+        SharedViewHolder::release(this);
+        std::string errorMsg = e.what();
+        auto* dialog = new brls::Dialog("Connection Failed\n\n" + errorMsg);
+        dialog->addButton("OK", []() {
+            brls::Application::popActivity();
+        });
+        dialog->open();
     }
 }
