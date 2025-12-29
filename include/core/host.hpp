@@ -27,6 +27,13 @@ enum HostRegisterError {
     HOST_REGISTER_ERROR_UNDEFINED_TARGET = 3
 };
 
+enum class HostType {
+    Discovered = 0,
+    Auto = 1,
+    Manual = 2,
+    Remote = 3
+};
+
 class Host {
     friend class SettingsManager;
     friend class DiscoveryManager;
@@ -48,9 +55,8 @@ private:
 
     // Host identification
     std::string hostName;
-    std::string hostId;  // MAC address without colons
+    std::string hostId;
     std::string hostAddr;
-    std::string hostType;
     std::string serverNickname;
 
     // Access point info (from registration)
@@ -75,8 +81,9 @@ private:
     bool registered = false;
     bool rpKeyData = false;
     bool sessionInit = false;
-    bool isRemoteHost = false;
     bool needsLinking = false;
+    bool inConfig = false;
+    HostType hostType = HostType::Discovered;
 
     ChiakiHolepunchSession holepunchSession = nullptr;
 
@@ -125,9 +132,15 @@ public:
     bool hasRpKey() const { return rpKeyData; }
     bool isReady() const { return state == CHIAKI_DISCOVERY_HOST_STATE_READY; }
     bool isPS5() const;
-    bool isRemote() const { return isRemoteHost; }
+    bool isRemote() const { return hostType == HostType::Remote; }
+    bool isManual() const { return hostType == HostType::Manual; }
+    bool isAuto() const { return hostType == HostType::Auto; }
+    HostType getHostType() const { return hostType; }
+    void setHostType(HostType type) { hostType = type; }
     bool needsLink() const { return needsLinking; }
     void setNeedsLink(bool value) { needsLinking = value; }
+    bool isInConfig() const { return inConfig; }
+    void setInConfig(bool value) { inConfig = value; }
 
     // Console state helpers
     bool isStandby() const { return state == CHIAKI_DISCOVERY_HOST_STATE_STANDBY; }

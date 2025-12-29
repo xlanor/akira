@@ -58,8 +58,21 @@ void AddHostTab::onSaveClicked() {
         return;
     }
 
-    std::string hostKey = "[Manual] " + name;
-    Host* host = settings->getOrCreateHost(hostKey);
+    if (!SettingsManager::isValidHostAddress(addr)) {
+        statusLabel->setText("Invalid IP address or hostname");
+        statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
+        return;
+    }
+
+    auto* hostsMap = settings->getHostsMap();
+    if (hostsMap->find(name) != hostsMap->end()) {
+        statusLabel->setText("A console with this name already exists");
+        statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
+        return;
+    }
+
+    Host* host = settings->getOrCreateHost(name);
+    host->setHostType(HostType::Manual);
     settings->setHostAddr(host, addr);
     settings->setDiscovered(host, true);
 
@@ -71,7 +84,7 @@ void AddHostTab::onSaveClicked() {
     statusLabel->setText("Console added successfully!");
     statusLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
 
-    brls::Logger::info("Added host: {} at {}", hostKey, addr);
+    brls::Logger::info("Added host: {} at {}", name, addr);
 
     hostNameInput->setValue("");
     hostAddrInput->setValue("");

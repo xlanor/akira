@@ -81,6 +81,10 @@ public:
     static int getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res);
     static int getMaxBitrateForResolution(ChiakiVideoResolutionPreset res);
 
+    static bool isValidIPv4(const std::string& addr);
+    static bool isValidFQDN(const std::string& addr);
+    static bool isValidHostAddress(const std::string& addr);
+
     std::string getHostName(Host* host);
     std::string getHostAddr(Host* host);
     void setHostAddr(Host* host, const std::string& addr);

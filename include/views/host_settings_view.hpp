@@ -20,6 +20,8 @@ public:
 
 private:
     BRLS_BIND(brls::Label, titleLabel, "host_settings/title");
+    BRLS_BIND(brls::InputCell, hostNameInput, "host_settings/hostName");
+    BRLS_BIND(brls::InputCell, hostAddrInput, "host_settings/hostAddr");
     BRLS_BIND(brls::InputCell, psnAccountIdInput, "host_settings/psnAccountId");
     BRLS_BIND(brls::InputCell, psnOnlineIdInput, "host_settings/psnOnlineId");
     BRLS_BIND(brls::Button, lookupBtn, "host_settings/lookupBtn");
@@ -32,8 +34,11 @@ private:
     Host* host = nullptr;
     SettingsManager* settings = nullptr;
     SaveCallback onSaved;
-    int selectedHaptic = -1;  // Track selection: -1=inherit, 0=disabled, 1=weak, 2=strong
+    int selectedHaptic = -1;
+    std::string originalHostName;
 
+    void initHostNameInput();
+    void initHostAddrInput();
     void initPsnAccountIdInput();
     void initLookupButton();
     void initConsolePINInput();
