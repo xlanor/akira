@@ -1,7 +1,8 @@
 # Akira
 Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises a forked variant of [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
 
-This is still considered unstable/beta
+This is still considered unstable/beta, bugs are expected.
+
 <p align="center" width="100%">
   <img src="readme/akira_hosts_114.jpg">
 </p>
@@ -27,10 +28,6 @@ And some horribly compressed encodes to fit < 10mb:
 I initially started working on this when FW 21 broke chiaki-ng.The changes I was going to be making was very invasive, and so I took it out of tree first, switching to a homebrew nro that wraps chiaki-ng as a dependency. I may upstream this back into chiaki-ng eventually. 
 
 At this point I'm a place where I can seat back and enjoy my christmas break to play Avatar while my partner watches something else on the telly.
-
-Disconnecting etc is still problematic and crashes and will most likely require an app restart for now.
-
-bitrate settings are low while I try and smoothen out the decoder.
 
 ## Changes from in-tree
 [Read this](https://github.com/xlanor/akira/wiki/Additional-changes)
