@@ -259,3 +259,9 @@ void IO::setRequestedProfile(int width, int height, int fps, int bitrate, bool h
     m_requested_bitrate = bitrate;
     m_requested_hevc = hevc;
 }
+
+void IO::setVideoPaused(bool paused)
+{
+    if (m_video_renderer)
+        m_video_renderer->setPaused(paused);
+}

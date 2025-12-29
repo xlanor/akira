@@ -292,6 +292,9 @@ void Deko3dRenderer::draw(AVFrame* frame)
         }
     }
 
+    if (m_paused)
+        return;
+
     AVNVTegraMap* map = av_nvtegra_frame_get_fbuf_map(frame);
     if (map)
     {

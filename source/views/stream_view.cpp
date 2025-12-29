@@ -198,7 +198,7 @@ void StreamView::stopStream()
 
     brls::Logger::info("Stopping stream");
 
-    brls::Application::unblockInputs();
+    brls::Application::forceUnblockInputs();
 
     streamActive = false;
 
@@ -482,7 +482,8 @@ void StreamView::showDisconnectMenu()
 {
     brls::Logger::info("showDisconnectMenu: entering");
     menuOpen = true;
-    brls::Application::unblockInputs();
+    io->setVideoPaused(true);
+    brls::Application::forceUnblockInputs();
 
     auto* menu = new StreamMenu();
 
@@ -494,6 +495,7 @@ void StreamView::showDisconnectMenu()
         if (auto self = weak.lock()) {
             brls::Logger::info("Stats overlay toggled: {}", enabled);
             self->io->setShowStatsOverlay(enabled);
+            self->io->setVideoPaused(false);
             self->menuOpen = false;
             brls::Application::blockInputs(true);
         }
@@ -505,6 +507,7 @@ void StreamView::showDisconnectMenu()
             if (self->io->getInputManager()) {
                 self->io->getInputManager()->resetMotionControls();
             }
+            self->io->setVideoPaused(false);
             self->menuOpen = false;
             brls::Application::blockInputs(true);
         }
@@ -520,6 +523,7 @@ void StreamView::showDisconnectMenu()
     menu->setOnDismiss([weak]() {
         if (auto self = weak.lock()) {
             brls::Logger::info("Menu dismissed");
+            self->io->setVideoPaused(false);
             self->menuOpen = false;
             brls::Application::blockInputs(true);
         }
@@ -608,7 +612,6 @@ void StreamView::retryWithWake()
         host->startSession();
         sessionStarted = true;
         streamActive = true;
-        brls::Application::blockInputs(true);
         brls::Logger::info("Retry connection started");
     } catch (const Exception& e) {
         brls::Logger::error("Retry failed: {}", e.what());
