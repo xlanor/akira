@@ -4,17 +4,20 @@ Akira is a hombrew application built with xfangfang's fork of [borealis](https:/
 This is still considered unstable/beta, bugs are expected.
 
 <p align="center" width="100%">
-  <img src="readme/akira_hosts_114.jpg">
+  <img src="readme/akira_hosts_020.jpg"
 </p>
-
 <p align="center">
-  <img src="readme/akira_buildinfo.jpg" width="30%">
-  <img src="readme/akira_ingame_debug.jpg" width="30%">
+  <img src="readme/akira_remote_conn_holepunch.jpg">
+  <img src="readme/akira_bitrate.jpg">
+</p>
+<p align="center">
+  <img src="readme/akira_ingame_debug_2.jpg" >
+  <img src="readme/akira_ingame_debug.jpg" >
 </p>
 
 <p align="center">
 And some horribly compressed encodes to fit < 10mb:
-</p>
+</p>i
 <p align="center" width="100%">
 <video src="https://github.com/user-attachments/assets/1ae8a3e3-9123-43cf-ae2e-f038383ef87d" width="80%" controls></video>
 </p>
@@ -67,7 +70,7 @@ This software was built with reference/code from:
 - [kkwong](https://git.sr.ht/~kkwong/chiaki) for the initial hwacel and rumble patches
 - H0neyBadger for the initial switch port
 - [micro-ecc](https://github.com/kmackay/micro-ecc) for the ECDH implementation that was vendored in.
-- [vecteezy](https://www.vecteezy.com/vector-art/27484683-shiba-inu-logo) for the shiba inu logo because I like shiba inus.
+- [vecteezy]() for the shiba inu logo because I like shiba inus.
 
 ## Issues
 
