@@ -6,6 +6,8 @@
 #include "core/discovery_manager.hpp"
 #include "util/shared_view_holder.hpp"
 #include <switch.h>
+#include <thread>
+#include <chrono>
 
 StreamView::StreamView(Host* host)
     : host(host)
@@ -213,6 +215,12 @@ void StreamView::stopStream()
 void StreamView::draw(NVGcontext* vg, float x, float y, float width, float height,
                       brls::Style style, brls::FrameContext* ctx)
 {
+    static int drawCount = 0;
+    if (drawCount++ % 60 == 0) {
+        brls::Logger::info("StreamView::draw #{}: streamActive={}, sessionStarted={}, menuOpen={}",
+            drawCount, streamActive, sessionStarted, menuOpen);
+    }
+
     if (!streamActive || !sessionStarted)
     {
         nvgBeginPath(vg);
@@ -446,6 +454,13 @@ void StreamView::checkMenuTrigger()
 
     bool minusPressed = (buttons & HidNpadButton_Minus) != 0;
 
+    static int checkCount = 0;
+    if (minusPressed && checkCount++ % 30 == 0) {
+        auto elapsed = minusWasHeld ?
+            std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - minusHoldStart).count() : 0;
+        brls::Logger::info("checkMenuTrigger: minus pressed, wasHeld={}, elapsed={}s", minusWasHeld, elapsed);
+    }
+
     if (minusPressed) {
         if (!minusWasHeld) {
             minusHoldStart = std::chrono::steady_clock::now();
@@ -453,6 +468,7 @@ void StreamView::checkMenuTrigger()
         } else {
             auto elapsed = std::chrono::steady_clock::now() - minusHoldStart;
             if (std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() >= 3) {
+                brls::Logger::info("checkMenuTrigger: 3 seconds reached, showing menu");
                 showDisconnectMenu();
                 minusWasHeld = false;  // Reset
             }
@@ -577,6 +593,9 @@ void StreamView::retryWithWake()
 
     brls::Logger::info("Wake sent, retrying connection...");
     brls::Application::notify("Waking console...");
+
+    brls::Logger::info("Sleeping for 5 seconds to allow console to wake...");
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
     sessionStarted = false;
     streamActive = false;

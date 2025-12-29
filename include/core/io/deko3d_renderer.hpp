@@ -36,8 +36,10 @@ public:
 
     void setShowStatsOverlay(bool show) override { m_show_stats = show; }
     void setStreamStats(const StreamStats& stats) override { m_stats = stats; }
+    void setPaused(bool paused) { m_paused = paused; }
 
 private:
+    bool m_paused = false;
     std::optional<CMemPool> m_pool_code;
     std::optional<CMemPool> m_pool_data;
 
@@ -104,7 +106,23 @@ private:
 
     void updateTextureBindings(AVFrame* frame, AVNVTegraMap* map);
 
+    static constexpr int GPU_BUFFER_COUNT = 3;
+    dk::MemBlock m_frame_buffers[GPU_BUFFER_COUNT];
+    dk::Image m_luma_buffers[GPU_BUFFER_COUNT];
+    dk::Image m_chroma_buffers[GPU_BUFFER_COUNT];
+    dk::ImageDescriptor m_luma_descs[GPU_BUFFER_COUNT];
+    dk::ImageDescriptor m_chroma_descs[GPU_BUFFER_COUNT];
+    int m_current_buffer = 0;
+    int m_next_buffer = 0;
+    bool m_buffers_initialized = false;
+
+    bool initPersistentBuffers(AVFrame* frame);
+    void copyFrameToBuffer();
+
     void* m_current_map_addr = nullptr;
+
+    DkFence m_copy_fences[GPU_BUFFER_COUNT] = {};
+    AVFrame* m_pending_nvtegra_release = nullptr;
 
     // Fences for GPU synchronization
     // Borealis is ready

@@ -53,6 +53,15 @@ bool VideoDecoder::initCodec(bool is_PS5, int width, int height)
         m_codec_context->thread_type = FF_THREAD_FRAME;
         m_codec_context->thread_count = 1;
 #ifdef BOREALIS_USE_DEKO3D
+        // Create HW device context BEFORE opening codec (critical for HW acceleration)
+        brls::Logger::info("VideoDecoder: Creating NVTegra hardware device context...");
+        if (av_hwdevice_ctx_create(&m_hw_device_ctx, AV_HWDEVICE_TYPE_NVTEGRA, NULL, NULL, 0) < 0)
+        {
+            throw Exception("Failed to create NVTegra hardware device context");
+        }
+        m_codec_context->hw_device_ctx = av_buffer_ref(m_hw_device_ctx);
+        brls::Logger::info("VideoDecoder: NVTegra hw device context created: {}", (void*)m_hw_device_ctx);
+
         if (width > 0 && height > 0)
         {
             m_codec_context->width = width;
@@ -70,21 +79,11 @@ bool VideoDecoder::initCodec(bool is_PS5, int width, int height)
         m_codec_context->thread_count = 4;
     }
 
+    // Open codec AFTER hw_device_ctx is attached (so FFmpeg knows to use HW acceleration)
     if (avcodec_open2(m_codec_context, m_codec, nullptr) < 0)
     {
         avcodec_free_context(&m_codec_context);
         throw Exception("Failed to open codec context");
-    }
-
-    if (m_hw_accel_enabled)
-    {
-        brls::Logger::info("VideoDecoder: Creating NVTegra hardware device context...");
-        if (av_hwdevice_ctx_create(&m_hw_device_ctx, AV_HWDEVICE_TYPE_NVTEGRA, NULL, NULL, 0) < 0)
-        {
-            throw Exception("Failed to enable hardware encoding");
-        }
-        m_codec_context->hw_device_ctx = av_buffer_ref(m_hw_device_ctx);
-        brls::Logger::info("VideoDecoder: NVTegra hw device context created: {}", (void*)m_hw_device_ctx);
     }
 
     return true;
@@ -104,8 +103,7 @@ bool VideoDecoder::initVideo(int video_width, int video_height, int screen_width
     m_waiting_for_idr = true;
     brls::Logger::info("VideoDecoder: Waiting for IDR frame to start decoding");
 
-    // Frame queue uses push/pop pattern - no pre-allocation needed
-    m_frame_queue.setLimit(5);
+    m_frame_queue.setLimit(10);
 
     m_tmp_frame = av_frame_alloc();
     if (!m_tmp_frame)
@@ -119,15 +117,7 @@ bool VideoDecoder::initVideo(int video_width, int video_height, int screen_width
 
 bool VideoDecoder::decode(uint8_t* buf, size_t buf_size)
 {
-    static uint32_t decode_count = 0;
-    if (decode_count++ % 100 == 0)
-    {
-        brls::Logger::info("VideoDecoder::decode: frame#{}, codec={}, hw_accel={}",
-            decode_count, m_codec_context ? "valid" : "null", m_hw_accel_enabled);
-    }
-
-    updateParamFlags(buf, buf_size);
-    bool has_idr = hasIDRSlice(buf, buf_size);
+    bool has_idr = scanNALUnits(buf, buf_size);
 
     bool has_all_params = m_is_hevc ? (m_has_vps && m_has_sps && m_has_pps)
                                      : (m_has_sps && m_has_pps);
@@ -192,13 +182,6 @@ send_packet:
 
     if (r == 0)
     {
-        static uint32_t push_count = 0;
-        if (push_count++ % 100 == 0)
-        {
-            brls::Logger::info("VideoDecoder: push #{}, frame_fmt={}, data[0]={}",
-                push_count, static_cast<int>(m_tmp_frame->format), (void*)m_tmp_frame->data[0]);
-        }
-
         m_frame_queue.push(m_tmp_frame);
     }
     else if (r != AVERROR(EAGAIN)) 
@@ -208,9 +191,7 @@ send_packet:
 
     av_packet_free(&packet);
 
-    // Return false while waiting for complete keyframe (triggers CORRUPTFRAME)
-    // Return true once we have params + IDR and decoding is active
-    return !m_waiting_for_idr;
+    return true;
 }
 
 void VideoDecoder::flush()
@@ -223,28 +204,23 @@ void VideoDecoder::flush()
     }
 }
 
-void VideoDecoder::updateParamFlags(uint8_t* buf, size_t buf_size)
+bool VideoDecoder::scanNALUnits(uint8_t* buf, size_t buf_size)
 {
     if (buf_size < 5)
-        return;
+        return false;
 
+    bool has_idr = false;
     bool prev_vps = m_has_vps, prev_sps = m_has_sps, prev_pps = m_has_pps;
 
-    // Scan ALL NAL units in the packet for parameter sets
     size_t offset = 0;
     while (offset + 4 < buf_size)
     {
-        // Find next start code (0x00 0x00 0x01 or 0x00 0x00 0x00 0x01)
         if (buf[offset] == 0x00 && buf[offset + 1] == 0x00)
         {
             if (buf[offset + 2] == 0x01)
-            {
                 offset += 3;
-            }
             else if (buf[offset + 2] == 0x00 && offset + 3 < buf_size && buf[offset + 3] == 0x01)
-            {
                 offset += 4;
-            }
             else
             {
                 offset++;
@@ -256,18 +232,18 @@ void VideoDecoder::updateParamFlags(uint8_t* buf, size_t buf_size)
 
             if (m_is_hevc)
             {
-                // HEVC NAL unit type is in bits 1-6 of first byte
                 uint8_t nal_type = (buf[offset] >> 1) & 0x3F;
-                if (nal_type == 32) m_has_vps = true;       // VPS
-                else if (nal_type == 33) m_has_sps = true;  // SPS
-                else if (nal_type == 34) m_has_pps = true;  // PPS
+                if (nal_type == 32) m_has_vps = true;
+                else if (nal_type == 33) m_has_sps = true;
+                else if (nal_type == 34) m_has_pps = true;
+                else if (nal_type == 19 || nal_type == 20) has_idr = true;
             }
             else
             {
-                // H.264 NAL unit type is in bits 0-4
                 uint8_t nal_type = buf[offset] & 0x1F;
-                if (nal_type == 7) m_has_sps = true;  // SPS
-                else if (nal_type == 8) m_has_pps = true;  // PPS
+                if (nal_type == 7) m_has_sps = true;
+                else if (nal_type == 8) m_has_pps = true;
+                else if (nal_type == 5) has_idr = true;
             }
         }
         else
@@ -287,60 +263,8 @@ void VideoDecoder::updateParamFlags(uint8_t* buf, size_t buf_size)
         if (!prev_sps && m_has_sps) brls::Logger::info("VideoDecoder: Received SPS");
         if (!prev_pps && m_has_pps) brls::Logger::info("VideoDecoder: Received PPS");
     }
-}
 
-bool VideoDecoder::hasIDRSlice(uint8_t* buf, size_t buf_size)
-{
-    if (buf_size < 5)
-        return false;
-
-    // Scan ALL NAL units in the packet looking for an IDR slice
-    size_t offset = 0;
-    while (offset + 4 < buf_size)
-    {
-        // Find next start code (0x00 0x00 0x01 or 0x00 0x00 0x00 0x01)
-        if (buf[offset] == 0x00 && buf[offset + 1] == 0x00)
-        {
-            if (buf[offset + 2] == 0x01)
-            {
-                offset += 3;
-            }
-            else if (buf[offset + 2] == 0x00 && offset + 3 < buf_size && buf[offset + 3] == 0x01)
-            {
-                offset += 4;
-            }
-            else
-            {
-                offset++;
-                continue;
-            }
-
-            if (offset >= buf_size)
-                break;
-
-            if (m_is_hevc)
-            {
-                // HEVC NAL unit type is in bits 1-6 of first byte
-                uint8_t nal_type = (buf[offset] >> 1) & 0x3F;
-                // IDR_W_RADL (19) or IDR_N_LP (20) = actual keyframe picture data
-                if (nal_type == 19 || nal_type == 20)
-                    return true;
-            }
-            else
-            {
-                // H.264 NAL unit type is in bits 0-4
-                uint8_t nal_type = buf[offset] & 0x1F;
-                // IDR slice (5) = actual keyframe picture data
-                if (nal_type == 5)
-                    return true;
-            }
-        }
-        else
-        {
-            offset++;
-        }
-    }
-    return false;
+    return has_idr;
 }
 
 void VideoDecoder::cleanup()

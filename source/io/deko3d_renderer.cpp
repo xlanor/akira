@@ -265,7 +265,7 @@ void Deko3dRenderer::draw(AVFrame* frame)
 {
     static int call = 0;
     if (++call % 100 == 1)
-        brls::Logger::info("draw #{}, init={}, tex={}", call, m_initialized, m_textures_initialized);
+        brls::Logger::info("draw #{}, init={}, tex={}, buf={}", call, m_initialized, m_textures_initialized, m_buffers_initialized);
 
     if (!m_initialized)
         return;
@@ -273,7 +273,6 @@ void Deko3dRenderer::draw(AVFrame* frame)
     if (!frame || frame->format != AV_PIX_FMT_NVTEGRA)
         return;
 
-    // Setup textures on first valid NVTEGRA frame
     if (!m_textures_initialized)
     {
         brls::Logger::info("draw: First NVTEGRA frame, calling setupTextures");
@@ -284,8 +283,15 @@ void Deko3dRenderer::draw(AVFrame* frame)
         }
     }
 
-    // Check if frame's GPU buffer changed (NVTEGRA decoder uses a pool of buffers)
-    // If we don't update bindings, we'll render stale frames → jerky playback
+    if (!m_buffers_initialized)
+    {
+        if (!initPersistentBuffers(frame))
+        {
+            brls::Logger::error("draw: initPersistentBuffers failed");
+            return;
+        }
+    }
+
     AVNVTegraMap* map = av_nvtegra_frame_get_fbuf_map(frame);
     if (map)
     {
@@ -297,17 +303,22 @@ void Deko3dRenderer::draw(AVFrame* frame)
         }
     }
 
-    // Store frame for deferred rendering in post-render callback
-    // The actual rendering happens in renderVideo() called after nvgEndFrame()
-    m_pending_frame = frame;
+    copyFrameToBuffer();
+
+    m_cmdbuf.clear();
+    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_descs[m_current_buffer]);
+    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_descs[m_current_buffer]);
+    DkCmdList list = m_cmdbuf.finishList();
+    if (list)
+    {
+        m_queue.submitCommands(list);
+        m_queue.flush();
+    }
 }
 
 void Deko3dRenderer::renderVideo(AVFrame* frame)
 {
-    if (!m_initialized || !m_textures_initialized)
-        return;
-
-    if (!frame || frame->format != AV_PIX_FMT_NVTEGRA)
+    if (!m_initialized || !m_textures_initialized || !m_buffers_initialized)
         return;
 
     // Get current framebuffer from borealis
@@ -383,10 +394,9 @@ void Deko3dRenderer::registerCallback()
         return;
 
     brls::Application::setPostRenderCallback([this]() {
-        if (m_pending_frame)
+        if (m_buffers_initialized && !m_paused)
         {
-            renderVideo(m_pending_frame);
-            m_pending_frame = nullptr;
+            renderVideo(nullptr);
         }
     });
 
@@ -414,40 +424,77 @@ void Deko3dRenderer::updateTextureBindings(AVFrame* frame, AVNVTegraMap* map)
     if (update_count++ % 300 == 0)
         brls::Logger::info("updateTextureBindings #{}, addr={}", update_count, map_addr);
 
-    // Destroy old memory block (wait for GPU to finish using it first)
     if (m_mapping_memblock)
     {
-        // Use waitIdle instead of fence - the fence was never signaled
         m_queue.waitIdle();
         dkMemBlockDestroy(m_mapping_memblock);
         m_mapping_memblock = nullptr;
     }
 
-    // Create new memory block from new GPU memory
     m_mapping_memblock = dk::MemBlockMaker{m_device, map_size}
         .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
         .setStorage(map_addr)
         .create();
 
-    // Reinitialize images with new memory block
     m_luma.initialize(m_luma_layout, m_mapping_memblock, 0);
     m_chroma.initialize(m_chroma_layout, m_mapping_memblock, frame->data[1] - frame->data[0]);
 
-    // Update image descriptors
     m_luma_desc.initialize(m_luma);
     m_chroma_desc.initialize(m_chroma);
+}
 
-    // Submit descriptor updates
-    m_cmdbuf.clear();
-    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_desc);
-    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_desc);
-    DkCmdList list = m_cmdbuf.finishList();
-    if (list)
+bool Deko3dRenderer::initPersistentBuffers(AVFrame* frame)
+{
+    if (m_buffers_initialized)
+        return true;
+
+    AVNVTegraMap* map = av_nvtegra_frame_get_fbuf_map(frame);
+    size_t frame_size = av_nvtegra_map_get_size(map);
+    frame_size = (frame_size + 0xFFF) & ~0xFFF;
+
+    brls::Logger::info("initPersistentBuffers: creating {} GPU buffers of size {}", GPU_BUFFER_COUNT, frame_size);
+
+    for (int i = 0; i < GPU_BUFFER_COUNT; i++)
     {
-        m_queue.submitCommands(list);
-        m_queue.flush();
-        m_queue.waitIdle();
+        m_frame_buffers[i] = dk::MemBlockMaker{m_device, frame_size}
+            .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
+            .create();
+
+        m_luma_buffers[i].initialize(m_luma_layout, m_frame_buffers[i], 0);
+
+        size_t chroma_offset = m_luma_layout.getSize();
+        m_chroma_buffers[i].initialize(m_chroma_layout, m_frame_buffers[i], chroma_offset);
+
+        m_luma_descs[i].initialize(m_luma_buffers[i]);
+        m_chroma_descs[i].initialize(m_chroma_buffers[i]);
     }
+
+    m_buffers_initialized = true;
+    brls::Logger::info("initPersistentBuffers: GPU circular buffer initialized");
+    return true;
+}
+
+void Deko3dRenderer::copyFrameToBuffer()
+{
+    dk::ImageView srcLuma{m_luma};
+    dk::ImageView srcChroma{m_chroma};
+
+    dk::ImageView dstLuma{m_luma_buffers[m_next_buffer]};
+    dk::ImageView dstChroma{m_chroma_buffers[m_next_buffer]};
+
+    DkImageRect lumaRect = {0, 0, 0, (uint32_t)m_frame_width, (uint32_t)m_frame_height, 1};
+    DkImageRect chromaRect = {0, 0, 0, (uint32_t)(m_frame_width / 2), (uint32_t)(m_frame_height / 2), 1};
+
+    m_cmdbuf.clear();
+    m_cmdbuf.copyImage(srcLuma, lumaRect, dstLuma, lumaRect);
+    m_cmdbuf.copyImage(srcChroma, chromaRect, dstChroma, chromaRect);
+
+    DkCmdList list = m_cmdbuf.finishList();
+    m_queue.submitCommands(list);
+    m_queue.waitIdle();
+
+    m_current_buffer = m_next_buffer;
+    m_next_buffer = (m_next_buffer + 1) % GPU_BUFFER_COUNT;
 }
 
 void Deko3dRenderer::cleanup()
@@ -457,19 +504,14 @@ void Deko3dRenderer::cleanup()
 
     brls::Logger::info("Deko3dRenderer::cleanup");
 
-    // Unregister post-render callback first
     unregisterCallback();
 
-    // Wait for GPU to finish any pending work
     m_queue.waitIdle();
 
-    // Cleanup text rendering resources
     cleanupTextRendering();
 
-    // Destroy vertex buffer
     m_vertex_buffer.destroy();
 
-    // Free video texture IDs from borealis before destroying backing memory
     if (m_luma_texture_id) {
         m_vctx->freeImageIndex(m_luma_texture_id);
         m_luma_texture_id = 0;
@@ -479,14 +521,29 @@ void Deko3dRenderer::cleanup()
         m_chroma_texture_id = 0;
     }
 
-    // Destroy GPU memory block for video frames
     if (m_mapping_memblock)
     {
         dkMemBlockDestroy(m_mapping_memblock);
         m_mapping_memblock = nullptr;
     }
 
-    // Reset image state
+    if (m_buffers_initialized)
+    {
+        for (int i = 0; i < GPU_BUFFER_COUNT; i++)
+        {
+            if (m_frame_buffers[i])
+            {
+                dkMemBlockDestroy(m_frame_buffers[i]);
+                m_frame_buffers[i] = nullptr;
+            }
+            m_luma_buffers[i] = dk::Image{};
+            m_chroma_buffers[i] = dk::Image{};
+            m_luma_descs[i] = dk::ImageDescriptor{};
+            m_chroma_descs[i] = dk::ImageDescriptor{};
+        }
+        m_buffers_initialized = false;
+    }
+
     m_luma = dk::Image{};
     m_chroma = dk::Image{};
     m_luma_desc = dk::ImageDescriptor{};
@@ -494,14 +551,14 @@ void Deko3dRenderer::cleanup()
     m_luma_layout = dk::ImageLayout{};
     m_chroma_layout = dk::ImageLayout{};
 
-    // Reset tracking
     m_current_map_addr = nullptr;
+    m_current_buffer = 0;
+    m_next_buffer = 0;
 
-    // Reset state flags
     m_initialized = false;
     m_textures_initialized = false;
     m_first_frame = true;
-    m_ready_fence = {};  // Reset fences to clean state
+    m_ready_fence = {};
     m_done_fence = {};
 }
 

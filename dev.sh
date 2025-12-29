@@ -162,7 +162,13 @@ fi
 # Kill any lingering nxlink processes
 pkill -f nxlink 2>/dev/null || true
 
+# Setup logging
+LOGS_DIR="${SCRIPT_DIR}/logs"
+mkdir -p "$LOGS_DIR"
+LOG_FILE="${LOGS_DIR}/$(date +%d%m%y%H%M%S).log"
+
 print_status "Deploying to Switch at ${SWITCH_IP}..."
+print_status "Logging to: ${LOG_FILE}"
 print_status "Press Ctrl+C to stop receiving logs"
 
 docker run --rm -it --init \
@@ -170,6 +176,6 @@ docker run --rm -it --init \
     -v "${SCRIPT_DIR}:/build" \
     -w /build \
     "$DOCKER_IMAGE" \
-    nxlink -s -a "$SWITCH_IP" /build/build/akira.nro
+    nxlink -s -a "$SWITCH_IP" /build/build/akira.nro 2>&1 | tee "$LOG_FILE"
 
 print_status "Done"

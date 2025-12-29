@@ -35,7 +35,6 @@ void HapticManager::setRumble(uint8_t left, uint8_t right)
 
 void HapticManager::processHapticAudio(uint8_t* buf, size_t buf_size)
 {
-    static uint32_t haptic_audio_count = 0;
     int16_t amplitudel = 0, amplituder = 0;
     int32_t suml = 0, sumr = 0;
     const size_t sample_size = 2 * sizeof(int16_t);
@@ -46,23 +45,14 @@ void HapticManager::processHapticAudio(uint8_t* buf, size_t buf_size)
         size_t cur = i * sample_size;
         memcpy(&amplitudel, buf + cur, sizeof(int16_t));
         memcpy(&amplituder, buf + cur + sizeof(int16_t), sizeof(int16_t));
-        // Use absolute values to compute intensity (RMS-like)
         suml += (amplitudel < 0) ? -amplitudel : amplitudel;
         sumr += (amplituder < 0) ? -amplituder : amplituder;
     }
 
-    // Average absolute amplitude, scaled to uint8_t range (0-255)
-    // Using /64 for stronger output (values saturate at 255 sooner)
     int32_t avgLeft = suml / static_cast<int32_t>(buf_count) / 64;
     int32_t avgRight = sumr / static_cast<int32_t>(buf_count) / 64;
     uint8_t left = static_cast<uint8_t>(avgLeft > 255 ? 255 : avgLeft);
     uint8_t right = static_cast<uint8_t>(avgRight > 255 ? 255 : avgRight);
-
-    // Log every 100th call to avoid spam
-    if (haptic_audio_count++ % 100 == 0)
-    {
-        brls::Logger::info("processHapticAudio: buf_size={}, left={}, right={}, frame#{}", buf_size, left, right, haptic_audio_count);
-    }
 
     setHapticRumble(left, right);
     if ((left != 0 || right != 0) && !m_haptic_lock)

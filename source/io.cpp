@@ -67,23 +67,8 @@ void IO::SetMesaConfig()
 
 bool IO::VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user)
 {
-    static uint32_t video_cb_count = 0;
-    if (video_cb_count++ % 100 == 0)
-    {
-        brls::Logger::info("VideoCB: frame#{}, quit={}, decoder={}",
-            video_cb_count, this->quit, m_video_decoder ? "valid" : "null");
-    }
-
     if (this->quit || !m_video_decoder)
         return false;
-
-    // When frames are lost, flush the decoder to clear stale reference frames
-    // The decoder will skip packets until it receives an IDR frame
-    if (frames_lost > 0)
-    {
-        brls::Logger::warning("IO: {} frames lost (recovered={})", frames_lost, frame_recovered);
-        m_video_decoder->flush();
-    }
 
     return m_video_decoder->decode(buf, buf_size);
 }
@@ -205,24 +190,12 @@ void IO::UpdateControllerState(ChiakiControllerState* state, std::map<uint32_t, 
 
 bool IO::MainLoop()
 {
-    static uint32_t mainloop_count = 0;
-    if (mainloop_count++ % 100 == 0)
-    {
-        FrameQueue* q = m_video_decoder ? m_video_decoder->getFrameQueue() : nullptr;
-        brls::Logger::info("MainLoop: #{}, hasFrames={}, queueSize={}",
-            mainloop_count,
-            q ? q->hasFrames() : false,
-            q ? q->size() : 0);
-    }
-
-    static int render_attempt = 0;
     if (m_video_renderer && m_video_renderer->isInitialized() && m_video_decoder)
     {
         FrameQueue* queue = m_video_decoder->getFrameQueue();
         if (queue && queue->hasFrames())
         {
             queue->get([this](AVFrame* frame) {
-                // Validate frame has actual data
                 if (frame && frame->data[0])
                 {
                     if (!m_first_frame_received)
@@ -230,31 +203,16 @@ bool IO::MainLoop()
                         m_first_frame_received = true;
                         brls::Logger::info("First video frame received!");
                     }
-                    if (render_attempt++ % 100 == 0)
-                    {
-                        brls::Logger::info("Calling draw() #{}", render_attempt);
-                    }
                     m_video_renderer->draw(frame);
                 }
             });
         }
 
-        if (m_show_stats_overlay && mainloop_count % 100 == 0)
-        {
-            brls::Logger::info("MainLoop: stats overlay enabled, passing to renderer");
-        }
         m_video_renderer->setShowStatsOverlay(m_show_stats_overlay);
         if (m_show_stats_overlay)
         {
             m_video_renderer->setStreamStats(getStreamStats());
         }
-    }
-    else if (mainloop_count % 100 == 0)
-    {
-        brls::Logger::warning("Render skipped: renderer={}, initialized={}, decoder={}",
-            m_video_renderer ? "valid" : "null",
-            m_video_renderer ? m_video_renderer->isInitialized() : false,
-            m_video_decoder ? "valid" : "null");
     }
 
     return !this->quit;

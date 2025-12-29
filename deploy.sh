@@ -56,13 +56,19 @@ if [ "$NO_LOG" = true ]; then
         nxlink -a "$SWITCH_IP" /build/build/akira.nro
     echo -e "${GREEN}[*]${NC} Deployed!"
 else
+    # Setup logging
+    LOGS_DIR="${SCRIPT_DIR}/logs"
+    mkdir -p "$LOGS_DIR"
+    LOG_FILE="${LOGS_DIR}/$(date +%d%m%y%H%M%S).log"
+
+    echo -e "${GREEN}[*]${NC} Logging to: ${LOG_FILE}"
     echo -e "${GREEN}[*]${NC} Press Ctrl+C to stop receiving logs"
     docker run --rm -it --init \
         --network host \
         -v "${SCRIPT_DIR}:/build" \
         -w /build \
         "$DOCKER_IMAGE" \
-        nxlink -s -a "$SWITCH_IP" /build/build/akira.nro
+        nxlink -s -a "$SWITCH_IP" /build/build/akira.nro 2>&1 | tee "$LOG_FILE"
 fi
 
 echo -e "${GREEN}[*]${NC} Done"

@@ -15,12 +15,6 @@ static void InitAudioCallback(unsigned int channels, unsigned int rate, void* us
 
 static bool VideoCallback(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user)
 {
-    static uint32_t cb_count = 0;
-    if (cb_count++ % 100 == 0)
-    {
-        brls::Logger::info("VideoCallback (static): frame#{}, buf_size={}", cb_count, buf_size);
-    }
-
     IO* io = static_cast<IO*>(user);
     return io->VideoCB(buf, buf_size, frames_lost, frame_recovered, user);
 }
@@ -33,11 +27,6 @@ static void AudioCallback(int16_t* buf, size_t samples_count, void* user)
 
 static void HapticsFrameCallback(uint8_t* buf, size_t buf_size, void* user)
 {
-    static uint32_t haptic_frame_count = 0;
-    if (haptic_frame_count++ % 100 == 0) 
-    {
-        brls::Logger::info("HapticsFrameCallback: buf_size={}, frame#{}", buf_size, haptic_frame_count);
-    }
     IO* io = static_cast<IO*>(user);
     io->HapticCB(buf, buf_size);
 }

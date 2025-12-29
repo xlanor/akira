@@ -71,11 +71,7 @@ private:
     bool m_has_sps = false;
     bool m_has_pps = false;
 
-    // Scan packet for parameter sets and update flags (with logging)
-    void updateParamFlags(uint8_t* buf, size_t buf_size);
-
-    // Check if packet contains an IDR slice
-    bool hasIDRSlice(uint8_t* buf, size_t buf_size);
+    bool scanNALUnits(uint8_t* buf, size_t buf_size);
 };
 
 #endif // AKIRA_IO_VIDEO_DECODER_HPP

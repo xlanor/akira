@@ -3,6 +3,7 @@ build/
 *.nro
 *.nacp
 *.elf
+logs/
 
 # IDE
 .vscode/
