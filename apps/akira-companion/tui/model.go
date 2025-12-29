@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"akira-companion/internal/nat"
 	"akira-companion/internal/state"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -27,6 +28,9 @@ type Model struct {
 	duidModel   DUIDModel
 	loginModel  LoginModel
 	serverModel ServerModel
+
+	natLoading bool
+	natResult  *nat.DetectionResult
 }
 
 func NewModel(s *state.AppState) Model {
@@ -36,7 +40,17 @@ func NewModel(s *state.AppState) Model {
 		duidModel:   NewDUIDModel(s),
 		loginModel:  NewLoginModel(s),
 		serverModel: NewServerModel(s),
+		natLoading:  true,
 	}
+}
+
+type NATDetectedMsg struct {
+	Result nat.DetectionResult
+}
+
+func detectNAT() tea.Msg {
+	result := nat.Detect()
+	return NATDetectedMsg{Result: result}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -47,7 +61,7 @@ func (m Model) Init() tea.Cmd {
 			m.currentStep = StepServer
 		}
 	}
-	return m.currentStepInit()
+	return tea.Batch(m.currentStepInit(), detectNAT)
 }
 
 func (m Model) currentStepInit() tea.Cmd {
@@ -76,6 +90,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+	case NATDetectedMsg:
+		m.natLoading = false
+		m.natResult = &msg.Result
+		return m, nil
 
 	case StepCompleteMsg:
 		switch m.currentStep {
@@ -107,6 +126,9 @@ func (m Model) View() string {
 	var b strings.Builder
 
 	b.WriteString(TitleStyle.Render("AKIRA COMPANION"))
+	b.WriteString("\n\n")
+
+	b.WriteString(m.renderNATInfo())
 	b.WriteString("\n\n")
 
 	b.WriteString(m.renderStepIndicator(StepDUID, "Configure DUID"))
@@ -156,4 +178,36 @@ type StepCompleteMsg struct{}
 
 func CompleteStep() tea.Msg {
 	return StepCompleteMsg{}
+}
+
+func (m Model) renderNATInfo() string {
+	label := MutedStyle.Render("Network: ")
+
+	if m.natLoading {
+		return label + MutedStyle.Render("Detecting NAT type...")
+	}
+
+	if m.natResult == nil {
+		return label + MutedStyle.Render("Unknown")
+	}
+
+	if m.natResult.Error != nil {
+		return label + ErrorStyle.Render("Failed: "+m.natResult.Error.Error())
+	}
+
+	natType := m.natResult.Type.String()
+	var style lipgloss.Style
+
+	switch m.natResult.Type {
+	case nat.NATCone:
+		style = SuccessStyle
+	case nat.NATSymmetric, nat.NATBlocked:
+		style = ErrorStyle
+	default:
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B"))
+	}
+
+	result := label + style.Render(natType)
+	result += "\n" + MutedStyle.Render("(Assumes this app is on the same network as your PS5)")
+	return result
 }

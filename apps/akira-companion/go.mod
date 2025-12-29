@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.2.4
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/mdp/qrterminal/v3 v3.2.0
+	github.com/pion/stun/v3 v3.0.2
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 )
 
@@ -23,10 +24,15 @@ require (
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
+	github.com/pion/dtls/v3 v3.0.8 // indirect
+	github.com/pion/logging v0.2.4 // indirect
+	github.com/pion/transport/v3 v3.1.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	golang.org/x/sync v0.9.0 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/term v0.13.0 // indirect
-	golang.org/x/text v0.3.8 // indirect
+	github.com/wlynxg/anet v0.0.5 // indirect
+	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/term v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )

@@ -26,5 +26,9 @@
             <ConfigViewTab/>
         </brls:Tab>
 
+        <brls:Tab label="Network">
+            <NetworkUtilitiesTab/>
+        </brls:Tab>
+
     </brls:TabFrame>
 </brls:AppletFrame>
