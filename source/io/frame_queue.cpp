@@ -14,17 +14,15 @@ void FrameQueue::push(AVFrame* frame)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    // Clone the frame to own its data (NVTEGRA GPU memory pointer)
-    // decoder reuses m_tmp_frame, so without cloning
-    // we'd have a race condition where decoder overwrites while renderer reads
-    AVFrame* cloned = av_frame_clone(frame);
-    if (!cloned)
+    AVFrame* ref_frame = av_frame_alloc();
+    if (!ref_frame || av_frame_ref(ref_frame, frame) < 0)
     {
-        brls::Logger::error("FrameQueue: Failed to clone frame");
+        if (ref_frame) av_frame_free(&ref_frame);
+        brls::Logger::error("FrameQueue: Failed to ref frame");
         return;
     }
 
-    m_queue.push(cloned);
+    m_queue.push(ref_frame);
 
     // Drop oldest if over limit
     if (m_queue.size() > m_limit)

@@ -10,22 +10,6 @@ layout (binding = 1) uniform sampler2D plane1;  // UV (chroma) plane
 // Y is full range [0,255], UV is [0,255] with 128 as neutral
 void main()
 {
-#ifdef DEBUG_DEKO3D_RENDERING
-    // DEBUG: Draw a small green square in top-left corner to confirm quad is rendering
-    if (vTexCoord.x < 0.1 && vTexCoord.y < 0.1)
-    {
-        outColor = vec4(0.0, 1.0, 0.0, 1.0);  // Green
-        return;
-    }
-
-    // DEBUG: Draw a small blue square in top-right corner to show texture coords work
-    if (vTexCoord.x > 0.9 && vTexCoord.y < 0.1)
-    {
-        outColor = vec4(0.0, 0.0, 1.0, 1.0);  // Blue
-        return;
-    }
-#endif
-
     float y = texture(plane0, vTexCoord).r;
     float u = texture(plane1, vTexCoord).r - 0.5;
     float v = texture(plane1, vTexCoord).g - 0.5;
