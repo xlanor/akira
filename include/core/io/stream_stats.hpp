@@ -26,9 +26,17 @@ struct StreamStats
     size_t faked_frames = 0;
     size_t queue_size = 0;
 
-    // Video info
     int video_width = 0;
     int video_height = 0;
+
+    float packet_loss_percent = 0.0f;
+    uint64_t packets_received = 0;
+    uint64_t packets_lost = 0;
+
+    size_t network_frames_lost = 0;
+    size_t frames_recovered = 0;
+
+    uint64_t stream_duration_seconds = 0;
 };
 
 #endif // AKIRA_IO_STREAM_STATS_HPP

@@ -59,7 +59,7 @@ private:
     int m_font_texture_id = 0;
 
     CMemPool::Handle m_text_vertex_buffer;
-    static constexpr size_t MAX_TEXT_VERTICES = 1024;
+    static constexpr size_t MAX_TEXT_VERTICES = 2048;
 
     // End debug menu, this bit draws the actual
     // video from chiaki-ng

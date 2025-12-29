@@ -760,7 +760,9 @@ void Deko3dRenderer::renderStatsOverlay()
         return;
     }
 
-    // Build stats text
+    uint64_t mins = m_stats.stream_duration_seconds / 60;
+    uint64_t secs = m_stats.stream_duration_seconds % 60;
+
     char statsText[512];
     snprintf(statsText, sizeof(statsText),
         "=== Requested ===\n"
@@ -772,7 +774,12 @@ void Deko3dRenderer::renderStatsOverlay()
         "%dx%d @ %.0ffps\n"
         "Decoder: %s (%s)\n"
         "Dropped: %zu  Faked: %zu\n"
-        "Queue: %zu",
+        "Queue: %zu\n"
+        "\n"
+        "=== Network ===\n"
+        "Packet Loss: %.1f%%\n"
+        "Frame Loss: %zu (Rec: %zu)\n"
+        "Duration: %lum%02lus",
         m_stats.requested_width,
         m_stats.requested_height,
         m_stats.requested_fps,
@@ -785,7 +792,12 @@ void Deko3dRenderer::renderStatsOverlay()
         m_stats.is_hardware_decoder ? "NVTEGRA" : "SW",
         m_stats.dropped_frames,
         m_stats.faked_frames,
-        m_stats.queue_size
+        m_stats.queue_size,
+        m_stats.packet_loss_percent,
+        m_stats.network_frames_lost,
+        m_stats.frames_recovered,
+        mins,
+        secs
     );
 
     // Calculate overlay dimensions

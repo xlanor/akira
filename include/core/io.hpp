@@ -9,6 +9,7 @@
 #include <chiaki/controller.h>
 #include <chiaki/log.h>
 #include <switch.h>
+#include <chrono>
 
 #include "exception.hpp"
 #include "core/io/stream_stats.hpp"
@@ -49,6 +50,11 @@ private:
     int m_requested_bitrate = 0;
     bool m_requested_hevc = false;
 
+    ChiakiSession* m_session = nullptr;
+    std::chrono::steady_clock::time_point m_stream_start_time;
+    size_t m_network_frames_lost = 0;
+    size_t m_frames_recovered = 0;
+
 public:
     // Singleton configuration
     IO(const IO&) = delete;
@@ -79,7 +85,7 @@ public:
     void SetLogger(ChiakiLog* log);
     ChiakiLog* GetLogger() { return this->log; }
 
-    StreamStats getStreamStats() const;
+    StreamStats getStreamStats();
     bool getShowStatsOverlay() const { return m_show_stats_overlay; }
     void setShowStatsOverlay(bool show) { m_show_stats_overlay = show; }
     void setVideoPaused(bool paused);
@@ -88,6 +94,10 @@ public:
     bool hasReceivedFirstFrame() const { return m_first_frame_received; }
 
     InputManager* getInputManager() { return m_input_manager.get(); }
+
+    void setSession(ChiakiSession* session);
+    void startStreamTimer();
+    void resetStreamStats();
 };
 
 #endif // AKIRA_IO_HPP

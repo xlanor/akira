@@ -6,8 +6,9 @@
 #include "core/io/haptic_manager.hpp"
 #include "core/io/input_manager.hpp"
 #include "core/io/video_decoder.hpp"
-
 #include "core/io/deko3d_renderer.hpp"
+
+#include <chiaki/packetstats.h>
 
 IO* IO::instance = nullptr;
 
@@ -70,6 +71,11 @@ bool IO::VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_
     if (this->quit || !m_video_decoder)
         return false;
 
+    if (frames_lost > 0)
+        m_network_frames_lost += frames_lost;
+    if (frame_recovered)
+        m_frames_recovered++;
+
     return m_video_decoder->decode(buf, buf_size);
 }
 
@@ -130,6 +136,8 @@ bool IO::FreeVideo()
 
     m_video_decoder.reset();
     m_video_renderer.reset();
+
+    resetStreamStats();
 
     return true;
 }
@@ -218,11 +226,10 @@ bool IO::MainLoop()
     return !this->quit;
 }
 
-StreamStats IO::getStreamStats() const
+StreamStats IO::getStreamStats()
 {
     StreamStats stats;
 
-    // Requested profile
     stats.requested_width = m_requested_width;
     stats.requested_height = m_requested_height;
     stats.requested_fps = m_requested_fps;
@@ -248,6 +255,23 @@ StreamStats IO::getStreamStats() const
 
     stats.renderer_name = "Deko3d";
 
+    if (m_session)
+    {
+        uint64_t received = 0, lost = 0;
+        chiaki_packet_stats_get(&m_session->stream_connection.packet_stats, false, &received, &lost);
+        stats.packets_received = received;
+        stats.packets_lost = lost;
+        if (received + lost > 0)
+            stats.packet_loss_percent = static_cast<float>(lost) / static_cast<float>(received + lost) * 100.0f;
+    }
+
+    stats.network_frames_lost = m_network_frames_lost;
+    stats.frames_recovered = m_frames_recovered;
+
+    auto now = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - m_stream_start_time);
+    stats.stream_duration_seconds = duration.count();
+
     return stats;
 }
 
@@ -264,4 +288,21 @@ void IO::setVideoPaused(bool paused)
 {
     if (m_video_renderer)
         m_video_renderer->setPaused(paused);
+}
+
+void IO::setSession(ChiakiSession* session)
+{
+    m_session = session;
+}
+
+void IO::startStreamTimer()
+{
+    m_stream_start_time = std::chrono::steady_clock::now();
+}
+
+void IO::resetStreamStats()
+{
+    m_network_frames_lost = 0;
+    m_frames_recovered = 0;
+    m_session = nullptr;
 }
