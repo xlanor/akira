@@ -152,7 +152,40 @@ void SettingsManager::parseTomlFile() {
 
             std::string hostName(key.str());
             auto* table = value.as_table();
-            Host* host = getOrCreateHost(hostName);
+
+            std::string cleanName = hostName;
+            HostType migratedType = HostType::Discovered;
+
+            if (auto val = (*table)["host_type"].value<int64_t>()) {
+                migratedType = static_cast<HostType>(*val);
+            } else {
+                if (hostName.length() > 9 && hostName.substr(hostName.length() - 9) == " (Remote)") {
+                    cleanName = hostName;
+                    migratedType = HostType::Remote;
+                } else if (hostName.rfind("[Manual] ", 0) == 0) {
+                    cleanName = hostName.substr(9);
+                    migratedType = HostType::Manual;
+                } else if (hostName.rfind("[Auto] ", 0) == 0) {
+                    cleanName = hostName.substr(7);
+                    migratedType = HostType::Auto;
+                }
+            }
+
+            if (cleanName != hostName) {
+                if (hosts.find(cleanName) != hosts.end()) {
+                    Host* existing = hosts[cleanName];
+                    if (existing->hostType == HostType::Manual && migratedType != HostType::Manual) {
+                        brls::Logger::info("Skipping {} - Manual host {} already exists", hostName, cleanName);
+                        continue;
+                    }
+                }
+                brls::Logger::info("Migrating host '{}' to '{}'", hostName, cleanName);
+            }
+
+            Host* host = getOrCreateHost(cleanName);
+            host->inConfig = true;
+            host->hostType = migratedType;
+            host->hostName = cleanName;
 
             if (auto val = (*table)["host_addr"].value<std::string>())
                 host->hostAddr = *val;
@@ -170,12 +203,8 @@ void SettingsManager::parseTomlFile() {
                 host->consolePIN = *val;
             if (auto val = (*table)["haptic"].value<int64_t>())
                 host->haptic = static_cast<int>(*val);
-            if (auto val = (*table)["remote_duid"].value<std::string>()) {
+            if (auto val = (*table)["remote_duid"].value<std::string>())
                 host->remoteDuid = *val;
-                if (!val->empty() && hostName.rfind("[Remote] ", 0) == 0) {
-                    host->isRemoteHost = true;
-                }
-            }
 
             bool rpKeySet = false, rpRegistKeySet = false, rpKeyTypeSet = false;
             if (auto val = (*table)["rp_key"].value<std::string>())
@@ -259,10 +288,34 @@ void SettingsManager::parseLegacyFile() {
         switch (item) {
             case ConfigItem::Unknown:
                 break;
-            case ConfigItem::HostName:
-                currentHost = getOrCreateHost(value);
+            case ConfigItem::HostName: {
+                std::string cleanName = value;
+                HostType migratedType = HostType::Discovered;
+                if (value.length() > 9 && value.substr(value.length() - 9) == " (Remote)") {
+                    cleanName = value;
+                    migratedType = HostType::Remote;
+                } else if (value.rfind("[Manual] ", 0) == 0) {
+                    cleanName = value.substr(9);
+                    migratedType = HostType::Manual;
+                } else if (value.rfind("[Auto] ", 0) == 0) {
+                    cleanName = value.substr(7);
+                    migratedType = HostType::Auto;
+                }
+                if (cleanName != value && hosts.find(cleanName) != hosts.end()) {
+                    Host* existing = hosts[cleanName];
+                    if (existing->hostType == HostType::Manual && migratedType != HostType::Manual) {
+                        brls::Logger::info("Skipping {} - Manual host {} already exists", value, cleanName);
+                        currentHost = nullptr;
+                        break;
+                    }
+                }
+                currentHost = getOrCreateHost(cleanName);
+                currentHost->inConfig = true;
+                currentHost->hostType = migratedType;
+                currentHost->hostName = cleanName;
                 rpKeySet = rpRegistKeySet = rpKeyTypeSet = false;
                 break;
+            }
             case ConfigItem::HostAddr:
                 if (currentHost) currentHost->hostAddr = value;
                 break;
@@ -302,9 +355,6 @@ void SettingsManager::parseLegacyFile() {
             case ConfigItem::RemoteDuid:
                 if (currentHost) {
                     currentHost->remoteDuid = value;
-                    if (!value.empty() && currentHost->getHostName().rfind("[Remote] ", 0) == 0) {
-                        currentHost->isRemoteHost = true;
-                    }
                 }
                 break;
             case ConfigItem::Target:
@@ -372,10 +422,12 @@ int SettingsManager::writeFile() {
 
     for (const auto& [name, host] : hosts) {
         brls::Logger::debug("Writing host config: {}", name);
+        host->inConfig = true;
 
         toml::table hostTable;
         hostTable.insert("host_addr", host->getHostAddr());
         hostTable.insert("target", static_cast<int>(host->getChiakiTarget()));
+        hostTable.insert("host_type", static_cast<int>(host->hostType));
 
         if (host->videoResolution)
             hostTable.insert("video_resolution", resolutionToString(host->videoResolution));
@@ -483,6 +535,50 @@ int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res)
         case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 5000;
         default: return 15000;
     }
+}
+
+bool SettingsManager::isValidIPv4(const std::string& addr) {
+    static std::regex ipv4Regex(R"(^(\d+)\.(\d+)\.(\d+)\.(\d+)$)");
+    std::smatch match;
+    if (!std::regex_match(addr, match, ipv4Regex)) {
+        return false;
+    }
+    for (int i = 1; i <= 4; i++) {
+        int octet = std::stoi(match[i].str());
+        if (octet > 255) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SettingsManager::isValidFQDN(const std::string& addr) {
+    if (addr.empty() || addr.length() > 253) {
+        return false;
+    }
+    if (addr.front() == '.' || addr.back() == '.') {
+        return false;
+    }
+    if (addr.front() == '-' || addr.back() == '-') {
+        return false;
+    }
+    // TLDs must contain at least one letter - reject pure numeric strings like "192.168.50.266"
+    bool hasAlpha = false;
+    for (char c : addr) {
+        if (std::isalpha(static_cast<unsigned char>(c))) {
+            hasAlpha = true;
+            break;
+        }
+    }
+    if (!hasAlpha) {
+        return false;
+    }
+    static std::regex fqdnRegex(R"(^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$)");
+    return std::regex_match(addr, fqdnRegex);
+}
+
+bool SettingsManager::isValidHostAddress(const std::string& addr) {
+    return isValidIPv4(addr) || isValidFQDN(addr);
 }
 
 std::string SettingsManager::getHostName(Host* host) {

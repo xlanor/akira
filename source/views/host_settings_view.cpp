@@ -21,9 +21,12 @@ HostSettingsView::HostSettingsView(Host* host)
     this->inflateFromXMLRes("xml/views/host_settings.xml");
 
     settings = SettingsManager::getInstance();
+    originalHostName = host->getHostName();
 
     titleLabel->setText("Settings for " + host->getHostName());
 
+    initHostNameInput();
+    initHostAddrInput();
     initPsnAccountIdInput();
     initLookupButton();
     initConsolePINInput();
@@ -52,6 +55,37 @@ HostSettingsView::~HostSettingsView()
 brls::View* HostSettingsView::create()
 {
     return nullptr;
+}
+
+void HostSettingsView::initHostNameInput()
+{
+    std::string displayName = host->getHostName();
+    if (host->isRemote() && displayName.length() > 9 && displayName.substr(displayName.length() - 9) == " (Remote)") {
+        displayName = displayName.substr(0, displayName.length() - 9);
+    }
+
+    hostNameInput->init(
+        "Host Name",
+        displayName,
+        [](std::string text) {},
+        "e.g., Living Room PS5",
+        "Name to identify this console"
+    );
+}
+
+void HostSettingsView::initHostAddrInput()
+{
+    hostAddrInput->init(
+        "IP Address",
+        host->getHostAddr(),
+        [](std::string text) {},
+        "e.g., 192.168.1.100",
+        "PlayStation's IP address"
+    );
+
+    if (host->isRemote()) {
+        hostAddrInput->setVisibility(brls::Visibility::GONE);
+    }
 }
 
 void HostSettingsView::initPsnAccountIdInput()
@@ -152,10 +186,33 @@ void HostSettingsView::initHapticSelector()
 
 void HostSettingsView::onSaveClicked()
 {
+    std::string newHostName = hostNameInput->getValue();
+    std::string newHostAddr = hostAddrInput->getValue();
     std::string psnAccountId = psnAccountIdInput->getValue();
     std::string consolePIN = consolePINInput->getValue();
 
-    // Validate Console PIN (must be 4 digits or empty)
+    if (newHostName.empty()) {
+        brls::Application::notify("Host name cannot be empty");
+        return;
+    }
+
+    if (host->isRemote() && newHostName != originalHostName) {
+        if (originalHostName.length() > 9 && originalHostName.substr(originalHostName.length() - 9) == " (Remote)") {
+            newHostName = newHostName + " (Remote)";
+        }
+    }
+
+    if (!host->isRemote()) {
+        if (newHostAddr.empty()) {
+            brls::Application::notify("IP address cannot be empty");
+            return;
+        }
+        if (!SettingsManager::isValidHostAddress(newHostAddr)) {
+            brls::Application::notify("Invalid IP address or hostname");
+            return;
+        }
+    }
+
     if (!consolePIN.empty()) {
         if (consolePIN.length() != 4) {
             brls::Application::notify("Console PIN must be 4 digits");
@@ -169,10 +226,21 @@ void HostSettingsView::onSaveClicked()
         }
     }
 
-    // Save per-host settings
+    if (newHostName != originalHostName) {
+        auto* hostsMap = settings->getHostsMap();
+        if (hostsMap->find(newHostName) != hostsMap->end()) {
+            brls::Application::notify("A host with this name already exists");
+            return;
+        }
+        settings->renameHost(originalHostName, newHostName);
+    }
+
+    if (!host->isRemote()) {
+        settings->setHostAddr(host, newHostAddr);
+    }
     settings->setPsnAccountId(host, psnAccountId);
     settings->setConsolePIN(host, consolePIN);
-    host->setHapticRaw(selectedHaptic);  // Save haptic directly since it can be -1
+    host->setHapticRaw(selectedHaptic);
     settings->writeFile();
 
     brls::Logger::info("Saved settings for {}: psnAccountId={}, consolePIN={}, haptic={}",

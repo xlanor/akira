@@ -294,16 +294,15 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
     brls::Logger::info("--");
 
     brls::sync([this, data, target]() {
-        std::string manualName = "[Manual] " + data->hostName;
         auto* hostsMap = settings->getHostsMap();
-        auto manualIt = hostsMap->find(manualName);
+        auto it = hostsMap->find(data->hostName);
 
         Host* host;
-        if (manualIt != hostsMap->end()) {
-            host = manualIt->second;
+        if (it != hostsMap->end()) {
+            host = it->second;
         } else {
-            std::string hostKey = "[Auto] " + data->hostName;
-            host = settings->getOrCreateHost(hostKey);
+            host = settings->getOrCreateHost(data->hostName);
+            host->setHostType(HostType::Auto);
         }
 
         host->state = data->state;
@@ -866,31 +865,21 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         auto* hostsMap = settings->getHostsMap();
         Host* localHost = nullptr;
 
-        std::string autoName = "[Auto] " + deviceName;
-        std::string manualName = "[Manual] " + deviceName;
-
-        auto it = hostsMap->find(autoName);
-        if (it == hostsMap->end()) {
-            it = hostsMap->find(manualName);
-        }
-        if (it == hostsMap->end()) {
-            it = hostsMap->find(deviceName);
-        }
-
-        if (it != hostsMap->end() && it->second->hasRpKey())
+        auto it = hostsMap->find(deviceName);
+        if (it != hostsMap->end() && it->second->hasRpKey() && !it->second->isRemote())
         {
             localHost = it->second;
             if (localHost->getRemoteDuid().empty())
             {
                 localHost->setRemoteDuid(deviceUid);
-                brls::Logger::info("Updated local host '{}' with remote DUID", it->first);
+                brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
             }
         }
 
-        std::string displayName = "[Remote] " + deviceName;
-        Host* host = settings->getOrCreateHost(displayName);
+        std::string remoteName = deviceName + " (Remote)";
+        Host* host = settings->getOrCreateHost(remoteName);
 
-        host->isRemoteHost = true;
+        host->setHostType(HostType::Remote);
         host->discovered = true;
         host->setRemoteDuid(deviceUid);
 

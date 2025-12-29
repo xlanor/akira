@@ -28,6 +28,18 @@
         paddingBottom="15">
 
         <brls:InputCell
+            id="host_settings/hostName"
+            title="Host Name"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:InputCell
+            id="host_settings/hostAddr"
+            title="IP Address"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:InputCell
             id="host_settings/psnAccountId"
             title="PSN Account ID"
             marginLeft="15"

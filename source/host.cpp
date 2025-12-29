@@ -376,6 +376,9 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
 
     sessionInit = true;
 
+    io->setSession(&session);
+    io->startStreamTimer();
+
     brls::Logger::info("Host::initSession: Setting up callbacks...");
     chiaki_opus_decoder_set_cb(&opusDecoder, InitAudioCallback, AudioCallback, io);
     chiaki_opus_decoder_get_sink(&opusDecoder, &audioSink);

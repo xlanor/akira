@@ -64,12 +64,8 @@ public:
 
         nameLabel = new brls::Label();
         std::string displayName = host->getHostName();
-        if (displayName.rfind("[Remote] ", 0) == 0) {
-            displayName = displayName.substr(9);
-        } else if (displayName.rfind("[Auto] ", 0) == 0) {
-            displayName = displayName.substr(7);
-        } else if (displayName.rfind("[Manual] ", 0) == 0) {
-            displayName = displayName.substr(9);
+        if (host->isRemote() && displayName.length() > 9 && displayName.substr(displayName.length() - 9) == " (Remote)") {
+            displayName = displayName.substr(0, displayName.length() - 9);
         }
         nameLabel->setText(displayName);
         nameLabel->setFontSize(18);
@@ -101,8 +97,7 @@ public:
         autoBadge->setPaddingLeft(6);
         autoBadge->setPaddingRight(6);
         autoBadge->setMarginLeft(8);
-        bool isAuto = host->getHostName().rfind("[Auto] ", 0) == 0;
-        autoBadge->setVisibility(isAuto ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        autoBadge->setVisibility(host->isAuto() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         auto* autoBadgeLabel = new brls::Label();
         autoBadgeLabel->setText("Auto");
@@ -120,8 +115,7 @@ public:
         manualBadge->setPaddingLeft(6);
         manualBadge->setPaddingRight(6);
         manualBadge->setMarginLeft(8);
-        bool isManual = host->getHostName().rfind("[Manual] ", 0) == 0;
-        manualBadge->setVisibility(isManual ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        manualBadge->setVisibility(host->isManual() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         auto* manualBadgeLabel = new brls::Label();
         manualBadgeLabel->setText("Manual");
@@ -171,10 +165,8 @@ public:
 
         remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
-        bool isAuto = host->getHostName().rfind("[Auto] ", 0) == 0;
-        bool isManual = host->getHostName().rfind("[Manual] ", 0) == 0;
-        autoBadge->setVisibility(isAuto ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        manualBadge->setVisibility(isManual ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        autoBadge->setVisibility(host->isAuto() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        manualBadge->setVisibility(host->isManual() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         if (host->isRemote()) {
             addrLabel->setText("PSN Remote Play");
@@ -187,7 +179,7 @@ public:
         bool showWake = host->isStandby() && host->hasRpKey() && !host->isRemote();
         bool showRegister = host->isDiscovered() && !host->hasRpKey() && !host->isRemote();
         bool showSettings = host->hasRpKey() && !host->needsLink();
-        bool showDelete = (host->hasRpKey() || !host->isDiscovered()) && !host->needsLink();
+        bool showDelete = host->isInConfig() && !host->needsLink();
 
         linkBtn->setVisibility(showLink ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         connectBtn->setVisibility(showConnect ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
@@ -442,17 +434,13 @@ private:
                     auto* settings = SettingsManager::getInstance();
 
                     std::string remoteName = remoteHost->getHostName();
-                    if (remoteName.rfind("[Remote] ", 0) == 0) {
-                        remoteName = remoteName.substr(9);
+                    if (remoteName.length() > 9 && remoteName.substr(remoteName.length() - 9) == " (Remote)") {
+                        remoteName = remoteName.substr(0, remoteName.length() - 9);
                     }
 
-                    std::string prefix = "";
-                    if (oldName.rfind("[Auto] ", 0) == 0) {
-                        prefix = "[Auto] ";
-                    } else if (oldName.rfind("[Manual] ", 0) == 0) {
-                        prefix = "[Manual] ";
+                    if (oldName != remoteName) {
+                        settings->renameHost(oldName, remoteName);
                     }
-                    settings->renameHost(oldName, prefix + remoteName);
                     remoteHost->copyRegistrationFrom(localHost);
                     remoteHost->setNeedsLink(false);
                     localHost->setRemoteDuid(remoteHost->getRemoteDuid());
@@ -486,12 +474,16 @@ private:
         settingsBtn->registerClickAction([this](brls::View* view) {
             brls::Logger::info("Settings button clicked for {}", host->getHostName());
 
-            Host* hostPtr = host;
             auto* settingsView = new HostSettingsView(host);
-            settingsView->setOnSaved([hostPtr]() {
-                if (HostListTab::currentInstance) {
-                    HostListTab::currentInstance->updateHostItem(hostPtr);
-                }
+            settingsView->setOnSaved([]() {
+                brls::sync([]() {
+                    if (HostListTab::currentInstance) {
+                        HostListTab::currentInstance->syncHostList();
+                        if (HostListTab::currentInstance->findRemoteBtn) {
+                            brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
+                        }
+                    }
+                });
             });
             brls::Application::pushActivity(new brls::Activity(settingsView));
 
