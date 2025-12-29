@@ -70,7 +70,7 @@ This software was built with reference/code from:
 - [kkwong](https://git.sr.ht/~kkwong/chiaki) for the initial hwacel and rumble patches
 - H0neyBadger for the initial switch port
 - [micro-ecc](https://github.com/kmackay/micro-ecc) for the ECDH implementation that was vendored in.
-- [vecteezy]() for the shiba inu logo because I like shiba inus.
+- [vecteezy](https://www.vecteezy.com/vector-art/67445984-adorable-capybara-illustration-enjoying-a-drink) for the capybara logo.
 
 ## Issues
 
