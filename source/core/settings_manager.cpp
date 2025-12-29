@@ -467,21 +467,21 @@ ChiakiVideoFPSPreset SettingsManager::stringToFps(const std::string& value) {
 
 int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res) {
     switch (res) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 7000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 5000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 3000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 1500;
-        default: return 5000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 15000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 10000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 5000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 2000;
+        default: return 10000;
     }
 }
 
 int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) {
     switch (res) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 15000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 10000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 5000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 3000;
-        default: return 10000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 20000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 15000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 5000;
+        default: return 15000;
     }
 }
 
