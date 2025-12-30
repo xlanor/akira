@@ -58,6 +58,13 @@ SettingsTab::SettingsTab() {
         return true;
     });
 
+    revealCredentialsBtn->registerClickAction([this](brls::View*) {
+        credentialsRevealed = !credentialsRevealed;
+        revealCredentialsBtn->setText(credentialsRevealed ? "Hide Secrets" : "Reveal Secrets");
+        updateCredentialsDisplay();
+        return true;
+    });
+
     updateCredentialsDisplay();
 }
 
@@ -369,6 +376,7 @@ void SettingsTab::initPsnAccountSection() {
                     psnAccountIdInput->setValue(accountId);
                     settings->setPsnAccountId(nullptr, accountId);
                     settings->writeFile();
+                    updateCredentialsDisplay();
                     brls::Application::notify("Account ID found!");
                     brls::Logger::info("Found account ID for PSN user");
                 });
@@ -537,6 +545,12 @@ void SettingsTab::initCompanionSection() {
     });
 }
 
+std::string SettingsTab::censorString(const std::string& str) {
+    if (str.empty()) return "Not set";
+    if (str.length() <= 5) return str;
+    return "****" + str.substr(str.length() - 5);
+}
+
 void SettingsTab::updateCredentialsDisplay() {
     credOnlineIdCell->setText("Online ID");
     std::string onlineId = settings->getPsnOnlineId(nullptr);
@@ -548,20 +562,28 @@ void SettingsTab::updateCredentialsDisplay() {
 
     credAccessTokenCell->setText("Access Token");
     std::string accessToken = settings->getPsnAccessToken();
-    if (!accessToken.empty()) {
-        std::string displayToken = accessToken.length() > 20 ? accessToken.substr(0, 16) + "..." : accessToken;
-        credAccessTokenCell->setDetailText(displayToken);
+    if (credentialsRevealed) {
+        if (!accessToken.empty()) {
+            std::string displayToken = accessToken.length() > 40 ? accessToken.substr(0, 36) + "..." : accessToken;
+            credAccessTokenCell->setDetailText(displayToken);
+        } else {
+            credAccessTokenCell->setDetailText("Not set");
+        }
     } else {
-        credAccessTokenCell->setDetailText("Not set");
+        credAccessTokenCell->setDetailText(censorString(accessToken));
     }
 
     credRefreshTokenCell->setText("Refresh Token");
     std::string refreshToken = settings->getPsnRefreshToken();
-    if (!refreshToken.empty()) {
-        std::string displayToken = refreshToken.length() > 20 ? refreshToken.substr(0, 16) + "..." : refreshToken;
-        credRefreshTokenCell->setDetailText(displayToken);
+    if (credentialsRevealed) {
+        if (!refreshToken.empty()) {
+            std::string displayToken = refreshToken.length() > 40 ? refreshToken.substr(0, 36) + "..." : refreshToken;
+            credRefreshTokenCell->setDetailText(displayToken);
+        } else {
+            credRefreshTokenCell->setDetailText("Not set");
+        }
     } else {
-        credRefreshTokenCell->setDetailText("Not set");
+        credRefreshTokenCell->setDetailText(censorString(refreshToken));
     }
 
     credTokenExpiryCell->setText("Token Expires");
@@ -584,11 +606,15 @@ void SettingsTab::updateCredentialsDisplay() {
 
     credDuidCell->setText("DUID");
     std::string duid = settings->getGlobalDuid();
-    if (!duid.empty()) {
-        std::string displayDuid = duid.length() > 20 ? duid.substr(0, 16) + "..." : duid;
-        credDuidCell->setDetailText(displayDuid);
+    if (credentialsRevealed) {
+        if (!duid.empty()) {
+            std::string displayDuid = duid.length() > 40 ? duid.substr(0, 36) + "..." : duid;
+            credDuidCell->setDetailText(displayDuid);
+        } else {
+            credDuidCell->setDetailText("Not set");
+        }
     } else {
-        credDuidCell->setDetailText("Not set");
+        credDuidCell->setDetailText(censorString(duid));
     }
 }
 

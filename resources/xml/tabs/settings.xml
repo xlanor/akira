@@ -282,6 +282,14 @@
             cornerRadius="8"
             marginBottom="30">
 
+            <brls:Button
+                id="settings/revealCredentials"
+                text="Reveal Secrets"
+                marginLeft="15"
+                marginRight="15"
+                marginTop="10"
+                marginBottom="10"/>
+
             <brls:DetailCell
                 id="settings/credOnlineId"
                 focusable="false"
