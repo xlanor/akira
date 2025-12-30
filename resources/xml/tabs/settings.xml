@@ -130,6 +130,22 @@
                 marginTop="5"
                 marginBottom="15"/>
 
+
+            <brls:Button
+                id="settings/runBenchmark"
+                text="Run GHASH Benchmark"
+                marginLeft="15"
+                marginRight="15"
+                marginTop="10"/>
+
+            <brls:Label
+                text="Compares TABLE vs PMULL performance"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="15"/>
+
         </brls:Box>
 
         <brls:Header
@@ -180,6 +196,20 @@
 
             <brls:Label
                 text="Automatically retry holepunch up to 4 times with increasing delays (3s, 6s, 9s)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:BooleanCell
+                id="settings/experimentalCrypto"
+                title="Enable Experimental PMULL GHASH"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Uses ARM NEON PMULL for GHASH (faster). Turn off if you experience issues."
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"

@@ -48,6 +48,7 @@ private:
     bool holepunchRetry = false;
     bool powerUserMenuUnlocked = false;
     bool unlockBitrateMax = false;
+    bool enableExperimentalCrypto = true;
 
     // Companion server settings
     std::string companionHost;
@@ -169,6 +170,9 @@ public:
     bool getUnlockBitrateMax() const;
     void setUnlockBitrateMax(bool enabled);
     int getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const;
+
+    bool getEnableExperimentalCrypto() const;
+    void setEnableExperimentalCrypto(bool enabled);
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP

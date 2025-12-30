@@ -23,7 +23,7 @@ include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 project(akira)
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "2")
-set(VERSION_REVISION "2")
+set(VERSION_REVISION "3")
 set(APP_TITLE "Akira")
 set(PROJECT_AUTHOR "xlanor")
 set(PACKAGE_NAME "io.github.akira")
@@ -114,6 +114,7 @@ endif()
 set(CHIAKI_IS_SWITCH ON CACHE BOOL "Building for Nintendo Switch")
 set(CHIAKI_LIB_ENABLE_OPUS ON CACHE BOOL "Enable Opus audio codec")
 set(CHIAKI_LIB_ENABLE_LIBNX_CRYPTO ON CACHE BOOL "Use libnx crypto backend")
+set(CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL ON CACHE BOOL "Enable experimental PMULL GHASH")
 set(CHIAKI_ENABLE_FFMPEG_DECODER ON CACHE BOOL "Enable FFmpeg video decoder")
 set(CHIAKI_ENABLE_TESTS OFF CACHE BOOL "Disable tests")
 
@@ -136,6 +137,14 @@ if(PLATFORM_SWITCH AND CHIAKI_LIB_ENABLE_LIBNX_CRYPTO)
     target_compile_definitions(chiaki-lib PUBLIC CHIAKI_LIB_ENABLE_LIBNX_CRYPTO)
     target_compile_definitions(chiaki-lib PUBLIC CHIAKI_IS_SWITCH)
     target_compile_definitions(chiaki-lib PUBLIC __SWITCH__)
+endif()
+
+if(CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL)
+    target_compile_definitions(chiaki-lib PUBLIC CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/library/chiaki-ng/lib/src/crypto/libnx/ghash_pmull.c
+        PROPERTIES COMPILE_FLAGS "-march=armv8-a+crypto"
+    )
 endif()
 
 ###########################################
@@ -163,6 +172,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${BOREALIS_LIBRARY}/include
     # Real chiaki headers from chiaki-ng library
     ${CMAKE_CURRENT_SOURCE_DIR}/library/chiaki-ng/lib/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/library/chiaki-ng/lib/src
     ${CMAKE_CURRENT_BINARY_DIR}/chiaki-lib/include
     ${APP_PLATFORM_INCLUDE}
 )

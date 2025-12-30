@@ -2,6 +2,7 @@
 
 #include "core/io/deko3d_renderer.hpp"
 #include "core/io/bitmap_font.hpp"
+#include "crypto/libnx/gmac.h"
 #include <borealis.hpp>
 #include <borealis/platforms/switch/switch_platform.hpp>
 #include <array>
@@ -763,6 +764,8 @@ void Deko3dRenderer::renderStatsOverlay()
     uint64_t mins = m_stats.stream_duration_seconds / 60;
     uint64_t secs = m_stats.stream_duration_seconds % 60;
 
+    const char* ghashMode = (chiaki_libnx_get_ghash_mode() == CHIAKI_LIBNX_GHASH_PMULL) ? "PMULL" : "TABLE";
+
     char statsText[512];
     snprintf(statsText, sizeof(statsText),
         "=== Requested ===\n"
@@ -777,9 +780,10 @@ void Deko3dRenderer::renderStatsOverlay()
         "Queue: %zu\n"
         "\n"
         "=== Network ===\n"
-        "Packet Loss: %.1f%%\n"
+        "Packet Loss (Live): %.1f%%\n"
         "Frame Loss: %zu (Rec: %zu)\n"
-        "Duration: %lum%02lus",
+        "Duration: %lum%02lus\n"
+        "GHASH: %s",
         m_stats.requested_width,
         m_stats.requested_height,
         m_stats.requested_fps,
@@ -797,7 +801,8 @@ void Deko3dRenderer::renderStatsOverlay()
         m_stats.network_frames_lost,
         m_stats.frames_recovered,
         mins,
-        secs
+        secs,
+        ghashMode
     );
 
     // Calculate overlay dimensions

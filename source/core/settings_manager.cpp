@@ -159,6 +159,8 @@ void SettingsManager::parseTomlFile() {
             powerUserMenuUnlocked = *val;
         if (auto val = config["unlock_bitrate_max"].value<bool>())
             unlockBitrateMax = *val;
+        if (auto val = config["enable_experimental_crypto"].value<bool>())
+            enableExperimentalCrypto = *val;
         if (auto val = config["companion_host"].value<std::string>())
             companionHost = *val;
         if (auto val = config["companion_port"].value<int64_t>())
@@ -454,6 +456,8 @@ int SettingsManager::writeFile() {
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
     if (unlockBitrateMax)
         config.insert("unlock_bitrate_max", unlockBitrateMax);
+    if (enableExperimentalCrypto)
+        config.insert("enable_experimental_crypto", enableExperimentalCrypto);
 
     for (const auto& [name, host] : hosts) {
         brls::Logger::debug("Writing host config: {}", name);
@@ -999,4 +1003,12 @@ int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res)
         }
     }
     return 1000;
+}
+
+bool SettingsManager::getEnableExperimentalCrypto() const {
+    return enableExperimentalCrypto;
+}
+
+void SettingsManager::setEnableExperimentalCrypto(bool enabled) {
+    enableExperimentalCrypto = enabled;
 }
