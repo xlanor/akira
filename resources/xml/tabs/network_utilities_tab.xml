@@ -33,7 +33,8 @@
                 id="network/resultContainer"
                 width="auto"
                 height="auto"
-                axis="column"/>
+                axis="column"
+                grow="1.0"/>
 
         </brls:Box>
 

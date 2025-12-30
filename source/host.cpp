@@ -1,9 +1,12 @@
 #include "core/host.hpp"
 #include "core/io.hpp"
 #include "core/exception.hpp"
+#include "core/settings_manager.hpp"
 
 #include <borealis.hpp>
 #include <cstring>
+#include <thread>
+#include <chrono>
 
 #include <chiaki/base64.h>
 
@@ -266,10 +269,12 @@ int Host::initSession(IO* io)
 
 int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
 {
-    chiaki_connect_video_profile_preset(&videoProfile, videoResolution, videoFps);
-    videoProfile.bitrate = settings->getVideoBitrate();
+    auto resolution = settings->getVideoResolution(this);
+    auto fps = settings->getVideoFPS(this);
+    chiaki_connect_video_profile_preset(&videoProfile, resolution, fps);
+    videoProfile.bitrate = settings->getVideoBitrate(this);
     brls::Logger::info("Host::initSession: videoResolution preset={}, profile={}x{}, bitrate={}",
-        static_cast<int>(videoResolution), videoProfile.width, videoProfile.height, videoProfile.bitrate);
+        static_cast<int>(resolution), videoProfile.width, videoProfile.height, videoProfile.bitrate);
 
     chiaki_opus_decoder_init(&opusDecoder, log);
 
@@ -571,12 +576,9 @@ ChiakiErrorCode Host::initHolepunchSession()
 
 ChiakiErrorCode Host::connectHolepunch()
 {
-    if (!holepunchSession)
-    {
-        ChiakiErrorCode err = initHolepunchSession();
-        if (err != CHIAKI_ERR_SUCCESS)
-            return err;
-    }
+    bool retryEnabled = SettingsManager::getInstance()->getHolepunchRetry();
+    const int maxRetries = retryEnabled ? 4 : 1;
+    ChiakiErrorCode err = CHIAKI_ERR_UNKNOWN;
 
     if (remoteDuid.empty())
     {
@@ -600,56 +602,78 @@ ChiakiErrorCode Host::connectHolepunch()
     ChiakiHolepunchConsoleType consoleType = isPS5() ?
         CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5 : CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4;
 
-    brls::Logger::info("Starting holepunch connection sequence for {} ({})",
-        hostName, isPS5() ? "PS5" : "PS4");
+    for (int attempt = 1; attempt <= maxRetries; attempt++)
+    {
+        if (!holepunchSession)
+        {
+            err = initHolepunchSession();
+            if (err != CHIAKI_ERR_SUCCESS)
+                return err;
+        }
 
-    ChiakiErrorCode err = chiaki_holepunch_upnp_discover(holepunchSession);
-    if (err != CHIAKI_ERR_SUCCESS)
-    {
-        brls::Logger::warning("UPNP discovery failed (non-fatal): {}", chiaki_error_string(err));
-    }
-    else
-    {
-        brls::Logger::info("UPNP discovery completed");
-    }
+        brls::Logger::info("Starting holepunch connection sequence for {} ({}) - attempt {}/{}",
+            hostName, isPS5() ? "PS5" : "PS4", attempt, maxRetries);
 
-    brls::Logger::info("Creating holepunch session on PSN...");
-    err = chiaki_holepunch_session_create(holepunchSession);
-    if (err != CHIAKI_ERR_SUCCESS)
-    {
-        brls::Logger::error("Failed to create holepunch session: {}", chiaki_error_string(err));
-        return err;
-    }
-    brls::Logger::info("Holepunch session created on PSN");
+        err = chiaki_holepunch_upnp_discover(holepunchSession);
+        if (err != CHIAKI_ERR_SUCCESS)
+        {
+            brls::Logger::warning("UPNP discovery failed (non-fatal): {}", chiaki_error_string(err));
+        }
+        else
+        {
+            brls::Logger::info("UPNP discovery completed");
+        }
 
-    brls::Logger::info("Creating CTRL offer...");
-    err = holepunch_session_create_offer(holepunchSession);
-    if (err != CHIAKI_ERR_SUCCESS)
-    {
-        brls::Logger::error("Failed to create CTRL offer: {}", chiaki_error_string(err));
-        return err;
-    }
-    brls::Logger::info("CTRL offer created");
+        brls::Logger::info("Creating holepunch session on PSN...");
+        err = chiaki_holepunch_session_create(holepunchSession);
+        if (err != CHIAKI_ERR_SUCCESS)
+        {
+            brls::Logger::error("Failed to create holepunch session: {}", chiaki_error_string(err));
+            return err;
+        }
+        brls::Logger::info("Holepunch session created on PSN");
 
-    brls::Logger::info("Starting holepunch session for device...");
-    err = chiaki_holepunch_session_start(holepunchSession, duidBytes, consoleType);
-    if (err != CHIAKI_ERR_SUCCESS)
-    {
-        brls::Logger::error("Failed to start holepunch session: {}", chiaki_error_string(err));
-        return err;
-    }
-    brls::Logger::info("Holepunch session started for device");
+        brls::Logger::info("Creating CTRL offer...");
+        err = holepunch_session_create_offer(holepunchSession);
+        if (err != CHIAKI_ERR_SUCCESS)
+        {
+            brls::Logger::error("Failed to create CTRL offer: {}", chiaki_error_string(err));
+            return err;
+        }
+        brls::Logger::info("CTRL offer created");
 
-    brls::Logger::info("Punching CTRL hole...");
-    err = chiaki_holepunch_session_punch_hole(holepunchSession, CHIAKI_HOLEPUNCH_PORT_TYPE_CTRL);
-    if (err != CHIAKI_ERR_SUCCESS)
-    {
+        brls::Logger::info("Starting holepunch session for device...");
+        err = chiaki_holepunch_session_start(holepunchSession, duidBytes, consoleType);
+        if (err != CHIAKI_ERR_SUCCESS)
+        {
+            brls::Logger::error("Failed to start holepunch session: {}", chiaki_error_string(err));
+            return err;
+        }
+        brls::Logger::info("Holepunch session started for device");
+
+        brls::Logger::info("Punching CTRL hole...");
+        err = chiaki_holepunch_session_punch_hole(holepunchSession, CHIAKI_HOLEPUNCH_PORT_TYPE_CTRL);
+        if (err == CHIAKI_ERR_SUCCESS)
+        {
+            brls::Logger::info("CTRL hole punched successfully!");
+            return CHIAKI_ERR_SUCCESS;
+        }
+
         brls::Logger::error("Failed to punch CTRL hole: {}", chiaki_error_string(err));
-        return err;
-    }
-    brls::Logger::info("CTRL hole punched successfully!");
 
-    return CHIAKI_ERR_SUCCESS;
+        if (err == CHIAKI_ERR_HOST_UNREACH && attempt < maxRetries)
+        {
+            int delaySeconds = attempt * 3;
+            brls::Logger::warning("Holepunch attempt {}/{} failed, retrying in {} seconds...", attempt, maxRetries, delaySeconds);
+            cleanupHolepunch();
+            std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
+            continue;
+        }
+
+        break;
+    }
+
+    return err;
 }
 
 void Host::cancelHolepunch()
