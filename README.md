@@ -17,7 +17,7 @@ This is still considered unstable/beta, bugs are expected.
 
 <p align="center">
 And some horribly compressed encodes to fit < 10mb:
-</p>i
+</p>
 <p align="center" width="100%">
 <video src="https://github.com/user-attachments/assets/1ae8a3e3-9123-43cf-ae2e-f038383ef87d" width="80%" controls></video>
 </p>
@@ -37,7 +37,9 @@ At this point I'm a place where I can seat back and enjoy my christmas break to 
 
 The biggest change is probably the removal of openGL and cutover to deko3d.
 
-The second biggest feature change is the addition of PSN remote play. Thanks to the hard work by Streetpea on chiaki-ng, I just call whatever he has built. You should see two screens come up if this is successful.
+The second biggest change is probably ensuring that hardware accelerated crypto is used on the network stream
+
+The biggest feature change is the addition of PSN remote play. Thanks to the hard work by Streetpea on chiaki-ng, I just call whatever he has built. You should see two screens come up if this is successful.
 
 The first screen is going to be for the CTRL holepunching, and the second screen for DATA holepunching after the session has been initalised. Rather than show an empty screen I decided to just stream the logs.
 
