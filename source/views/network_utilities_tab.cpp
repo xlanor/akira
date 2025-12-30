@@ -1,5 +1,4 @@
 #include "views/network_utilities_tab.hpp"
-#include "core/stun_client.hpp"
 #include <vector>
 
 NetworkUtilitiesTab::NetworkUtilitiesTab() {
@@ -26,56 +25,53 @@ void NetworkUtilitiesTab::onCheckNatClicked() {
     StunResult result = StunClient::detectNATType();
 
     isChecking = false;
-
-    if (!result.error.empty() && result.type == NATType::Unknown) {
-        displayResult("Error", result.error, "", 0, true);
-    } else {
-        displayResult(
-            StunClient::natTypeToString(result.type),
-            StunClient::natTypeDescription(result.type),
-            result.externalIP,
-            result.externalPort,
-            result.type == NATType::Symmetric || result.type == NATType::UDPBlocked
-        );
-    }
+    displayResult(result);
 }
 
 void NetworkUtilitiesTab::clearResults() {
     resultContainer->clearViews();
 }
 
-void NetworkUtilitiesTab::displayResult(const std::string& natType, const std::string& description,
-                                         const std::string& externalIP, uint16_t externalPort,
-                                         bool isError) {
+void NetworkUtilitiesTab::displayResult(const StunResult& result) {
     clearResults();
 
-    NVGcolor typeColor;
-    if (isError) {
-        typeColor = nvgRGBA(239, 68, 68, 255);
-    } else if (natType == "Endpoint-Independent Mapping" || natType == "Open Internet") {
-        typeColor = nvgRGBA(16, 185, 129, 255);
-    } else if (natType == "Address & Port-Dependent Mapping" || natType == "UDP Blocked") {
-        typeColor = nvgRGBA(239, 68, 68, 255);
+    if (!result.error.empty() && result.type == NATType::Unknown) {
+        addResultRow("Error", result.error, nvgRGBA(239, 68, 68, 255));
+        return;
+    }
+
+    std::string mappingStr = StunClient::natTypeToString(result.type);
+    NVGcolor mappingColor;
+    if (result.type == NATType::FullCone || result.type == NATType::OpenInternet ||
+        result.type == NATType::RestrictedCone || result.type == NATType::PortRestrictedCone) {
+        mappingColor = nvgRGBA(16, 185, 129, 255);
+    } else if (result.type == NATType::Symmetric || result.type == NATType::UDPBlocked) {
+        mappingColor = nvgRGBA(239, 68, 68, 255);
     } else {
-        typeColor = nvgRGBA(245, 158, 11, 255);
+        mappingColor = nvgRGBA(245, 158, 11, 255);
     }
 
-    addResultRow("NAT Type", natType, typeColor);
+    addResultRow("Mapping", mappingStr, mappingColor);
 
-    auto* descLabel = new brls::Label();
-    descLabel->setText(description);
-    descLabel->setFontSize(18);
-    descLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
-    descLabel->setMarginTop(5);
-    descLabel->setMarginBottom(20);
-    resultContainer->addView(descLabel);
-
-    if (!externalIP.empty()) {
-        addResultRow("External IP", externalIP);
+    std::string filteringStr = StunClient::filteringTypeToString(result.filtering);
+    NVGcolor filteringColor;
+    if (result.filtering == FilteringType::EndpointIndependent) {
+        filteringColor = nvgRGBA(16, 185, 129, 255);
+    } else if (result.filtering == FilteringType::AddressDependent ||
+               result.filtering == FilteringType::AddressPortDependent) {
+        filteringColor = nvgRGBA(245, 158, 11, 255);
+    } else {
+        filteringColor = nvgRGBA(150, 150, 150, 255);
     }
 
-    if (externalPort > 0) {
-        addResultRow("External Port", std::to_string(externalPort));
+    addResultRow("Filtering", filteringStr, filteringColor);
+
+    if (!result.externalIP.empty()) {
+        addResultRow("External IP", result.externalIP);
+    }
+
+    if (result.externalPort > 0) {
+        addResultRow("External Port", std::to_string(result.externalPort));
     }
 
     addCompatibilityTable();
@@ -90,7 +86,7 @@ void NetworkUtilitiesTab::addCompatibilityTable() {
     header->setText("Holepunch Compatibility");
     header->setFontSize(22);
     header->setTextColor(nvgRGBA(100, 180, 255, 255));
-    header->setMarginBottom(15);
+    header->setMarginBottom(10);
     resultContainer->addView(header);
 
     auto* note = new brls::Label();
@@ -100,6 +96,13 @@ void NetworkUtilitiesTab::addCompatibilityTable() {
     note->setMarginBottom(15);
     resultContainer->addView(note);
 
+    auto* mappingHeader = new brls::Label();
+    mappingHeader->setText("Mapping");
+    mappingHeader->setFontSize(18);
+    mappingHeader->setTextColor(nvgRGBA(150, 150, 150, 255));
+    mappingHeader->setMarginBottom(8);
+    resultContainer->addView(mappingHeader);
+
     struct CompatRow {
         std::string switchNat;
         std::string ps5Nat;
@@ -107,62 +110,142 @@ void NetworkUtilitiesTab::addCompatibilityTable() {
         NVGcolor color;
     };
 
-    std::vector<CompatRow> rows = {
+    std::vector<CompatRow> mappingRows = {
         {"Endpoint-Independent", "Endpoint-Independent", "Works", nvgRGBA(16, 185, 129, 255)},
-        {"Endpoint-Independent", "Addr & Port-Dependent", "May fail", nvgRGBA(245, 158, 11, 255)},
-        {"Addr & Port-Dependent", "Endpoint-Independent", "May fail", nvgRGBA(245, 158, 11, 255)},
-        {"Addr & Port-Dependent", "Addr & Port-Dependent", "Won't work", nvgRGBA(239, 68, 68, 255)},
+        {"Endpoint-Independent", "Addr and Port-Dep", "Won't work", nvgRGBA(239, 68, 68, 255)},
+        {"Addr and Port-Dep", "Endpoint-Independent", "Won't work", nvgRGBA(239, 68, 68, 255)},
+        {"Addr and Port-Dep", "Addr and Port-Dep", "Won't work", nvgRGBA(239, 68, 68, 255)},
     };
 
     auto* headerRow = new brls::Box();
     headerRow->setAxis(brls::Axis::ROW);
     headerRow->setMarginBottom(5);
+    headerRow->setWidthPercentage(100);
 
     auto* col1 = new brls::Label();
     col1->setText("Switch");
-    col1->setFontSize(16);
+    col1->setFontSize(14);
     col1->setTextColor(nvgRGBA(180, 180, 180, 255));
-    col1->setWidth(200);
+    col1->setWidthPercentage(40);
     headerRow->addView(col1);
 
     auto* col2 = new brls::Label();
-    col2->setText("PS5 Network");
-    col2->setFontSize(16);
+    col2->setText("PS5");
+    col2->setFontSize(14);
     col2->setTextColor(nvgRGBA(180, 180, 180, 255));
-    col2->setWidth(200);
+    col2->setWidthPercentage(40);
     headerRow->addView(col2);
 
     auto* col3 = new brls::Label();
     col3->setText("Result");
-    col3->setFontSize(16);
+    col3->setFontSize(14);
     col3->setTextColor(nvgRGBA(180, 180, 180, 255));
+    col3->setWidthPercentage(20);
     headerRow->addView(col3);
 
     resultContainer->addView(headerRow);
 
-    for (const auto& row : rows) {
+    for (const auto& row : mappingRows) {
         auto* tableRow = new brls::Box();
         tableRow->setAxis(brls::Axis::ROW);
-        tableRow->setMarginTop(8);
+        tableRow->setMarginTop(6);
+        tableRow->setWidthPercentage(100);
 
         auto* c1 = new brls::Label();
         c1->setText(row.switchNat);
-        c1->setFontSize(16);
+        c1->setFontSize(14);
         c1->setTextColor(nvgRGBA(200, 200, 200, 255));
-        c1->setWidth(200);
+        c1->setWidthPercentage(40);
         tableRow->addView(c1);
 
         auto* c2 = new brls::Label();
         c2->setText(row.ps5Nat);
-        c2->setFontSize(16);
+        c2->setFontSize(14);
         c2->setTextColor(nvgRGBA(200, 200, 200, 255));
-        c2->setWidth(200);
+        c2->setWidthPercentage(40);
         tableRow->addView(c2);
 
         auto* c3 = new brls::Label();
         c3->setText(row.result);
-        c3->setFontSize(16);
+        c3->setFontSize(14);
         c3->setTextColor(row.color);
+        c3->setWidthPercentage(20);
+        tableRow->addView(c3);
+
+        resultContainer->addView(tableRow);
+    }
+
+    auto* spacer2 = new brls::Box();
+    spacer2->setHeight(20);
+    resultContainer->addView(spacer2);
+
+    auto* filteringHeader = new brls::Label();
+    filteringHeader->setText("Filtering (if mapping is Endpoint-Independent)");
+    filteringHeader->setFontSize(18);
+    filteringHeader->setTextColor(nvgRGBA(150, 150, 150, 255));
+    filteringHeader->setMarginBottom(8);
+    resultContainer->addView(filteringHeader);
+
+    std::vector<CompatRow> filteringRows = {
+        {"Endpoint-Independent", "Endpoint-Independent", "Works", nvgRGBA(16, 185, 129, 255)},
+        {"Endpoint-Independent", "Address-Dependent", "Works", nvgRGBA(16, 185, 129, 255)},
+        {"Address-Dependent", "Endpoint-Independent", "Works", nvgRGBA(16, 185, 129, 255)},
+        {"Address-Dependent", "Address-Dependent", "May fail", nvgRGBA(245, 158, 11, 255)},
+    };
+
+    auto* headerRow2 = new brls::Box();
+    headerRow2->setAxis(brls::Axis::ROW);
+    headerRow2->setMarginBottom(5);
+    headerRow2->setWidthPercentage(100);
+
+    auto* col1b = new brls::Label();
+    col1b->setText("Switch");
+    col1b->setFontSize(14);
+    col1b->setTextColor(nvgRGBA(180, 180, 180, 255));
+    col1b->setWidthPercentage(40);
+    headerRow2->addView(col1b);
+
+    auto* col2b = new brls::Label();
+    col2b->setText("PS5");
+    col2b->setFontSize(14);
+    col2b->setTextColor(nvgRGBA(180, 180, 180, 255));
+    col2b->setWidthPercentage(40);
+    headerRow2->addView(col2b);
+
+    auto* col3b = new brls::Label();
+    col3b->setText("Result");
+    col3b->setFontSize(14);
+    col3b->setTextColor(nvgRGBA(180, 180, 180, 255));
+    col3b->setWidthPercentage(20);
+    headerRow2->addView(col3b);
+
+    resultContainer->addView(headerRow2);
+
+    for (const auto& row : filteringRows) {
+        auto* tableRow = new brls::Box();
+        tableRow->setAxis(brls::Axis::ROW);
+        tableRow->setMarginTop(6);
+        tableRow->setWidthPercentage(100);
+
+        auto* c1 = new brls::Label();
+        c1->setText(row.switchNat);
+        c1->setFontSize(14);
+        c1->setTextColor(nvgRGBA(200, 200, 200, 255));
+        c1->setWidthPercentage(40);
+        tableRow->addView(c1);
+
+        auto* c2 = new brls::Label();
+        c2->setText(row.ps5Nat);
+        c2->setFontSize(14);
+        c2->setTextColor(nvgRGBA(200, 200, 200, 255));
+        c2->setWidthPercentage(40);
+        tableRow->addView(c2);
+
+        auto* c3 = new brls::Label();
+        c3->setText(row.result);
+        c3->setFontSize(14);
+        c3->setTextColor(row.color);
+        c3->setWidthPercentage(20);
         tableRow->addView(c3);
 
         resultContainer->addView(tableRow);

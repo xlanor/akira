@@ -1,6 +1,6 @@
-Akira 0.2.1
-Commit: a42c362
-Build: 2025-12-29 17:44:55 UTC
+Akira 0.2.2
+Commit: 3fb2306
+Build: 2025-12-29 22:45:57 UTC
 
 === Custom Libraries ===
 chiaki-ng 
@@ -12,10 +12,13 @@ deko3d 0.5.0-1
 devkit-env 1.0.1-2
 devkitA64 r28-1
 devkitA64-gdb 14.1-1
-devkitARM r66-1
+devkitARM r67-4
 devkita64-cmake 1.1.3-1
 devkita64-rules 1.1.1-1
+devkitarm-binutils 2.45.1-2
 devkitarm-crtls 1.2.6-1
+devkitarm-gcc 15.2.0-6
+devkitarm-newlib 4.5.0.20241231-4
 devkitarm-rules 1.6.0-4
 devkitpro-keyring 20241017-2
 dkp-cmake-common-utils 1.5.2-1

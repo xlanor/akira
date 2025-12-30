@@ -2,6 +2,7 @@
 #define AKIRA_SETTINGS_TAB_HPP
 
 #include <borealis.hpp>
+#include <chrono>
 
 #include "core/settings_manager.hpp"
 
@@ -12,11 +13,15 @@ public:
     static brls::View* create();
 
 private:
-    BRLS_BIND(brls::SelectorCell, resolutionSelector, "settings/resolution");
-    BRLS_BIND(brls::SelectorCell, fpsSelector, "settings/fps");
-    BRLS_BIND(brls::SliderCell, bitrateSlider, "settings/bitrate");
+    BRLS_BIND(brls::SelectorCell, localResolutionSelector, "settings/localResolution");
+    BRLS_BIND(brls::SelectorCell, remoteResolutionSelector, "settings/remoteResolution");
+    BRLS_BIND(brls::SelectorCell, localFpsSelector, "settings/localFps");
+    BRLS_BIND(brls::SelectorCell, remoteFpsSelector, "settings/remoteFps");
+    BRLS_BIND(brls::SliderCell, localBitrateSlider, "settings/localBitrate");
+    BRLS_BIND(brls::SliderCell, remoteBitrateSlider, "settings/remoteBitrate");
     BRLS_BIND(brls::SelectorCell, hapticSelector, "settings/haptic");
     BRLS_BIND(brls::BooleanCell, invertABToggle, "settings/invertAB");
+    BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
     BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
     BRLS_BIND(brls::Button, lookupBtn, "settings/lookupBtn");
     BRLS_BIND(brls::InputCell, psnAccountIdInput, "settings/psnAccountId");
@@ -34,18 +39,31 @@ private:
     BRLS_BIND(brls::DetailCell, credTokenExpiryCell, "settings/credTokenExpiry");
     BRLS_BIND(brls::DetailCell, credDuidCell, "settings/credDuid");
 
+    BRLS_BIND(brls::Label, versionLabel, "settings/version");
+    BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
+    BRLS_BIND(brls::BooleanCell, unlockBitrateMaxToggle, "settings/unlockBitrateMax");
+
     SettingsManager* settings = nullptr;
+    int powerUserClickCount = 0;
+    std::chrono::steady_clock::time_point lastPowerUserClick;
 
     void updateCredentialsDisplay();
 
-    void initResolutionSelector();
-    void initFpsSelector();
-    void initBitrateSlider();
-    void updateBitrateSlider();
+    void initLocalResolutionSelector();
+    void initRemoteResolutionSelector();
+    void initLocalFpsSelector();
+    void initRemoteFpsSelector();
+    void initLocalBitrateSlider();
+    void updateLocalBitrateSlider();
+    void initRemoteBitrateSlider();
+    void updateRemoteBitrateSlider();
     void initHapticSelector();
     void initInvertABToggle();
+    void initHolepunchRetryToggle();
     void initPsnAccountSection();
     void initCompanionSection();
+    void initPowerUserSection();
+    void updatePowerUserVisibility();
 };
 
 #endif // AKIRA_SETTINGS_TAB_HPP

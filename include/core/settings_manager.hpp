@@ -31,8 +31,10 @@ private:
     std::map<std::string, Host*> hosts;
 
     // Global settings (defaults)
-    ChiakiVideoResolutionPreset globalVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
-    ChiakiVideoFPSPreset globalVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
+    ChiakiVideoResolutionPreset localVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
+    ChiakiVideoResolutionPreset remoteVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
+    ChiakiVideoFPSPreset localVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
+    ChiakiVideoFPSPreset remoteVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
     std::string globalPsnOnlineId;
     std::string globalPsnAccountId;
     std::string globalPsnRefreshToken;
@@ -41,7 +43,11 @@ private:
     std::string globalDuid;
     HapticPreset globalHaptic = HapticPreset::Disabled;
     bool globalInvertAB = false;
-    int globalVideoBitrate = 5000;
+    int localVideoBitrate = 10000;
+    int remoteVideoBitrate = 10000;
+    bool holepunchRetry = false;
+    bool powerUserMenuUnlocked = false;
+    bool unlockBitrateMax = false;
 
     // Companion server settings
     std::string companionHost;
@@ -79,7 +85,7 @@ public:
     static ChiakiVideoFPSPreset stringToFps(const std::string& value);
 
     static int getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res);
-    static int getMaxBitrateForResolution(ChiakiVideoResolutionPreset res);
+    int getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) const;
 
     static bool isValidIPv4(const std::string& addr);
     static bool isValidFQDN(const std::string& addr);
@@ -113,15 +119,22 @@ public:
     void setConsolePIN(Host* host, const std::string& pin);
 
     ChiakiVideoResolutionPreset getVideoResolution(Host* host);
-    void setVideoResolution(Host* host, ChiakiVideoResolutionPreset value);
-    void setVideoResolution(Host* host, const std::string& value);
+    ChiakiVideoResolutionPreset getLocalVideoResolution() const;
+    void setLocalVideoResolution(ChiakiVideoResolutionPreset value);
+    ChiakiVideoResolutionPreset getRemoteVideoResolution() const;
+    void setRemoteVideoResolution(ChiakiVideoResolutionPreset value);
 
     ChiakiVideoFPSPreset getVideoFPS(Host* host);
-    void setVideoFPS(Host* host, ChiakiVideoFPSPreset value);
-    void setVideoFPS(Host* host, const std::string& value);
+    ChiakiVideoFPSPreset getLocalVideoFPS() const;
+    void setLocalVideoFPS(ChiakiVideoFPSPreset value);
+    ChiakiVideoFPSPreset getRemoteVideoFPS() const;
+    void setRemoteVideoFPS(ChiakiVideoFPSPreset value);
 
-    int getVideoBitrate() const;
-    void setVideoBitrate(int value);
+    int getVideoBitrate(Host* host) const;
+    int getLocalVideoBitrate() const;
+    void setLocalVideoBitrate(int value);
+    int getRemoteVideoBitrate() const;
+    void setRemoteVideoBitrate(int value);
 
     HapticPreset getHaptic(Host* host);
     void setHaptic(Host* host, HapticPreset value);
@@ -147,6 +160,15 @@ public:
 
     bool getInvertAB() const;
     void setInvertAB(bool invert);
+
+    bool getHolepunchRetry() const;
+    void setHolepunchRetry(bool retry);
+
+    bool getPowerUserMenuUnlocked() const;
+    void setPowerUserMenuUnlocked(bool unlocked);
+    bool getUnlockBitrateMax() const;
+    void setUnlockBitrateMax(bool enabled);
+    int getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const;
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP

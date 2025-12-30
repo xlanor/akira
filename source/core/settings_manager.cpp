@@ -63,8 +63,6 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
     if (created) {
         setPsnOnlineId(host, globalPsnOnlineId);
         setPsnAccountId(host, globalPsnAccountId);
-        setVideoResolution(host, globalVideoResolution);
-        setVideoFPS(host, globalVideoFPS);
     }
 
     return host;
@@ -118,10 +116,25 @@ void SettingsManager::parseTomlFile() {
     try {
         auto config = toml::parse_file(TOML_CONFIG_FILE);
 
-        if (auto val = config["video_resolution"].value<std::string>())
-            globalVideoResolution = stringToResolution(*val);
-        if (auto val = config["video_fps"].value<int64_t>())
-            globalVideoFPS = stringToFps(std::to_string(*val));
+        if (auto val = config["local_video_resolution"].value<std::string>())
+            localVideoResolution = stringToResolution(*val);
+        else if (auto val = config["video_resolution"].value<std::string>())
+            localVideoResolution = stringToResolution(*val);
+
+        if (auto val = config["remote_video_resolution"].value<std::string>())
+            remoteVideoResolution = stringToResolution(*val);
+        else if (auto val = config["video_resolution"].value<std::string>())
+            remoteVideoResolution = stringToResolution(*val);
+
+        if (auto val = config["local_video_fps"].value<int64_t>())
+            localVideoFPS = stringToFps(std::to_string(*val));
+        else if (auto val = config["video_fps"].value<int64_t>())
+            localVideoFPS = stringToFps(std::to_string(*val));
+
+        if (auto val = config["remote_video_fps"].value<int64_t>())
+            remoteVideoFPS = stringToFps(std::to_string(*val));
+        else if (auto val = config["video_fps"].value<int64_t>())
+            remoteVideoFPS = stringToFps(std::to_string(*val));
         if (auto val = config["haptic"].value<int64_t>())
             globalHaptic = static_cast<HapticPreset>(*val);
         if (auto val = config["psn_online_id"].value<std::string>())
@@ -138,14 +151,31 @@ void SettingsManager::parseTomlFile() {
             globalDuid = *val;
         if (auto val = config["invert_ab"].value<bool>())
             globalInvertAB = *val;
+        if (auto val = config["holepunch_retry"].value<bool>())
+            holepunchRetry = *val;
+        if (auto val = config["power_user_menu_unlocked"].value<bool>())
+            powerUserMenuUnlocked = *val;
+        else if (auto val = config["power_user_mode"].value<bool>())
+            powerUserMenuUnlocked = *val;
+        if (auto val = config["unlock_bitrate_max"].value<bool>())
+            unlockBitrateMax = *val;
         if (auto val = config["companion_host"].value<std::string>())
             companionHost = *val;
         if (auto val = config["companion_port"].value<int64_t>())
             companionPort = static_cast<int>(*val);
-        if (auto val = config["video_bitrate"].value<int64_t>())
-            globalVideoBitrate = static_cast<int>(*val);
+        if (auto val = config["local_video_bitrate"].value<int64_t>())
+            localVideoBitrate = static_cast<int>(*val);
+        else if (auto val = config["video_bitrate"].value<int64_t>())
+            localVideoBitrate = static_cast<int>(*val);
         else
-            globalVideoBitrate = getDefaultBitrateForResolution(globalVideoResolution);
+            localVideoBitrate = getDefaultBitrateForResolution(localVideoResolution);
+
+        if (auto val = config["remote_video_bitrate"].value<int64_t>())
+            remoteVideoBitrate = static_cast<int>(*val);
+        else if (auto val = config["video_bitrate"].value<int64_t>())
+            remoteVideoBitrate = static_cast<int>(*val);
+        else
+            remoteVideoBitrate = getDefaultBitrateForResolution(remoteVideoResolution);
 
         for (auto& [key, value] : config) {
             if (!value.is_table()) continue;
@@ -191,10 +221,6 @@ void SettingsManager::parseTomlFile() {
                 host->hostAddr = *val;
             if (auto val = (*table)["target"].value<int64_t>())
                 host->setChiakiTarget(static_cast<ChiakiTarget>(*val));
-            if (auto val = (*table)["video_resolution"].value<std::string>())
-                host->videoResolution = stringToResolution(*val);
-            if (auto val = (*table)["video_fps"].value<int64_t>())
-                host->videoFps = stringToFps(std::to_string(*val));
             if (auto val = (*table)["psn_online_id"].value<std::string>())
                 host->psnOnlineId = *val;
             if (auto val = (*table)["psn_account_id"].value<std::string>())
@@ -344,10 +370,12 @@ void SettingsManager::parseLegacyFile() {
                 if (currentHost) rpRegistKeySet = setHostRpRegistKey(currentHost, value);
                 break;
             case ConfigItem::VideoResolution:
-                setVideoResolution(currentHost, value);
+                localVideoResolution = stringToResolution(value);
+                remoteVideoResolution = stringToResolution(value);
                 break;
             case ConfigItem::VideoFps:
-                setVideoFPS(currentHost, value);
+                localVideoFPS = stringToFps(value);
+                remoteVideoFPS = stringToFps(value);
                 break;
             case ConfigItem::Haptic:
                 setHaptic(currentHost, value);
@@ -394,11 +422,12 @@ int SettingsManager::writeFile() {
 
     toml::table config;
 
-    if (globalVideoResolution)
-        config.insert("video_resolution", resolutionToString(globalVideoResolution));
-    if (globalVideoFPS)
-        config.insert("video_fps", fpsToInt(globalVideoFPS));
-    config.insert("video_bitrate", globalVideoBitrate);
+    config.insert("local_video_resolution", resolutionToString(localVideoResolution));
+    config.insert("remote_video_resolution", resolutionToString(remoteVideoResolution));
+    config.insert("local_video_fps", fpsToInt(localVideoFPS));
+    config.insert("remote_video_fps", fpsToInt(remoteVideoFPS));
+    config.insert("local_video_bitrate", localVideoBitrate);
+    config.insert("remote_video_bitrate", remoteVideoBitrate);
     if (globalHaptic != HapticPreset::Disabled)
         config.insert("haptic", static_cast<int>(globalHaptic));
     if (!globalPsnOnlineId.empty())
@@ -419,6 +448,12 @@ int SettingsManager::writeFile() {
         config.insert("companion_port", companionPort);
     if (globalInvertAB)
         config.insert("invert_ab", globalInvertAB);
+    if (holepunchRetry)
+        config.insert("holepunch_retry", holepunchRetry);
+    if (powerUserMenuUnlocked)
+        config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
+    if (unlockBitrateMax)
+        config.insert("unlock_bitrate_max", unlockBitrateMax);
 
     for (const auto& [name, host] : hosts) {
         brls::Logger::debug("Writing host config: {}", name);
@@ -429,10 +464,6 @@ int SettingsManager::writeFile() {
         hostTable.insert("target", static_cast<int>(host->getChiakiTarget()));
         hostTable.insert("host_type", static_cast<int>(host->hostType));
 
-        if (host->videoResolution)
-            hostTable.insert("video_resolution", resolutionToString(host->videoResolution));
-        if (host->videoFps)
-            hostTable.insert("video_fps", fpsToInt(host->videoFps));
         if (!host->psnOnlineId.empty())
             hostTable.insert("psn_online_id", host->psnOnlineId);
         if (!host->psnAccountId.empty())
@@ -527,7 +558,16 @@ int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset 
     }
 }
 
-int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) {
+int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) const {
+    if (unlockBitrateMax) {
+        switch (res) {
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 30000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 25000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 5000;
+            default: return 25000;
+        }
+    }
     switch (res) {
         case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 20000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 15000;
@@ -651,51 +691,66 @@ void SettingsManager::setConsolePIN(Host* host, const std::string& pin) {
 }
 
 ChiakiVideoResolutionPreset SettingsManager::getVideoResolution(Host* host) {
-    if (host) return host->videoResolution;
-    return globalVideoResolution;
+    if (host && host->isRemote()) return remoteVideoResolution;
+    return localVideoResolution;
 }
 
-void SettingsManager::setVideoResolution(Host* host, ChiakiVideoResolutionPreset value) {
-    if (host) {
-        host->videoResolution = value;
-    } else {
-        globalVideoResolution = value;
-        for (auto& [name, h] : hosts) {
-            h->videoResolution = value;
-        }
-    }
+ChiakiVideoResolutionPreset SettingsManager::getLocalVideoResolution() const {
+    return localVideoResolution;
 }
 
-void SettingsManager::setVideoResolution(Host* host, const std::string& value) {
-    setVideoResolution(host, stringToResolution(value));
+void SettingsManager::setLocalVideoResolution(ChiakiVideoResolutionPreset value) {
+    localVideoResolution = value;
+}
+
+ChiakiVideoResolutionPreset SettingsManager::getRemoteVideoResolution() const {
+    return remoteVideoResolution;
+}
+
+void SettingsManager::setRemoteVideoResolution(ChiakiVideoResolutionPreset value) {
+    remoteVideoResolution = value;
 }
 
 ChiakiVideoFPSPreset SettingsManager::getVideoFPS(Host* host) {
-    if (host) return host->videoFps;
-    return globalVideoFPS;
+    if (host && host->isRemote()) return remoteVideoFPS;
+    return localVideoFPS;
 }
 
-void SettingsManager::setVideoFPS(Host* host, ChiakiVideoFPSPreset value) {
-    if (host) {
-        host->videoFps = value;
-    } else {
-        globalVideoFPS = value;
-        for (auto& [name, h] : hosts) {
-            h->videoFps = value;
-        }
-    }
+ChiakiVideoFPSPreset SettingsManager::getLocalVideoFPS() const {
+    return localVideoFPS;
 }
 
-void SettingsManager::setVideoFPS(Host* host, const std::string& value) {
-    setVideoFPS(host, stringToFps(value));
+void SettingsManager::setLocalVideoFPS(ChiakiVideoFPSPreset value) {
+    localVideoFPS = value;
 }
 
-int SettingsManager::getVideoBitrate() const {
-    return globalVideoBitrate;
+ChiakiVideoFPSPreset SettingsManager::getRemoteVideoFPS() const {
+    return remoteVideoFPS;
 }
 
-void SettingsManager::setVideoBitrate(int value) {
-    globalVideoBitrate = value;
+void SettingsManager::setRemoteVideoFPS(ChiakiVideoFPSPreset value) {
+    remoteVideoFPS = value;
+}
+
+int SettingsManager::getVideoBitrate(Host* host) const {
+    if (host && host->isRemote()) return remoteVideoBitrate;
+    return localVideoBitrate;
+}
+
+int SettingsManager::getLocalVideoBitrate() const {
+    return localVideoBitrate;
+}
+
+void SettingsManager::setLocalVideoBitrate(int value) {
+    localVideoBitrate = value;
+}
+
+int SettingsManager::getRemoteVideoBitrate() const {
+    return remoteVideoBitrate;
+}
+
+void SettingsManager::setRemoteVideoBitrate(int value) {
+    remoteVideoBitrate = value;
 }
 
 HapticPreset SettingsManager::getHaptic(Host* host) {
@@ -907,4 +962,41 @@ bool SettingsManager::getInvertAB() const {
 
 void SettingsManager::setInvertAB(bool invert) {
     globalInvertAB = invert;
+}
+
+bool SettingsManager::getHolepunchRetry() const {
+    return holepunchRetry;
+}
+
+void SettingsManager::setHolepunchRetry(bool retry) {
+    holepunchRetry = retry;
+}
+
+bool SettingsManager::getPowerUserMenuUnlocked() const {
+    return powerUserMenuUnlocked;
+}
+
+void SettingsManager::setPowerUserMenuUnlocked(bool unlocked) {
+    powerUserMenuUnlocked = unlocked;
+}
+
+bool SettingsManager::getUnlockBitrateMax() const {
+    return unlockBitrateMax;
+}
+
+void SettingsManager::setUnlockBitrateMax(bool enabled) {
+    unlockBitrateMax = enabled;
+}
+
+int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const {
+    if (unlockBitrateMax) {
+        switch (res) {
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 5000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 5000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 1000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 1000;
+            default: return 1000;
+        }
+    }
+    return 1000;
 }

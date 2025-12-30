@@ -181,33 +181,41 @@ func CompleteStep() tea.Msg {
 }
 
 func (m Model) renderNATInfo() string {
-	label := MutedStyle.Render("Network: ")
-
 	if m.natLoading {
-		return label + MutedStyle.Render("Detecting NAT type...")
+		return MutedStyle.Render("Network: ") + MutedStyle.Render("Detecting NAT type...")
 	}
 
 	if m.natResult == nil {
-		return label + MutedStyle.Render("Unknown")
+		return MutedStyle.Render("Network: ") + MutedStyle.Render("Unknown")
 	}
 
 	if m.natResult.Error != nil {
-		return label + ErrorStyle.Render("Failed: "+m.natResult.Error.Error())
+		return MutedStyle.Render("Network: ") + ErrorStyle.Render("Failed: "+m.natResult.Error.Error())
 	}
 
-	natType := m.natResult.Type.String()
-	var style lipgloss.Style
+	var mappingStyle, filteringStyle lipgloss.Style
+	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B"))
 
-	switch m.natResult.Type {
-	case nat.NATCone:
-		style = SuccessStyle
-	case nat.NATSymmetric, nat.NATBlocked:
-		style = ErrorStyle
+	switch m.natResult.Mapping {
+	case nat.MappingEndpointIndependent:
+		mappingStyle = SuccessStyle
+	case nat.MappingAddressPortDependent:
+		mappingStyle = ErrorStyle
 	default:
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B"))
+		mappingStyle = warningStyle
 	}
 
-	result := label + style.Render(natType)
-	result += "\n" + MutedStyle.Render("(Assumes this app is on the same network as your PS5)")
+	switch m.natResult.Filtering {
+	case nat.FilteringEndpointIndependent:
+		filteringStyle = SuccessStyle
+	case nat.FilteringAddressDependent, nat.FilteringAddressPortDependent:
+		filteringStyle = warningStyle
+	default:
+		filteringStyle = MutedStyle
+	}
+
+	result := MutedStyle.Render("Mapping:   ") + mappingStyle.Render(m.natResult.Mapping.String()) + "\n"
+	result += MutedStyle.Render("Filtering: ") + filteringStyle.Render(m.natResult.Filtering.String()) + "\n"
+	result += MutedStyle.Render("External:  ") + MutedStyle.Render(m.natResult.ExternalIP)
 	return result
 }

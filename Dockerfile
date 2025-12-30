@@ -2,10 +2,9 @@ FROM devkitpro/devkita64:latest
 
 RUN apt-get update && apt-get install -y \
     autoconf automake libtool pkg-config \
-    protobuf-compiler \
+    protobuf-compiler python3-protobuf \
     python3 python3-pip \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip3 install --break-system-packages protobuf grpcio-tools
+    && rm -rf /var/lib/apt/lists/*
 
 RUN dkp-pacman -Syu --noconfirm && \
     dkp-pacman -S --noconfirm \
