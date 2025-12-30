@@ -53,8 +53,8 @@ bool VideoDecoder::initCodec(bool is_PS5, int width, int height)
         m_codec_context->thread_type = FF_THREAD_FRAME;
         m_codec_context->thread_count = 1;
 #ifdef BOREALIS_USE_DEKO3D
-        // Create HW device context BEFORE opening codec (critical for HW acceleration)
-        brls::Logger::info("VideoDecoder: Creating NVTegra hardware device context...");
+        // Create HW device context BEFORE opening codec 
+	brls::Logger::info("VideoDecoder: Creating NVTegra hardware device context...");
         if (av_hwdevice_ctx_create(&m_hw_device_ctx, AV_HWDEVICE_TYPE_NVTEGRA, NULL, NULL, 0) < 0)
         {
             throw Exception("Failed to create NVTegra hardware device context");

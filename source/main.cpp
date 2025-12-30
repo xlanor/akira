@@ -11,6 +11,7 @@
 
 #include <chiaki/common.h>
 #include <chiaki/log.h>
+#include "crypto/libnx/gmac.h"
 
 #include "views/host_list_tab.hpp"
 #include "views/settings_tab.hpp"
@@ -197,6 +198,14 @@ int main(int argc, char* argv[])
 #endif
     SettingsManager::getInstance()->setLogger(&chiakiLog);
     IO::GetInstance()->SetLogger(&chiakiLog);
+
+    if (SettingsManager::getInstance()->getEnableExperimentalCrypto()) {
+        chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
+        brls::Logger::info("GHASH mode: PMULL");
+    } else {
+        chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
+        brls::Logger::info("GHASH mode: TABLE (default)");
+    }
 
     brls::Logger::info("Chiaki library initialized");
 

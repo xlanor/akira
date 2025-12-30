@@ -1,5 +1,7 @@
 #include "views/settings_tab.hpp"
+#include "views/benchmark_view.hpp"
 #include "core/discovery_manager.hpp"
+#include "crypto/libnx/gmac.h"
 
 #include <ctime>
 #include <iomanip>
@@ -49,6 +51,13 @@ SettingsTab::SettingsTab() {
     initPsnAccountSection();
     initCompanionSection();
     initPowerUserSection();
+    initExperimentalCryptoToggle();
+
+    runBenchmarkBtn->registerClickAction([this](brls::View*) {
+        runGhashBenchmark();
+        return true;
+    });
+
     updateCredentialsDisplay();
 }
 
@@ -631,4 +640,29 @@ void SettingsTab::updatePowerUserVisibility() {
     } else {
         powerUserSection->setVisibility(brls::Visibility::GONE);
     }
+}
+
+void SettingsTab::initExperimentalCryptoToggle() {
+    bool currentValue = settings->getEnableExperimentalCrypto();
+
+    experimentalCryptoToggle->init(
+        "Enable Experimental PMULL GHASH",
+        currentValue,
+        [this](bool isOn) {
+            settings->setEnableExperimentalCrypto(isOn);
+            settings->writeFile();
+            if (isOn) {
+                chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
+            } else {
+                chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
+            }
+            brls::Logger::info("GHASH mode: {}", isOn ? "PMULL" : "TABLE");
+        }
+    );
+}
+
+void SettingsTab::runGhashBenchmark() {
+    auto* benchmarkView = new BenchmarkView();
+    brls::Application::pushActivity(new brls::Activity(benchmarkView));
+    benchmarkView->startBenchmark();
 }
