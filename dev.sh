@@ -123,6 +123,18 @@ fi
 # Build
 print_status "Building..."
 
+ORIGINAL_REVISION=$(grep 'set(VERSION_REVISION' "${SCRIPT_DIR}/CMakeLists.txt" | sed 's/.*"\(.*\)".*/\1/')
+DEV_TIMESTAMP=$(date +%d%m%y-%H%M%S)
+DEV_REVISION="${ORIGINAL_REVISION}-dev-${DEV_TIMESTAMP}"
+
+cleanup_version() {
+    sed -i "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
+}
+trap cleanup_version EXIT
+
+print_status "Setting dev version: ${DEV_REVISION}"
+sed -i "s/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/set(VERSION_REVISION \"${DEV_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
+
 docker run --rm \
     -v "${SCRIPT_DIR}:/build" \
     -w /build \

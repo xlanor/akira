@@ -31,13 +31,13 @@ private:
     BRLS_BIND(brls::Button, refreshTokenBtn, "settings/refreshTokenBtn");
     BRLS_BIND(brls::Button, clearPsnBtn, "settings/clearPsnBtn");
 
-    // Credential display cells
     BRLS_BIND(brls::DetailCell, credOnlineIdCell, "settings/credOnlineId");
     BRLS_BIND(brls::DetailCell, credAccountIdCell, "settings/credAccountId");
     BRLS_BIND(brls::DetailCell, credAccessTokenCell, "settings/credAccessToken");
     BRLS_BIND(brls::DetailCell, credRefreshTokenCell, "settings/credRefreshToken");
     BRLS_BIND(brls::DetailCell, credTokenExpiryCell, "settings/credTokenExpiry");
     BRLS_BIND(brls::DetailCell, credDuidCell, "settings/credDuid");
+    BRLS_BIND(brls::Button, revealCredentialsBtn, "settings/revealCredentials");
 
     BRLS_BIND(brls::Label, versionLabel, "settings/version");
     BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
@@ -48,8 +48,10 @@ private:
     SettingsManager* settings = nullptr;
     int powerUserClickCount = 0;
     std::chrono::steady_clock::time_point lastPowerUserClick;
+    bool credentialsRevealed = false;
 
     void updateCredentialsDisplay();
+    std::string censorString(const std::string& str);
 
     void initLocalResolutionSelector();
     void initRemoteResolutionSelector();

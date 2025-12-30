@@ -1,13 +1,65 @@
 #include "views/config_view_tab.hpp"
 #include <fstream>
+#include <vector>
+
+static const std::vector<std::string> sensitiveKeys = {
+    "global_duid", "psn_access_token", "psn_account_id",
+    "psn_refresh_token", "remote_duid", "rp_key", "rp_regist_key"
+};
 
 ConfigViewTab::ConfigViewTab() {
     this->inflateFromXMLRes("xml/tabs/config_view_tab.xml");
+
+    revealBtn->registerClickAction([this](brls::View* view) {
+        credentialsRevealed = !credentialsRevealed;
+        revealBtn->setText(credentialsRevealed ? "Hide Secrets" : "Reveal Secrets");
+        configContainer->clearViews();
+        loadConfigFromFile();
+        return true;
+    });
+
     loadConfigFromFile();
 }
 
 brls::View* ConfigViewTab::create() {
     return new ConfigViewTab();
+}
+
+std::string ConfigViewTab::censorValue(const std::string& value) {
+    if (value.length() <= 5) return value;
+    return "****" + value.substr(value.length() - 5);
+}
+
+std::string ConfigViewTab::processLine(const std::string& line) {
+    if (credentialsRevealed) return line;
+
+    for (const auto& key : sensitiveKeys) {
+        size_t keyPos = line.find(key);
+        if (keyPos == std::string::npos) continue;
+
+        size_t eqPos = line.find('=', keyPos);
+        if (eqPos == std::string::npos) continue;
+
+        size_t valueStart = eqPos + 1;
+        while (valueStart < line.length() && (line[valueStart] == ' ' || line[valueStart] == '"'))
+            valueStart++;
+
+        size_t valueEnd = line.length();
+        if (line.back() == '"') valueEnd--;
+
+        if (valueStart >= valueEnd) continue;
+
+        std::string value = line.substr(valueStart, valueEnd - valueStart);
+        std::string censored = censorValue(value);
+
+        bool hasQuotes = line.find('"', eqPos) != std::string::npos;
+        if (hasQuotes) {
+            return line.substr(0, eqPos + 1) + " \"" + censored + "\"";
+        } else {
+            return line.substr(0, eqPos + 1) + " " + censored;
+        }
+    }
+    return line;
 }
 
 void ConfigViewTab::loadConfigFromFile() {
@@ -27,7 +79,8 @@ void ConfigViewTab::loadConfigFromFile() {
             configContainer->addView(spacer);
         } else {
             bool isHeader = !line.empty() && line.front() == '[' && line.back() == ']';
-            addLine(line, isHeader);
+            std::string processedLine = processLine(line);
+            addLine(processedLine, isHeader);
         }
     }
 }

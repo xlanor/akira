@@ -8,6 +8,11 @@
     paddingRight="@style/brls/tab_frame/content_padding_sides"
     paddingBottom="@style/brls/tab_frame/content_padding_top_bottom">
 
+    <brls:Button
+        id="config/revealBtn"
+        text="Reveal Secrets"
+        marginBottom="15"/>
+
     <brls:ScrollingFrame
         width="auto"
         height="auto"
