@@ -21,6 +21,7 @@ private:
     BRLS_BIND(brls::SliderCell, remoteBitrateSlider, "settings/remoteBitrate");
     BRLS_BIND(brls::SelectorCell, hapticSelector, "settings/haptic");
     BRLS_BIND(brls::BooleanCell, invertABToggle, "settings/invertAB");
+    BRLS_BIND(brls::SelectorCell, gyroSourceSelector, "settings/gyroSource");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
     BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
     BRLS_BIND(brls::Button, lookupBtn, "settings/lookupBtn");
@@ -63,6 +64,7 @@ private:
     void updateRemoteBitrateSlider();
     void initHapticSelector();
     void initInvertABToggle();
+    void initGyroSourceSelector();
     void initHolepunchRetryToggle();
     void initPsnAccountSection();
     void initCompanionSection();

@@ -161,6 +161,8 @@ void SettingsManager::parseTomlFile() {
             unlockBitrateMax = *val;
         if (auto val = config["enable_experimental_crypto"].value<bool>())
             enableExperimentalCrypto = *val;
+        if (auto val = config["gyro_source"].value<int64_t>())
+            globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
             companionHost = *val;
         if (auto val = config["companion_port"].value<int64_t>())
@@ -458,6 +460,8 @@ int SettingsManager::writeFile() {
         config.insert("unlock_bitrate_max", unlockBitrateMax);
     if (enableExperimentalCrypto)
         config.insert("enable_experimental_crypto", enableExperimentalCrypto);
+    if (globalGyroSource != GyroSource::Auto)
+        config.insert("gyro_source", static_cast<int>(globalGyroSource));
 
     for (const auto& [name, host] : hosts) {
         brls::Logger::debug("Writing host config: {}", name);
@@ -1011,4 +1015,12 @@ bool SettingsManager::getEnableExperimentalCrypto() const {
 
 void SettingsManager::setEnableExperimentalCrypto(bool enabled) {
     enableExperimentalCrypto = enabled;
+}
+
+GyroSource SettingsManager::getGyroSource() const {
+    return globalGyroSource;
+}
+
+void SettingsManager::setGyroSource(GyroSource source) {
+    globalGyroSource = source;
 }

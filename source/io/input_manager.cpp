@@ -185,14 +185,34 @@ bool InputManager::readSixAxis(ChiakiControllerState* state)
     else if (style_set & HidNpadStyleTag_NpadJoyDual)
     {
         u64 attrib = padGetAttributes(&m_pad);
-        if (attrib & HidNpadAttribute_IsLeftConnected)
-        {
+        GyroSource gyroSource = SettingsManager::getInstance()->getGyroSource();
+
+        bool leftConnected = attrib & HidNpadAttribute_IsLeftConnected;
+        bool rightConnected = attrib & HidNpadAttribute_IsRightConnected;
+
+        bool useLeft = false;
+        bool useRight = false;
+
+        switch (gyroSource) {
+            case GyroSource::Left:
+                useLeft = leftConnected;
+                break;
+            case GyroSource::Right:
+                useRight = rightConnected;
+                break;
+            case GyroSource::Auto:
+            default:
+                if (leftConnected)
+                    useLeft = true;
+                else if (rightConnected)
+                    useRight = true;
+                break;
+        }
+
+        if (useLeft)
             hidGetSixAxisSensorStates(m_sixaxis_handles[2], &sixaxis, 1);
-        }
-        else if (attrib & HidNpadAttribute_IsRightConnected)
-        {
+        else if (useRight)
             hidGetSixAxisSensorStates(m_sixaxis_handles[3], &sixaxis, 1);
-        }
     }
 
     state->gyro_x = sixaxis.angular_velocity.x * 2.0f * M_PI;

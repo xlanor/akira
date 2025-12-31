@@ -173,6 +173,12 @@
                 marginLeft="15"
                 marginRight="15"/>
 
+            <brls:SelectorCell
+                id="settings/gyroSource"
+                title="Gyro Source"
+                marginLeft="15"
+                marginRight="15"/>
+
         </brls:Box>
 
         <brls:Header

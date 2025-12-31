@@ -17,6 +17,12 @@ enum class HapticPreset {
     Strong = 2
 };
 
+enum class GyroSource {
+    Auto = 0,
+    Left = 1,
+    Right = 2
+};
+
 class SettingsManager {
 protected:
     SettingsManager();
@@ -49,6 +55,7 @@ private:
     bool powerUserMenuUnlocked = false;
     bool unlockBitrateMax = false;
     bool enableExperimentalCrypto = true;
+    GyroSource globalGyroSource = GyroSource::Auto;
 
     // Companion server settings
     std::string companionHost;
@@ -161,6 +168,9 @@ public:
 
     bool getInvertAB() const;
     void setInvertAB(bool invert);
+
+    GyroSource getGyroSource() const;
+    void setGyroSource(GyroSource source);
 
     bool getHolepunchRetry() const;
     void setHolepunchRetry(bool retry);

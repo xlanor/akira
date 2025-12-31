@@ -47,6 +47,7 @@ SettingsTab::SettingsTab() {
     initRemoteBitrateSlider();
     initHapticSelector();
     initInvertABToggle();
+    initGyroSourceSelector();
     initHolepunchRetryToggle();
     initPsnAccountSection();
     initCompanionSection();
@@ -312,6 +313,22 @@ void SettingsTab::initInvertABToggle() {
             settings->setInvertAB(isOn);
             settings->writeFile();
             brls::Logger::info("Invert A/B set to {}", isOn ? "true" : "false");
+        }
+    );
+}
+
+void SettingsTab::initGyroSourceSelector() {
+    std::vector<std::string> options = {"Auto", "Left Joy-Con", "Right Joy-Con"};
+    int currentIndex = static_cast<int>(settings->getGyroSource());
+
+    gyroSourceSelector->init(
+        "Gyro Source",
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            settings->setGyroSource(static_cast<GyroSource>(selected));
+            settings->writeFile();
         }
     );
 }
