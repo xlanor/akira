@@ -56,6 +56,7 @@ Actually, just read the whole wiki.
 
 This software was built with reference/code from:
 
+- [Florian Grill (PS/PXPlay dev](https://streamingdv.github.io/psplay/index.html) for the reverse engineering of the PS Remote Play API
 - [Streetpea](https://github.com/streetpea/chiaki-ng) the original chiaki-ng code
 - [moonlight-switch](https://github.com/XITRIX/Moonlight-Switch) XITRIX's deko3d renderer for moonlight for the deko3d bits
 - [switchfin](https://github.com/dragonflylee/switchfin/blob/bbcf9037fc3b11a78f5e0b7489d9e776fff2d99c/scripts/switch/mpv/deko3d.patch#L371) The patches used by dragonflylee in switchfin
