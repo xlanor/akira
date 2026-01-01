@@ -39,7 +39,7 @@ The biggest change is probably the removal of openGL and cutover to deko3d.
 
 The second biggest change is probably ensuring that hardware accelerated crypto is used on the network stream
 
-The biggest feature change is the addition of PSN remote play. Thanks to the hard work by Streetpea on chiaki-ng, I just call whatever he has built. You should see two screens come up if this is successful.
+The biggest feature change is the addition of PSN remote play. Thanks to the hard work by Streetpea on chiaki-ng and grill2010 for reverse engineering the PSN api, I just call whatever he has built. You should see two screens come up if this is successful.
 
 The first screen is going to be for the CTRL holepunching, and the second screen for DATA holepunching after the session has been initalised. Rather than show an empty screen I decided to just stream the logs.
 
@@ -56,7 +56,6 @@ Actually, just read the whole wiki.
 
 This software was built with reference/code from:
 
-- [Florian Grill (PS/PXPlay dev](https://streamingdv.github.io/psplay/index.html) for the reverse engineering of the PS Remote Play API
 - [Streetpea](https://github.com/streetpea/chiaki-ng) the original chiaki-ng code
 - [moonlight-switch](https://github.com/XITRIX/Moonlight-Switch) XITRIX's deko3d renderer for moonlight for the deko3d bits
 - [switchfin](https://github.com/dragonflylee/switchfin/blob/bbcf9037fc3b11a78f5e0b7489d9e776fff2d99c/scripts/switch/mpv/deko3d.patch#L371) The patches used by dragonflylee in switchfin
@@ -64,6 +63,7 @@ This software was built with reference/code from:
 
 
 ## Credits
+- [Florian Grill (PXPlay dev](https://streamingdv.github.io/psplay/index.html) for the reverse engineering of the PS Remote Play API
 - [Streetpea](https://github.com/streetpea/chiaki-ng) for chiaki-ng and your tireless effort in maintaining this library.
 - [moonlight-switch](https://github.com/XITRIX/Moonlight-Switch) for the deko3d rendering code that I based it off with some changes 
 - [thestr4ng3r](https://git.sr.ht/~thestr4ng3r/chiaki) for the original chiaki
