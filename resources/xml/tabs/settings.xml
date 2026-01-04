@@ -179,6 +179,12 @@
                 marginLeft="15"
                 marginRight="15"/>
 
+            <brls:BooleanCell
+                id="settings/sleepOnExit"
+                title="Sleep Console on Exit"
+                marginLeft="15"
+                marginRight="15"/>
+
         </brls:Box>
 
         <brls:Header

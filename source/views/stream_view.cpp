@@ -62,8 +62,7 @@ void StreamView::setupCallbacks()
 
     exitSubscription = brls::Application::getExitEvent()->subscribe([weak]() {
         if (auto self = weak.lock()) {
-            if (self->sessionStarted) {
-                brls::Logger::info("App exiting - putting PS5 to sleep");
+            if (self->sessionStarted && self->settings->getSleepOnExit()) {
                 self->host->gotoBed();
             }
         }
