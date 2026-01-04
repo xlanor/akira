@@ -24,7 +24,9 @@ show_usage() {
     echo "Options:"
     echo "  --rebuild      Force full rebuild (includes --clean-libs)"
     echo "  --build-only   Build without deploying"
+    echo "  --deploy-only  Deploy without rebuilding"
     echo "  --shell        Open shell in build container"
+    echo "  --clean        Clean build directory"
     echo "  --mute-chiaki  Mute chiaki library logs"
     echo "  --clean-libs   Clean library build artifacts (chiaki-ng, curl-libnx)"
     echo ""
@@ -48,10 +50,12 @@ clean_lib_artifacts() {
 
 # Parse arguments
 BUILD_ONLY=false
+DEPLOY_ONLY=false
 FORCE_REBUILD=false
 OPEN_SHELL=false
 MUTE_CHIAKI=false
 CLEAN_LIBS=false
+CLEAN_BUILD=false
 
 for arg in "$@"; do
     case $arg in
@@ -62,6 +66,14 @@ for arg in "$@"; do
             ;;
         --build-only)
             BUILD_ONLY=true
+            shift
+            ;;
+        --deploy-only)
+            DEPLOY_ONLY=true
+            shift
+            ;;
+        --clean)
+            CLEAN_BUILD=true
             shift
             ;;
         --shell)
@@ -86,6 +98,13 @@ done
 # Clean library artifacts if requested
 if [ "$CLEAN_LIBS" = true ]; then
     clean_lib_artifacts
+fi
+
+# Clean build directory if requested
+if [ "$CLEAN_BUILD" = true ]; then
+    print_status "Cleaning build directory..."
+    rm -rf "${BUILD_DIR}"
+    print_status "Build directory cleaned"
 fi
 
 # Docker image name
@@ -120,42 +139,51 @@ if [ "$OPEN_SHELL" = true ]; then
     exit 0
 fi
 
-# Build
-print_status "Building..."
+# Deploy-only mode check
+if [ "$DEPLOY_ONLY" = true ]; then
+    if [ ! -f "$NRO_FILE" ]; then
+        print_error "NRO not found at $NRO_FILE - build first"
+        exit 1
+    fi
+    print_status "Deploy-only mode - using existing build"
+else
+    # Build
+    print_status "Building..."
 
-ORIGINAL_REVISION=$(grep 'set(VERSION_REVISION' "${SCRIPT_DIR}/CMakeLists.txt" | sed 's/.*"\(.*\)".*/\1/')
-DEV_TIMESTAMP=$(date +%d%m%y-%H%M%S)
-DEV_REVISION="${ORIGINAL_REVISION}-dev-${DEV_TIMESTAMP}"
+    ORIGINAL_REVISION=$(grep 'set(VERSION_REVISION' "${SCRIPT_DIR}/CMakeLists.txt" | sed 's/.*"\(.*\)".*/\1/')
+    DEV_TIMESTAMP=$(date +%d%m%y-%H%M%S)
+    DEV_REVISION="${ORIGINAL_REVISION}-dev-${DEV_TIMESTAMP}"
 
-cleanup_version() {
-    sed -i "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
-}
-trap cleanup_version EXIT
+    cleanup_version() {
+        sed -i "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
+    }
+    trap cleanup_version EXIT
 
-print_status "Setting dev version: ${DEV_REVISION}"
-sed -i "s/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/set(VERSION_REVISION \"${DEV_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
+    print_status "Setting dev version: ${DEV_REVISION}"
+    sed -i "s/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/set(VERSION_REVISION \"${DEV_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
 
-docker run --rm \
-    -v "${SCRIPT_DIR}:/build" \
-    -w /build \
-    -e "MUTE_CHIAKI=${MUTE_CHIAKI}" \
-    "$DOCKER_IMAGE" \
-    bash -c "
-        set -e
-        git config --global --add safe.directory /build
-        git config --global --add safe.directory /build/library/borealis
-        git config --global --add safe.directory /build/library/chiaki-ng
-        git config --global --add safe.directory /build/library/curl-libnx
-        chmod +x /build/scripts/build-docker.sh
-        /build/scripts/build-docker.sh
-    "
+    docker run --rm \
+        -v "${SCRIPT_DIR}:/build" \
+        -w /build \
+        -e "MUTE_CHIAKI=${MUTE_CHIAKI}" \
+        "$DOCKER_IMAGE" \
+        bash -c "
+            set -e
+            git config --global --add safe.directory /build
+            git config --global --add safe.directory /build/library/borealis
+            git config --global --add safe.directory /build/library/chiaki-ng
+            git config --global --add safe.directory /build/library/curl-libnx
+            chmod +x /build/scripts/build-docker.sh
+            /build/scripts/build-docker.sh
+        "
 
-if [ ! -f "$NRO_FILE" ]; then
-    print_error "Build failed - NRO not found at $NRO_FILE"
-    exit 1
+    if [ ! -f "$NRO_FILE" ]; then
+        print_error "Build failed - NRO not found at $NRO_FILE"
+        exit 1
+    fi
+
+    print_status "Build successful: $NRO_FILE"
 fi
-
-print_status "Build successful: $NRO_FILE"
 
 # Deploy if not build-only and IP is provided
 if [ "$BUILD_ONLY" = true ]; then

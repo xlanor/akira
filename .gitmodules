@@ -33,3 +33,7 @@
 [submodule "library/tomlplusplus"]
 	path = library/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus.git
+[submodule "library/ffmpeg"]
+	path = library/ffmpeg
+	url = git@github.com:xlanor/FFmpeg.git
+	branch = ffmpeg-8.0
