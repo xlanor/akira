@@ -48,6 +48,7 @@ SettingsTab::SettingsTab() {
     initHapticSelector();
     initInvertABToggle();
     initGyroSourceSelector();
+    initSleepOnExitToggle();
     initHolepunchRetryToggle();
     initPsnAccountSection();
     initCompanionSection();
@@ -328,6 +329,19 @@ void SettingsTab::initGyroSourceSelector() {
         [](int selected) {},
         [this](int selected) {
             settings->setGyroSource(static_cast<GyroSource>(selected));
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initSleepOnExitToggle() {
+    bool currentValue = settings->getSleepOnExit();
+
+    sleepOnExitToggle->init(
+        "Sleep Console on Exit",
+        currentValue,
+        [this](bool isOn) {
+            settings->setSleepOnExit(isOn);
             settings->writeFile();
         }
     );

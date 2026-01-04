@@ -56,6 +56,7 @@ private:
     bool unlockBitrateMax = false;
     bool enableExperimentalCrypto = true;
     GyroSource globalGyroSource = GyroSource::Auto;
+    bool sleepOnExit = false;
 
     // Companion server settings
     std::string companionHost;
@@ -183,6 +184,9 @@ public:
 
     bool getEnableExperimentalCrypto() const;
     void setEnableExperimentalCrypto(bool enabled);
+
+    bool getSleepOnExit() const;
+    void setSleepOnExit(bool enabled);
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP

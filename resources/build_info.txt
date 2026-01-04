@@ -1,6 +1,6 @@
-Akira 0.2.3301225122415
-Commit: bfb0b7f
-Build: 2025-12-30 12:24:38 UTC
+Akira 0.2.4040126183041
+Commit: f9ca644
+Build: 2026-01-04 18:31:01 UTC
 
 === Custom Libraries ===
 chiaki-ng 
@@ -13,7 +13,10 @@ devkit-env 1.0.1-2
 devkitA64 r28-1
 devkitA64-gdb 14.1-1
 devkitARM r67-4
+devkita64-binutils 2.45.1-2
 devkita64-cmake 1.1.3-1
+devkita64-gcc 15.2.0-3
+devkita64-newlib 4.5.0.20241231-2
 devkita64-rules 1.1.1-1
 devkitarm-binutils 2.45.1-2
 devkitarm-crtls 1.2.6-1

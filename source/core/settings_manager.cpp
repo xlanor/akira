@@ -161,6 +161,8 @@ void SettingsManager::parseTomlFile() {
             unlockBitrateMax = *val;
         if (auto val = config["enable_experimental_crypto"].value<bool>())
             enableExperimentalCrypto = *val;
+        if (auto val = config["sleep_on_exit"].value<bool>())
+            sleepOnExit = *val;
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -460,6 +462,8 @@ int SettingsManager::writeFile() {
         config.insert("unlock_bitrate_max", unlockBitrateMax);
     if (enableExperimentalCrypto)
         config.insert("enable_experimental_crypto", enableExperimentalCrypto);
+    if (sleepOnExit)
+        config.insert("sleep_on_exit", sleepOnExit);
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", static_cast<int>(globalGyroSource));
 
@@ -1023,4 +1027,12 @@ GyroSource SettingsManager::getGyroSource() const {
 
 void SettingsManager::setGyroSource(GyroSource source) {
     globalGyroSource = source;
+}
+
+bool SettingsManager::getSleepOnExit() const {
+    return sleepOnExit;
+}
+
+void SettingsManager::setSleepOnExit(bool enabled) {
+    sleepOnExit = enabled;
 }
