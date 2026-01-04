@@ -1,0 +1,97 @@
+name: Alpha Build
+
+on:
+  push:
+    branches:
+      - alpha
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Extract version info
+        id: version
+        run: |
+          VERSION_MAJOR=$(grep 'set(VERSION_MAJOR' CMakeLists.txt | sed 's/[^0-9]*//g')
+          VERSION_MINOR=$(grep 'set(VERSION_MINOR' CMakeLists.txt | sed 's/[^0-9]*//g')
+          VERSION_REVISION=$(grep 'set(VERSION_REVISION' CMakeLists.txt | sed 's/[^0-9]*//g')
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REVISION}-alpha.${TIMESTAMP}.${SHORT_SHA}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Alpha version: ${VERSION}"
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Akira
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/build" \
+            -w /build \
+            ghcr.io/${{ github.repository_owner }}/akira-builder:latest \
+            bash -c "
+              set -e
+              git config --global --add safe.directory /build
+              git config --global --add safe.directory /build/library/borealis
+              git config --global --add safe.directory /build/library/chiaki-ng
+              chmod +x /build/scripts/build-docker.sh
+              /build/scripts/build-docker.sh
+            "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: akira-nro
+          path: build/akira.nro
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download akira-nro artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: akira-nro
+
+      - name: Delete existing alpha release
+        uses: dev-drprasad/delete-tag-and-release@v1.1
+        with:
+          tag_name: alpha
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_release: true
+        continue-on-error: true
+
+      - name: Create Alpha Pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: alpha
+          name: "Alpha Build - ${{ needs.build.outputs.version }}"
+          body: |
+            **Alpha Build**
+
+            Version: `${{ needs.build.outputs.version }}`
+            Commit: `${{ github.sha }}`
+
+            ⚠️ This is an automated alpha build from the `alpha` branch. It may be unstable.
+
+            This release is automatically updated on every push to the alpha branch.
+          files: akira.nro
+          prerelease: true
+          make_latest: false
