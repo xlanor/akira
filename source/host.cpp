@@ -287,6 +287,7 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
     connectInfo.host = hostAddr.c_str();
     connectInfo.video_profile = videoProfile;
     connectInfo.video_profile_auto_downgrade = true;
+    connectInfo.enable_idr_on_fec_failure = settings->getRequestIdrOnFecFailure();
     connectInfo.holepunch_session = holepunch;
 
     if (holepunch)

@@ -57,6 +57,7 @@ private:
     bool enableExperimentalCrypto = true;
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
+    bool requestIdrOnFecFailure = true;
 
     // Companion server settings
     std::string companionHost;
@@ -187,6 +188,9 @@ public:
 
     bool getSleepOnExit() const;
     void setSleepOnExit(bool enabled);
+
+    bool getRequestIdrOnFecFailure() const;
+    void setRequestIdrOnFecFailure(bool enabled);
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP

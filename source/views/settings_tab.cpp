@@ -54,6 +54,7 @@ SettingsTab::SettingsTab() {
     initCompanionSection();
     initPowerUserSection();
     initExperimentalCryptoToggle();
+    initRequestIdrOnFecFailureToggle();
 
     runBenchmarkBtn->registerClickAction([this](brls::View*) {
         runGhashBenchmark();
@@ -722,4 +723,17 @@ void SettingsTab::runGhashBenchmark() {
     auto* benchmarkView = new BenchmarkView();
     brls::Application::pushActivity(new brls::Activity(benchmarkView));
     benchmarkView->startBenchmark();
+}
+
+void SettingsTab::initRequestIdrOnFecFailureToggle() {
+    bool currentValue = settings->getRequestIdrOnFecFailure();
+
+    requestIdrOnFecFailureToggle->init(
+        "Request IDR on FEC Failure",
+        currentValue,
+        [this](bool isOn) {
+            settings->setRequestIdrOnFecFailure(isOn);
+            settings->writeFile();
+        }
+    );
 }
