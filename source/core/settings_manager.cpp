@@ -163,6 +163,8 @@ void SettingsManager::parseTomlFile() {
             enableExperimentalCrypto = *val;
         if (auto val = config["sleep_on_exit"].value<bool>())
             sleepOnExit = *val;
+        if (auto val = config["request_idr_on_fec_failure"].value<bool>())
+            requestIdrOnFecFailure = *val;
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -464,6 +466,7 @@ int SettingsManager::writeFile() {
         config.insert("enable_experimental_crypto", enableExperimentalCrypto);
     if (sleepOnExit)
         config.insert("sleep_on_exit", sleepOnExit);
+    config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", static_cast<int>(globalGyroSource));
 
@@ -1035,4 +1038,12 @@ bool SettingsManager::getSleepOnExit() const {
 
 void SettingsManager::setSleepOnExit(bool enabled) {
     sleepOnExit = enabled;
+}
+
+bool SettingsManager::getRequestIdrOnFecFailure() const {
+    return requestIdrOnFecFailure;
+}
+
+void SettingsManager::setRequestIdrOnFecFailure(bool enabled) {
+    requestIdrOnFecFailure = enabled;
 }

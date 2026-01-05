@@ -228,6 +228,20 @@
                 marginTop="5"
                 marginBottom="10"/>
 
+            <brls:BooleanCell
+                id="settings/requestIdrOnFecFailure"
+                title="Request IDR on FEC Failure"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Request keyframe when frame recovery fails. Improves recovery but may cause brief freezes."
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
         </brls:Box>
 
         <brls:Header

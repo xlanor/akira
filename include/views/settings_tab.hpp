@@ -24,6 +24,7 @@ private:
     BRLS_BIND(brls::SelectorCell, gyroSourceSelector, "settings/gyroSource");
     BRLS_BIND(brls::BooleanCell, sleepOnExitToggle, "settings/sleepOnExit");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
+    BRLS_BIND(brls::BooleanCell, requestIdrOnFecFailureToggle, "settings/requestIdrOnFecFailure");
     BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
     BRLS_BIND(brls::Button, lookupBtn, "settings/lookupBtn");
     BRLS_BIND(brls::InputCell, psnAccountIdInput, "settings/psnAccountId");
@@ -68,6 +69,7 @@ private:
     void initGyroSourceSelector();
     void initSleepOnExitToggle();
     void initHolepunchRetryToggle();
+    void initRequestIdrOnFecFailureToggle();
     void initPsnAccountSection();
     void initCompanionSection();
     void initPowerUserSection();
