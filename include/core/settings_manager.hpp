@@ -58,6 +58,7 @@ private:
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
+    float packetLossMax = 0.05f;
 
     // Companion server settings
     std::string companionHost;
@@ -191,6 +192,9 @@ public:
 
     bool getRequestIdrOnFecFailure() const;
     void setRequestIdrOnFecFailure(bool enabled);
+
+    float getPacketLossMax() const;
+    void setPacketLossMax(float value);
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP

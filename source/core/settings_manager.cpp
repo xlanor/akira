@@ -165,6 +165,8 @@ void SettingsManager::parseTomlFile() {
             sleepOnExit = *val;
         if (auto val = config["request_idr_on_fec_failure"].value<bool>())
             requestIdrOnFecFailure = *val;
+        if (auto val = config["packet_loss_max"].value<double>())
+            packetLossMax = static_cast<float>(*val);
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -467,6 +469,7 @@ int SettingsManager::writeFile() {
     if (sleepOnExit)
         config.insert("sleep_on_exit", sleepOnExit);
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
+    config.insert("packet_loss_max", static_cast<double>(packetLossMax));
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", static_cast<int>(globalGyroSource));
 
@@ -1046,4 +1049,12 @@ bool SettingsManager::getRequestIdrOnFecFailure() const {
 
 void SettingsManager::setRequestIdrOnFecFailure(bool enabled) {
     requestIdrOnFecFailure = enabled;
+}
+
+float SettingsManager::getPacketLossMax() const {
+    return packetLossMax;
+}
+
+void SettingsManager::setPacketLossMax(float value) {
+    packetLossMax = value;
 }

@@ -55,6 +55,7 @@ SettingsTab::SettingsTab() {
     initPowerUserSection();
     initExperimentalCryptoToggle();
     initRequestIdrOnFecFailureToggle();
+    initPacketLossMaxSlider();
 
     runBenchmarkBtn->registerClickAction([this](brls::View*) {
         runGhashBenchmark();
@@ -736,4 +737,24 @@ void SettingsTab::initRequestIdrOnFecFailureToggle() {
             settings->writeFile();
         }
     );
+}
+
+void SettingsTab::initPacketLossMaxSlider() {
+    float currentValue = settings->getPacketLossMax();
+    int currentPercent = static_cast<int>(currentValue * 100.0f);
+
+    packetLossMaxSlider->detail->setWidth(60);
+    packetLossMaxSlider->detail->setShrink(0);
+    packetLossMaxSlider->init(
+        "Packet Loss Max Reported",
+        currentValue,
+        [this](float value) {
+            int percent = static_cast<int>(value * 100.0f);
+            settings->setPacketLossMax(value);
+            packetLossMaxSlider->detail->setText(std::to_string(percent) + "%");
+            settings->writeFile();
+        }
+    );
+    packetLossMaxSlider->detail->setText(std::to_string(currentPercent) + "%");
+    packetLossMaxSlider->slider->setStep(0.01f);
 }

@@ -44,7 +44,7 @@
 
             <brls:SliderCell
                 id="settings/localBitrate"
-                title="Bitrate"
+                title="Target Bitrate"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -85,7 +85,7 @@
 
             <brls:SliderCell
                 id="settings/remoteBitrate"
-                title="Bitrate"
+                title="Target Bitrate"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -236,6 +236,20 @@
 
             <brls:Label
                 text="Request keyframe when frame recovery fails. Improves recovery but may cause brief freezes."
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:SliderCell
+                id="settings/packetLossMax"
+                title="Packet Loss Max Reported"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Limits reported packet loss to server. Lower values prevent quality degradation but may cause buffer issues on bad networks."
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"

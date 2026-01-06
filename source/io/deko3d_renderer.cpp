@@ -770,7 +770,7 @@ void Deko3dRenderer::renderStatsOverlay()
     snprintf(statsText, sizeof(statsText),
         "=== Requested ===\n"
         "%dx%d @ %dfps\n"
-        "Bitrate: %d kbps\n"
+        "Target: %d kbps\n"
         "Codec: %s\n"
         "\n"
         "=== Rendered ===\n"
@@ -781,6 +781,7 @@ void Deko3dRenderer::renderStatsOverlay()
         "\n"
         "=== Network ===\n"
         "Packet Loss (Live): %.1f%%\n"
+        "Reported: %.1f Mbps\n"
         "Frame Loss: %zu (Rec: %zu)\n"
         "Duration: %lum%02lus\n"
         "GHASH: %s",
@@ -798,6 +799,7 @@ void Deko3dRenderer::renderStatsOverlay()
         m_stats.faked_frames,
         m_stats.queue_size,
         m_stats.packet_loss_percent,
+        m_stats.measured_bitrate_mbps,
         m_stats.network_frames_lost,
         m_stats.frames_recovered,
         mins,

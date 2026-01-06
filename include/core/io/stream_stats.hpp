@@ -33,6 +33,8 @@ struct StreamStats
     uint64_t packets_received = 0;
     uint64_t packets_lost = 0;
 
+    float measured_bitrate_mbps = 0.0f;
+
     size_t network_frames_lost = 0;
     size_t frames_recovered = 0;
 

@@ -263,6 +263,7 @@ StreamStats IO::getStreamStats()
         stats.packets_lost = lost;
         if (received + lost > 0)
             stats.packet_loss_percent = static_cast<float>(lost) / static_cast<float>(received + lost) * 100.0f;
+        stats.measured_bitrate_mbps = static_cast<float>(m_session->stream_connection.measured_bitrate);
     }
 
     stats.network_frames_lost = m_network_frames_lost;
