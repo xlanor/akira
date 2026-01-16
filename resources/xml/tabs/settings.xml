@@ -99,6 +99,47 @@
 
         </brls:Box>
 
+        <brls:Header
+            title="VPN Settings"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30">
+
+            <brls:SelectorCell
+                id="settings/vpnResolution"
+                title="Resolution"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SelectorCell
+                id="settings/vpnFps"
+                title="Frame Rate"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SliderCell
+                id="settings/vpnBitrate"
+                title="Target Bitrate"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Settings for WireGuard VPN connections"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+        </brls:Box>
+
         <brls:Box
             id="settings/powerUserSection"
             width="auto"
@@ -250,6 +291,20 @@
 
             <brls:Label
                 text="Limits reported packet loss to server. Lower values prevent quality degradation but may cause buffer issues on bad networks."
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:BooleanCell
+                id="settings/enableFileLogging"
+                title="Enable File Logging"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Save logs to SD card (/switch/akira/logs/). Requires app restart."
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"

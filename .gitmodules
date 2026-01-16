@@ -33,3 +33,6 @@
 [submodule "library/tomlplusplus"]
 	path = library/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus.git
+[submodule "library/switch-wireguard"]
+	path = library/switch-wireguard
+	url = https://github.com/xlanor/wg-nx.git

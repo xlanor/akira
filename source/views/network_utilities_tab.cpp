@@ -1,4 +1,5 @@
 #include "views/network_utilities_tab.hpp"
+#include "core/wireguard_manager.hpp"
 #include <vector>
 
 NetworkUtilitiesTab::NetworkUtilitiesTab() {
@@ -8,6 +9,133 @@ NetworkUtilitiesTab::NetworkUtilitiesTab() {
         onCheckNatClicked();
         return true;
     });
+
+    initWireGuardUI();
+}
+
+void NetworkUtilitiesTab::initWireGuardUI() {
+    auto& wg = WireGuardManager::instance();
+
+    if (!wg.configExists()) {
+        auto* noConfigLabel = new brls::Label();
+        noConfigLabel->setText("No WireGuard config found");
+        noConfigLabel->setFontSize(18);
+        noConfigLabel->setTextColor(nvgRGBA(245, 158, 11, 255));
+        wgStatusContainer->addView(noConfigLabel);
+
+        auto* pathLabel = new brls::Label();
+        pathLabel->setText("Place wg0.conf at sdmc:/switch/akira/");
+        pathLabel->setFontSize(14);
+        pathLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
+        wgStatusContainer->addView(pathLabel);
+        return;
+    }
+
+    wgConnectBtn = new brls::Button();
+    wgConnectBtn->setText("Connect");
+    wgConnectBtn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
+    wgConnectBtn->setMarginRight(15);
+    wgConnectBtn->registerClickAction([this](brls::View* view) {
+        onWgConnectClicked();
+        return true;
+    });
+    wgButtonContainer->addView(wgConnectBtn);
+
+    wgDisconnectBtn = new brls::Button();
+    wgDisconnectBtn->setText("Disconnect");
+    wgDisconnectBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
+    wgDisconnectBtn->registerClickAction([this](brls::View* view) {
+        onWgDisconnectClicked();
+        return true;
+    });
+    wgButtonContainer->addView(wgDisconnectBtn);
+
+    updateWireGuardStatus();
+}
+
+void NetworkUtilitiesTab::updateWireGuardStatus() {
+    auto& wg = WireGuardManager::instance();
+
+    wgStatusContainer->clearViews();
+
+    auto* statusRow = new brls::Box();
+    statusRow->setAxis(brls::Axis::ROW);
+    statusRow->setMarginBottom(10);
+
+    auto* statusLabel = new brls::Label();
+    statusLabel->setText("Status: ");
+    statusLabel->setFontSize(18);
+    statusLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
+    statusRow->addView(statusLabel);
+
+    auto* statusValue = new brls::Label();
+    if (isWgConnecting) {
+        statusValue->setText("Connecting...");
+        statusValue->setTextColor(nvgRGBA(245, 158, 11, 255));
+    } else if (wg.isConnected()) {
+        statusValue->setText("Connected");
+        statusValue->setTextColor(nvgRGBA(16, 185, 129, 255));
+    } else {
+        statusValue->setText("Disconnected");
+        statusValue->setTextColor(nvgRGBA(239, 68, 68, 255));
+    }
+    statusValue->setFontSize(18);
+    statusRow->addView(statusValue);
+
+    wgStatusContainer->addView(statusRow);
+
+    if (wg.isConnected()) {
+        auto* ipRow = new brls::Box();
+        ipRow->setAxis(brls::Axis::ROW);
+
+        auto* ipLabel = new brls::Label();
+        ipLabel->setText("Tunnel IP: ");
+        ipLabel->setFontSize(16);
+        ipLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
+        ipRow->addView(ipLabel);
+
+        auto* ipValue = new brls::Label();
+        ipValue->setText(wg.getTunnelIP());
+        ipValue->setFontSize(16);
+        ipValue->setTextColor(nvgRGBA(200, 200, 200, 255));
+        ipRow->addView(ipValue);
+
+        wgStatusContainer->addView(ipRow);
+    }
+
+    if (!wg.getLastError().empty() && !wg.isConnected()) {
+        auto* errorLabel = new brls::Label();
+        errorLabel->setText("Error: " + wg.getLastError());
+        errorLabel->setFontSize(14);
+        errorLabel->setTextColor(nvgRGBA(239, 68, 68, 255));
+        wgStatusContainer->addView(errorLabel);
+    }
+
+    if (wgConnectBtn && wgDisconnectBtn) {
+        wgConnectBtn->setVisibility(wg.isConnected() || isWgConnecting ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
+        wgDisconnectBtn->setVisibility(wg.isConnected() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+}
+
+void NetworkUtilitiesTab::onWgConnectClicked() {
+    if (isWgConnecting)
+        return;
+
+    isWgConnecting = true;
+    updateWireGuardStatus();
+
+    brls::async([this]() {
+        bool success = WireGuardManager::instance().connect();
+        brls::sync([this, success]() {
+            isWgConnecting = false;
+            updateWireGuardStatus();
+        });
+    });
+}
+
+void NetworkUtilitiesTab::onWgDisconnectClicked() {
+    WireGuardManager::instance().disconnect();
+    updateWireGuardStatus();
 }
 
 brls::View* NetworkUtilitiesTab::create() {

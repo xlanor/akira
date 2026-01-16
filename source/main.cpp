@@ -199,6 +199,16 @@ int main(int argc, char* argv[])
     SettingsManager::getInstance()->setLogger(&chiakiLog);
     IO::GetInstance()->SetLogger(&chiakiLog);
 
+    static FILE* logFile = nullptr;
+    if (SettingsManager::getInstance()->getEnableFileLogging()) {
+        std::string logPath = SettingsManager::getLogFilePath();
+        logFile = fopen(logPath.c_str(), "w");
+        if (logFile) {
+            brls::Logger::setLogOutput(logFile);
+            brls::Logger::info("File logging enabled: {}", logPath);
+        }
+    }
+
     if (SettingsManager::getInstance()->getEnableExperimentalCrypto()) {
         chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
         brls::Logger::info("GHASH mode: PMULL");

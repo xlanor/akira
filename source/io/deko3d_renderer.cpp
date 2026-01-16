@@ -2,6 +2,7 @@
 
 #include "core/io/deko3d_renderer.hpp"
 #include "core/io/bitmap_font.hpp"
+#include "core/wireguard_manager.hpp"
 #include "crypto/libnx/gmac.h"
 #include <borealis.hpp>
 #include <borealis/platforms/switch/switch_platform.hpp>
@@ -766,6 +767,9 @@ void Deko3dRenderer::renderStatsOverlay()
 
     const char* ghashMode = (chiaki_libnx_get_ghash_mode() == CHIAKI_LIBNX_GHASH_PMULL) ? "PMULL" : "TABLE";
 
+    auto& wg = WireGuardManager::instance();
+    std::string vpnStatus = wg.isConnected() ? wg.getTunnelIP() : "Off";
+
     char statsText[512];
     snprintf(statsText, sizeof(statsText),
         "=== Requested ===\n"
@@ -784,7 +788,8 @@ void Deko3dRenderer::renderStatsOverlay()
         "Reported: %.1f Mbps\n"
         "Frame Loss: %zu (Rec: %zu)\n"
         "Duration: %lum%02lus\n"
-        "GHASH: %s",
+        "GHASH: %s\n"
+        "VPN: %s",
         m_stats.requested_width,
         m_stats.requested_height,
         m_stats.requested_fps,
@@ -804,7 +809,8 @@ void Deko3dRenderer::renderStatsOverlay()
         m_stats.frames_recovered,
         mins,
         secs,
-        ghashMode
+        ghashMode,
+        vpnStatus.c_str()
     );
 
     // Calculate overlay dimensions

@@ -375,8 +375,9 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             return;
         }
 
-        if (reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED && !self->wakeAttempted) {
-            brls::Logger::info("Connection refused - attempting wake and retry");
+        if ((reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED ||
+             reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN) && !self->wakeAttempted) {
+            brls::Logger::info("Connection failed (reason={}) - attempting wake and retry", static_cast<int>(reason));
             self->retryWithWake();
             return;
         }

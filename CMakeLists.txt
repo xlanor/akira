@@ -161,9 +161,56 @@ add_subdirectory(${BOREALIS_DIR}/library borealis)
 # Add tomlplusplus (header-only)
 add_subdirectory(library/tomlplusplus EXCLUDE_FROM_ALL)
 
+# WireGuard library
+set(WIREGUARD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/library/switch-wireguard)
+set(WIREGUARD_LIB ${WIREGUARD_DIR}/libwireguard.a)
+
+add_custom_command(
+    OUTPUT ${WIREGUARD_LIB}
+    COMMAND make -C ${WIREGUARD_DIR}
+    WORKING_DIRECTORY ${WIREGUARD_DIR}
+    COMMENT "Building libwireguard.a"
+)
+add_custom_target(wireguard_build DEPENDS ${WIREGUARD_LIB})
+
+###########################################
+# lwIP library (for WireGuard relay)
+###########################################
+set(LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/library/lwip)
+
+# Minimal lwIP sources - only core + IPv4 (no socket/netconn API, no apps)
+set(LWIP_SRCS
+    ${LWIP_DIR}/src/core/init.c
+    ${LWIP_DIR}/src/core/def.c
+    ${LWIP_DIR}/src/core/inet_chksum.c
+    ${LWIP_DIR}/src/core/ip.c
+    ${LWIP_DIR}/src/core/mem.c
+    ${LWIP_DIR}/src/core/memp.c
+    ${LWIP_DIR}/src/core/netif.c
+    ${LWIP_DIR}/src/core/pbuf.c
+    ${LWIP_DIR}/src/core/tcp.c
+    ${LWIP_DIR}/src/core/tcp_in.c
+    ${LWIP_DIR}/src/core/tcp_out.c
+    ${LWIP_DIR}/src/core/timeouts.c
+    ${LWIP_DIR}/src/core/udp.c
+    ${LWIP_DIR}/src/core/ipv4/ip4.c
+    ${LWIP_DIR}/src/core/ipv4/ip4_addr.c
+    ${LWIP_DIR}/src/core/ipv4/ip4_frag.c
+    ${LWIP_DIR}/src/core/ipv4/icmp.c
+)
+
+# WireGuard netif and lwIP arch implementations
+set(WG_NETIF_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/core/wg_netif.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/core/sys_arch.c
+)
+
 # Main target
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
+
+# Add lwIP and wg_netif sources to target
+target_sources(${PROJECT_NAME} PRIVATE ${LWIP_SRCS} ${WG_NETIF_SRCS})
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -174,6 +221,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/library/chiaki-ng/lib/include
     ${CMAKE_CURRENT_SOURCE_DIR}/library/chiaki-ng/lib/src
     ${CMAKE_CURRENT_BINARY_DIR}/chiaki-lib/include
+    # WireGuard
+    ${WIREGUARD_DIR}/include
+    # lwIP includes
+    ${LWIP_DIR}/src/include
+    ${LWIP_DIR}  # For lwipopts.h and arch/cc.h
     ${APP_PLATFORM_INCLUDE}
 )
 
@@ -208,8 +260,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${SWRESAMPLE_LIB}
     ${DAV1D_LIB}
     ${JSONC_LIB}
+    ${WIREGUARD_LIB}
     ${APP_PLATFORM_LIB}
 )
+
+add_dependencies(${PROJECT_NAME} wireguard_build)
 
 # SDL2 depends on EGL/OpenGL libraries on Switch
 if (PLATFORM_SWITCH)

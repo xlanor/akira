@@ -5,7 +5,10 @@
 #include <chiaki/base64.h>
 #include <toml++/toml.hpp>
 
+#include <algorithm>
 #include <cstdio>
+#include <ctime>
+#include <dirent.h>
 #include <fstream>
 #include <regex>
 #include <sys/stat.h>
@@ -167,6 +170,8 @@ void SettingsManager::parseTomlFile() {
             requestIdrOnFecFailure = *val;
         if (auto val = config["packet_loss_max"].value<double>())
             packetLossMax = static_cast<float>(*val);
+        if (auto val = config["enable_file_logging"].value<bool>())
+            enableFileLogging = *val;
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -186,6 +191,15 @@ void SettingsManager::parseTomlFile() {
             remoteVideoBitrate = static_cast<int>(*val);
         else
             remoteVideoBitrate = getDefaultBitrateForResolution(remoteVideoResolution);
+
+        if (auto val = config["vpn_video_bitrate"].value<int64_t>())
+            vpnVideoBitrate = static_cast<int>(*val);
+
+        if (auto val = config["vpn_video_resolution"].value<std::string>())
+            vpnVideoResolution = stringToResolution(*val);
+
+        if (auto val = config["vpn_video_fps"].value<int64_t>())
+            vpnVideoFPS = (*val == 30) ? CHIAKI_VIDEO_FPS_PRESET_30 : CHIAKI_VIDEO_FPS_PRESET_60;
 
         for (auto& [key, value] : config) {
             if (!value.is_table()) continue;
@@ -438,6 +452,9 @@ int SettingsManager::writeFile() {
     config.insert("remote_video_fps", fpsToInt(remoteVideoFPS));
     config.insert("local_video_bitrate", localVideoBitrate);
     config.insert("remote_video_bitrate", remoteVideoBitrate);
+    config.insert("vpn_video_bitrate", vpnVideoBitrate);
+    config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
+    config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
     if (globalHaptic != HapticPreset::Disabled)
         config.insert("haptic", static_cast<int>(globalHaptic));
     if (!globalPsnOnlineId.empty())
@@ -470,6 +487,7 @@ int SettingsManager::writeFile() {
         config.insert("sleep_on_exit", sleepOnExit);
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
     config.insert("packet_loss_max", static_cast<double>(packetLossMax));
+    config.insert("enable_file_logging", enableFileLogging);
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", static_cast<int>(globalGyroSource));
 
@@ -771,6 +789,30 @@ void SettingsManager::setRemoteVideoBitrate(int value) {
     remoteVideoBitrate = value;
 }
 
+int SettingsManager::getVpnVideoBitrate() const {
+    return vpnVideoBitrate;
+}
+
+void SettingsManager::setVpnVideoBitrate(int value) {
+    vpnVideoBitrate = value;
+}
+
+ChiakiVideoResolutionPreset SettingsManager::getVpnVideoResolution() const {
+    return vpnVideoResolution;
+}
+
+void SettingsManager::setVpnVideoResolution(ChiakiVideoResolutionPreset value) {
+    vpnVideoResolution = value;
+}
+
+ChiakiVideoFPSPreset SettingsManager::getVpnVideoFPS() const {
+    return vpnVideoFPS;
+}
+
+void SettingsManager::setVpnVideoFPS(ChiakiVideoFPSPreset value) {
+    vpnVideoFPS = value;
+}
+
 HapticPreset SettingsManager::getHaptic(Host* host) {
     if (!host) return globalHaptic;
     if (host->haptic < 0) return globalHaptic;
@@ -1057,4 +1099,46 @@ float SettingsManager::getPacketLossMax() const {
 
 void SettingsManager::setPacketLossMax(float value) {
     packetLossMax = value;
+}
+
+bool SettingsManager::getEnableFileLogging() const {
+    return enableFileLogging;
+}
+
+void SettingsManager::setEnableFileLogging(bool enabled) {
+    enableFileLogging = enabled;
+}
+
+std::string SettingsManager::getLogFilePath() {
+    mkdir(LOG_DIR, 0755);
+
+    DIR* dir = opendir(LOG_DIR);
+    if (dir) {
+        std::vector<std::string> logFiles;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name = entry->d_name;
+            if (name.size() > 4 && name.substr(name.size() - 4) == ".log") {
+                logFiles.push_back(name);
+            }
+        }
+        closedir(dir);
+
+        if (logFiles.size() >= 10) {
+            std::sort(logFiles.begin(), logFiles.end());
+            size_t toDelete = logFiles.size() - 9;  // Keep 9, new one makes 10
+            for (size_t i = 0; i < toDelete; i++) {
+                std::string path = std::string(LOG_DIR) + "/" + logFiles[i];
+                remove(path.c_str());
+            }
+        }
+    }
+
+    time_t now = time(nullptr);
+    struct tm* t = localtime(&now);
+    char filename[64];
+    snprintf(filename, sizeof(filename), "%02d%02d%02d%02d%02d%02d.log",
+             t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
+             t->tm_hour, t->tm_min, t->tm_sec);
+    return std::string(LOG_DIR) + "/" + filename;
 }
