@@ -2,6 +2,7 @@
 #include "core/io.hpp"
 #include "core/exception.hpp"
 #include "core/settings_manager.hpp"
+#include "core/wireguard_manager.hpp"
 
 #include <borealis.hpp>
 #include <cstring>
@@ -157,8 +158,35 @@ int Host::wakeup()
     }
 
     uint64_t credential = strtoull(rpRegistKey, NULL, 16);
-    ChiakiErrorCode ret = chiaki_discovery_wakeup(log, NULL, hostAddr.c_str(), credential, isPS5());
 
+    auto& wg = WireGuardManager::instance();
+    if (wg.isConnected())
+    {
+        brls::Logger::info("Host::wakeup: sending via WireGuard tunnel");
+        const char* version = isPS5() ? "00030010" : "00020020";
+        uint16_t port = isPS5() ? 9302 : 987;
+
+        char buf[512];
+        int len = snprintf(buf, sizeof(buf),
+            "WAKEUP * HTTP/1.1\n"
+            "client-type:vr\n"
+            "auth-type:R\n"
+            "model:w\n"
+            "app-type:r\n"
+            "user-credential:%llu\n"
+            "device-discovery-protocol-version:%s\n",
+            (unsigned long long)credential, version);
+
+        if (len > 0 && (size_t)len < sizeof(buf))
+        {
+            int result = wg.sendUdpPacket(hostAddr, port, buf, len + 1);
+            brls::Logger::info("Host::wakeup: sendUdpPacket returned {}", result);
+            return result >= 0 ? 0 : 1;
+        }
+        return 1;
+    }
+
+    ChiakiErrorCode ret = chiaki_discovery_wakeup(log, NULL, hostAddr.c_str(), credential, isPS5());
     return ret;
 }
 
@@ -273,8 +301,6 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
     auto fps = settings->getVideoFPS(this);
     chiaki_connect_video_profile_preset(&videoProfile, resolution, fps);
     videoProfile.bitrate = settings->getVideoBitrate(this);
-    brls::Logger::info("Host::initSession: videoResolution preset={}, profile={}x{}, bitrate={}",
-        static_cast<int>(resolution), videoProfile.width, videoProfile.height, videoProfile.bitrate);
 
     chiaki_opus_decoder_init(&opusDecoder, log);
 
@@ -284,7 +310,41 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
     hapticsSink.frame_cb = HapticsFrameCallback;
 
     ChiakiConnectInfo connectInfo = {};
-    connectInfo.host = hostAddr.c_str();
+    std::string effectiveHost = hostAddr;
+
+    auto& wg = WireGuardManager::instance();
+    if (wg.isConnected()) {
+        resolution = settings->getVpnVideoResolution();
+        fps = settings->getVpnVideoFPS();
+        chiaki_connect_video_profile_preset(&videoProfile, resolution, fps);
+        videoProfile.bitrate = settings->getVpnVideoBitrate();
+        brls::Logger::info("Host::initSession: WireGuard connected, starting relays to {} (PS5:{})", hostAddr, isPS5());
+        uint16_t tcpPort = wg.startTcpRelay(hostAddr, 9295, 9295);
+        uint16_t udp9295Port = wg.startUdpRelay(hostAddr, 9295, 9295);
+        uint16_t udp9296Port = wg.startUdpRelay(hostAddr, 9296, 9296);
+        uint16_t udp9297Port = wg.startUdpRelay(hostAddr, 9297, 9297);
+        bool success = tcpPort && udp9295Port && udp9296Port && udp9297Port;
+        if (isPS5()) {
+            uint16_t udp9302Port = wg.startUdpRelay(hostAddr, 9302, 9302);
+            success = success && udp9302Port;
+            brls::Logger::info("Host::initSession: PS5 relays TCP:{} UDP9295:{} UDP9296:{} UDP9297:{} UDP9302:{}", tcpPort, udp9295Port, udp9296Port, udp9297Port, udp9302Port);
+        } else {
+            uint16_t udp987Port = wg.startUdpRelay(hostAddr, 987, 987);
+            success = success && udp987Port;
+            brls::Logger::info("Host::initSession: PS4 relays TCP:{} UDP987:{} UDP9295:{} UDP9296:{} UDP9297:{}", tcpPort, udp987Port, udp9295Port, udp9296Port, udp9297Port);
+        }
+        if (success) {
+            effectiveHost = "127.0.0.1";
+            brls::Logger::info("Host::initSession: All relays started, using {}", effectiveHost);
+        } else {
+            brls::Logger::error("Host::initSession: Failed to start some relays");
+        }
+    }
+
+    brls::Logger::info("Host::initSession: videoResolution preset={}, profile={}x{}, bitrate={}",
+        static_cast<int>(resolution), videoProfile.width, videoProfile.height, videoProfile.bitrate);
+
+    connectInfo.host = effectiveHost.c_str();
     connectInfo.video_profile = videoProfile;
     connectInfo.video_profile_auto_downgrade = true;
     connectInfo.enable_idr_on_fec_failure = settings->getRequestIdrOnFecFailure();

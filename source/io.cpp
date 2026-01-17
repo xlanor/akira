@@ -128,6 +128,7 @@ bool IO::FreeVideo()
 {
     this->quit = true;
     m_first_frame_received = false;
+    SettingsManager::getInstance()->setStreamingActive(false);
 
     if (m_video_renderer)
     {
@@ -209,6 +210,7 @@ bool IO::MainLoop()
                     if (!m_first_frame_received)
                     {
                         m_first_frame_received = true;
+                        SettingsManager::getInstance()->setStreamingActive(true);
                         brls::Logger::info("First video frame received!");
                     }
                     m_video_renderer->draw(frame);

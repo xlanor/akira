@@ -20,6 +20,24 @@
             grow="1.0">
 
             <brls:Header
+                title="WireGuard VPN"
+                marginBottom="20"/>
+
+            <brls:Box
+                id="network/wgStatusContainer"
+                width="auto"
+                height="auto"
+                axis="column"
+                marginBottom="20"/>
+
+            <brls:Box
+                id="network/wgButtonContainer"
+                width="auto"
+                height="auto"
+                axis="row"
+                marginBottom="30"/>
+
+            <brls:Header
                 title="Network Utilities"
                 marginBottom="20"/>
 

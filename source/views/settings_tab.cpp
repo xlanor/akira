@@ -45,6 +45,9 @@ SettingsTab::SettingsTab() {
     initRemoteFpsSelector();
     initLocalBitrateSlider();
     initRemoteBitrateSlider();
+    initVpnResolutionSelector();
+    initVpnFpsSelector();
+    initVpnBitrateSlider();
     initHapticSelector();
     initInvertABToggle();
     initGyroSourceSelector();
@@ -56,6 +59,11 @@ SettingsTab::SettingsTab() {
     initExperimentalCryptoToggle();
     initRequestIdrOnFecFailureToggle();
     initPacketLossMaxSlider();
+    initEnableFileLoggingToggle();
+    initDebugLwipLogToggle();
+    initDebugWireguardLogToggle();
+    initDebugRenderLogToggle();
+    initDebugChiakiLogToggle();
 
     runBenchmarkBtn->registerClickAction([this](brls::View*) {
         runGhashBenchmark();
@@ -286,6 +294,104 @@ void SettingsTab::updateRemoteBitrateSlider() {
     float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
     remoteBitrateSlider->slider->setProgress(normalizedValue);
     remoteBitrateSlider->detail->setText(std::to_string(defaultBitrate) + " kbps");
+}
+
+void SettingsTab::initVpnResolutionSelector() {
+    std::vector<std::string> options = {"360p", "540p", "720p"};
+
+    int currentIndex = 2;
+    auto current = settings->getVpnVideoResolution();
+    switch (current) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: currentIndex = 0; break;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: currentIndex = 1; break;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: currentIndex = 2; break;
+        default: currentIndex = 2; break;
+    }
+
+    vpnResolutionSelector->init(
+        "VPN Resolution",
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            ChiakiVideoResolutionPreset preset;
+            switch (selected) {
+                case 0: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_360p; break;
+                case 1: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_540p; break;
+                case 2: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
+                default: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
+            }
+            settings->setVpnVideoResolution(preset);
+            settings->writeFile();
+            brls::Logger::info("VPN resolution set to {}", SettingsManager::resolutionToString(preset));
+        }
+    );
+}
+
+void SettingsTab::initVpnFpsSelector() {
+    std::vector<std::string> options = {"30 FPS", "60 FPS"};
+
+    int currentIndex = 0;
+    if (settings->getVpnVideoFPS() == CHIAKI_VIDEO_FPS_PRESET_60) {
+        currentIndex = 1;
+    }
+
+    vpnFpsSelector->init(
+        "VPN Frame Rate",
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            auto preset = selected == 0 ? CHIAKI_VIDEO_FPS_PRESET_30 : CHIAKI_VIDEO_FPS_PRESET_60;
+            settings->setVpnVideoFPS(preset);
+            settings->writeFile();
+            brls::Logger::info("VPN FPS set to {}", SettingsManager::fpsToString(preset));
+        }
+    );
+}
+
+void SettingsTab::initVpnBitrateSlider() {
+    const int VPN_MIN_BITRATE = 2000;
+    const int VPN_MAX_BITRATE = 15000;
+
+    int currentBitrate = settings->getVpnVideoBitrate();
+
+    if (currentBitrate < VPN_MIN_BITRATE) currentBitrate = VPN_MIN_BITRATE;
+    if (currentBitrate > VPN_MAX_BITRATE) currentBitrate = VPN_MAX_BITRATE;
+    settings->setVpnVideoBitrate(currentBitrate);
+
+    float normalizedValue = static_cast<float>(currentBitrate - VPN_MIN_BITRATE) / (VPN_MAX_BITRATE - VPN_MIN_BITRATE);
+    normalizedValue = std::max(0.0f, std::min(1.0f, normalizedValue));
+
+    vpnBitrateSlider->detail->setWidth(100);
+    vpnBitrateSlider->detail->setShrink(0);
+    vpnBitrateSlider->init(
+        "VPN Bitrate",
+        normalizedValue,
+        [this](float value) {
+            const int VPN_MIN_BITRATE = 2000;
+            const int VPN_MAX_BITRATE = 15000;
+            int bitrate = VPN_MIN_BITRATE + static_cast<int>(value * (VPN_MAX_BITRATE - VPN_MIN_BITRATE));
+            settings->setVpnVideoBitrate(bitrate);
+            vpnBitrateSlider->detail->setText(std::to_string(bitrate) + " kbps");
+            settings->writeFile();
+            brls::Logger::info("VPN bitrate set to {}", bitrate);
+        }
+    );
+
+    vpnBitrateSlider->detail->setText(std::to_string(currentBitrate) + " kbps");
+}
+
+void SettingsTab::updateVpnBitrateSlider() {
+    const int VPN_MIN_BITRATE = 2000;
+    const int VPN_MAX_BITRATE = 15000;
+    const int VPN_DEFAULT_BITRATE = 5000;
+
+    settings->setVpnVideoBitrate(VPN_DEFAULT_BITRATE);
+
+    float normalizedValue = static_cast<float>(VPN_DEFAULT_BITRATE - VPN_MIN_BITRATE) / (VPN_MAX_BITRATE - VPN_MIN_BITRATE);
+    vpnBitrateSlider->slider->setProgress(normalizedValue);
+    vpnBitrateSlider->detail->setText(std::to_string(VPN_DEFAULT_BITRATE) + " kbps");
 }
 
 void SettingsTab::initHapticSelector() {
@@ -756,5 +862,70 @@ void SettingsTab::initPacketLossMaxSlider() {
         }
     );
     packetLossMaxSlider->detail->setText(std::to_string(currentPercent) + "%");
-    packetLossMaxSlider->slider->setStep(0.01f);
+    packetLossMaxSlider->slider->setStep(0.05f);
+}
+
+void SettingsTab::initEnableFileLoggingToggle() {
+    bool currentValue = settings->getEnableFileLogging();
+
+    enableFileLoggingToggle->init(
+        "File Logging",
+        currentValue,
+        [this](bool isOn) {
+            settings->setEnableFileLogging(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugLwipLogToggle() {
+    bool currentValue = settings->getDebugLwipLog();
+
+    debugLwipLogToggle->init(
+        "lwIP Relay Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugLwipLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugWireguardLogToggle() {
+    bool currentValue = settings->getDebugWireguardLog();
+
+    debugWireguardLogToggle->init(
+        "WireGuard Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugWireguardLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugRenderLogToggle() {
+    bool currentValue = settings->getDebugRenderLog();
+
+    debugRenderLogToggle->init(
+        "Render Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugRenderLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugChiakiLogToggle() {
+    bool currentValue = settings->getDebugChiakiLog();
+
+    debugChiakiLogToggle->init(
+        "Chiaki Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugChiakiLog(isOn);
+            settings->writeFile();
+        }
+    );
 }

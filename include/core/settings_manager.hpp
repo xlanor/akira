@@ -51,6 +51,9 @@ private:
     bool globalInvertAB = false;
     int localVideoBitrate = 10000;
     int remoteVideoBitrate = 10000;
+    int vpnVideoBitrate = 5000;
+    ChiakiVideoResolutionPreset vpnVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
+    ChiakiVideoFPSPreset vpnVideoFPS = CHIAKI_VIDEO_FPS_PRESET_30;
     bool holepunchRetry = false;
     bool powerUserMenuUnlocked = false;
     bool unlockBitrateMax = false;
@@ -59,6 +62,16 @@ private:
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
     float packetLossMax = 0.05f;
+    bool enableFileLogging = false;
+
+    // Debug logging settings
+    bool debugLwipLog = false;
+    bool debugWireguardLog = false;
+    bool debugRenderLog = false;
+    bool debugChiakiLog = false;
+
+    // Runtime state (not persisted)
+    bool streamingActive = false;
 
     // Companion server settings
     std::string companionHost;
@@ -146,6 +159,12 @@ public:
     void setLocalVideoBitrate(int value);
     int getRemoteVideoBitrate() const;
     void setRemoteVideoBitrate(int value);
+    int getVpnVideoBitrate() const;
+    void setVpnVideoBitrate(int value);
+    ChiakiVideoResolutionPreset getVpnVideoResolution() const;
+    void setVpnVideoResolution(ChiakiVideoResolutionPreset value);
+    ChiakiVideoFPSPreset getVpnVideoFPS() const;
+    void setVpnVideoFPS(ChiakiVideoFPSPreset value);
 
     HapticPreset getHaptic(Host* host);
     void setHaptic(Host* host, HapticPreset value);
@@ -195,6 +214,26 @@ public:
 
     float getPacketLossMax() const;
     void setPacketLossMax(float value);
+
+    bool getEnableFileLogging() const;
+    void setEnableFileLogging(bool enabled);
+
+    // Debug logging
+    bool getDebugLwipLog() const;
+    void setDebugLwipLog(bool enabled);
+    bool getDebugWireguardLog() const;
+    void setDebugWireguardLog(bool enabled);
+    bool getDebugRenderLog() const;
+    void setDebugRenderLog(bool enabled);
+    bool getDebugChiakiLog() const;
+    void setDebugChiakiLog(bool enabled);
+
+    // Runtime state (not persisted)
+    bool isStreamingActive() const;
+    void setStreamingActive(bool active);
+
+    static constexpr const char* LOG_DIR = "sdmc:/switch/akira/logs";
+    static std::string getLogFilePath();
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP
