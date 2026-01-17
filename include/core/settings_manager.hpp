@@ -64,6 +64,15 @@ private:
     float packetLossMax = 0.05f;
     bool enableFileLogging = false;
 
+    // Debug logging settings
+    bool debugLwipLog = false;
+    bool debugWireguardLog = false;
+    bool debugRenderLog = false;
+    bool debugChiakiLog = false;
+
+    // Runtime state (not persisted)
+    bool streamingActive = false;
+
     // Companion server settings
     std::string companionHost;
     int companionPort = 8080;
@@ -208,6 +217,20 @@ public:
 
     bool getEnableFileLogging() const;
     void setEnableFileLogging(bool enabled);
+
+    // Debug logging
+    bool getDebugLwipLog() const;
+    void setDebugLwipLog(bool enabled);
+    bool getDebugWireguardLog() const;
+    void setDebugWireguardLog(bool enabled);
+    bool getDebugRenderLog() const;
+    void setDebugRenderLog(bool enabled);
+    bool getDebugChiakiLog() const;
+    void setDebugChiakiLog(bool enabled);
+
+    // Runtime state (not persisted)
+    bool isStreamingActive() const;
+    void setStreamingActive(bool active);
 
     static constexpr const char* LOG_DIR = "sdmc:/switch/akira/logs";
     static std::string getLogFilePath();

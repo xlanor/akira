@@ -38,6 +38,8 @@ private:
     bool sessionStarted = false;
     bool sessionPreStarted = false;
     bool wakeAttempted = false;
+    int wakeRetryCount = 0;
+    static constexpr int MAX_WAKE_RETRIES = 4;
 
     bool menuOpen = false;
     std::chrono::steady_clock::time_point minusHoldStart;

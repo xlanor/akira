@@ -3,6 +3,7 @@
 #include "core/io/deko3d_renderer.hpp"
 #include "core/io/bitmap_font.hpp"
 #include "core/wireguard_manager.hpp"
+#include "core/settings_manager.hpp"
 #include "crypto/libnx/gmac.h"
 #include <borealis.hpp>
 #include <borealis/platforms/switch/switch_platform.hpp>
@@ -266,7 +267,8 @@ bool Deko3dRenderer::setupTextures(AVFrame* frame)
 void Deko3dRenderer::draw(AVFrame* frame)
 {
     static int call = 0;
-    if (++call % 100 == 1)
+    ++call;
+    if (SettingsManager::getInstance()->getDebugRenderLog() && call % 100 == 1)
         brls::Logger::info("draw #{}, init={}, tex={}, buf={}", call, m_initialized, m_textures_initialized, m_buffers_initialized);
 
     if (!m_initialized)
@@ -426,7 +428,8 @@ void Deko3dRenderer::updateTextureBindings(AVFrame* frame, AVNVTegraMap* map)
     size_t map_size = av_nvtegra_map_get_size(map);
 
     static uint32_t update_count = 0;
-    if (update_count++ % 300 == 0)
+    ++update_count;
+    if (SettingsManager::getInstance()->getDebugRenderLog() && update_count % 300 == 0)
         brls::Logger::info("updateTextureBindings #{}, addr={}", update_count, map_addr);
 
     if (m_mapping_memblock)
@@ -740,9 +743,9 @@ void Deko3dRenderer::cleanupTextRendering()
 
 void Deko3dRenderer::renderStatsOverlay()
 {
-    // Debug logging to verify function is called
     static uint32_t call_count = 0;
-    if (++call_count % 60 == 1)  // Log every ~1 second at 60fps
+    ++call_count;
+    if (SettingsManager::getInstance()->getDebugRenderLog() && call_count % 60 == 1)
         brls::Logger::info("renderStatsOverlay #{}: show={}, text_init={}, font_id={}",
             call_count, m_show_stats, m_text_initialized, m_font_texture_id);
 
@@ -920,7 +923,8 @@ void Deko3dRenderer::renderStatsOverlay()
 
     // log vertex count periodically
     static uint32_t draw_count = 0;
-    if (++draw_count % 60 == 1)
+    ++draw_count;
+    if (SettingsManager::getInstance()->getDebugRenderLog() && draw_count % 60 == 1)
         brls::Logger::info("Stats overlay drawing {} vertices (bg=6, text={})",
             vertices.size(), vertices.size() - 6);
 

@@ -1,5 +1,6 @@
 #include "core/lwip_relay.hpp"
 #include "core/wg_netif.h"
+#include "core/settings_manager.hpp"
 #include <borealis.hpp>
 #include <cstring>
 #include <unistd.h>
@@ -310,7 +311,8 @@ void LwipRelay::pollTcpConnections() {
                 err_t err = tcp_write(conn->pcb, buf, (u16_t)received, TCP_WRITE_FLAG_COPY);
                 if (err == ERR_OK) {
                     tcp_output(conn->pcb);
-                    brls::Logger::info("LwipRelay: sent {} bytes to PS5", received);
+                    if (SettingsManager::getInstance()->getDebugLwipLog())
+                        brls::Logger::info("LwipRelay: sent {} bytes to PS5", received);
                 } else {
                     brls::Logger::error("LwipRelay: tcp_write failed: {}", (int)err);
                 }
@@ -376,7 +378,8 @@ void LwipRelay::pollUdpSockets() {
         udp_sendto(binding->pcb, p, &destAddr, binding->targetPort);
         pbuf_free(p);
 
-        brls::Logger::info("LwipRelay: sent {} UDP bytes to PS5 port {}", received, binding->targetPort);
+        if (SettingsManager::getInstance()->getDebugLwipLog())
+            brls::Logger::info("LwipRelay: sent {} UDP bytes to PS5 port {}", received, binding->targetPort);
     }
 }
 

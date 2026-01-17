@@ -60,6 +60,10 @@ SettingsTab::SettingsTab() {
     initRequestIdrOnFecFailureToggle();
     initPacketLossMaxSlider();
     initEnableFileLoggingToggle();
+    initDebugLwipLogToggle();
+    initDebugWireguardLogToggle();
+    initDebugRenderLogToggle();
+    initDebugChiakiLogToggle();
 
     runBenchmarkBtn->registerClickAction([this](brls::View*) {
         runGhashBenchmark();
@@ -865,10 +869,62 @@ void SettingsTab::initEnableFileLoggingToggle() {
     bool currentValue = settings->getEnableFileLogging();
 
     enableFileLoggingToggle->init(
-        "Enable File Logging",
+        "File Logging",
         currentValue,
         [this](bool isOn) {
             settings->setEnableFileLogging(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugLwipLogToggle() {
+    bool currentValue = settings->getDebugLwipLog();
+
+    debugLwipLogToggle->init(
+        "lwIP Relay Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugLwipLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugWireguardLogToggle() {
+    bool currentValue = settings->getDebugWireguardLog();
+
+    debugWireguardLogToggle->init(
+        "WireGuard Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugWireguardLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugRenderLogToggle() {
+    bool currentValue = settings->getDebugRenderLog();
+
+    debugRenderLogToggle->init(
+        "Render Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugRenderLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugChiakiLogToggle() {
+    bool currentValue = settings->getDebugChiakiLog();
+
+    debugChiakiLogToggle->init(
+        "Chiaki Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugChiakiLog(isOn);
             settings->writeFile();
         }
     );

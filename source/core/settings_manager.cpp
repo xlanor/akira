@@ -172,6 +172,14 @@ void SettingsManager::parseTomlFile() {
             packetLossMax = static_cast<float>(*val);
         if (auto val = config["enable_file_logging"].value<bool>())
             enableFileLogging = *val;
+        if (auto val = config["debug_lwip_log"].value<bool>())
+            debugLwipLog = *val;
+        if (auto val = config["debug_wireguard_log"].value<bool>())
+            debugWireguardLog = *val;
+        if (auto val = config["debug_render_log"].value<bool>())
+            debugRenderLog = *val;
+        if (auto val = config["debug_chiaki_log"].value<bool>())
+            debugChiakiLog = *val;
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -488,6 +496,14 @@ int SettingsManager::writeFile() {
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
     config.insert("packet_loss_max", static_cast<double>(packetLossMax));
     config.insert("enable_file_logging", enableFileLogging);
+    if (debugLwipLog)
+        config.insert("debug_lwip_log", debugLwipLog);
+    if (debugWireguardLog)
+        config.insert("debug_wireguard_log", debugWireguardLog);
+    if (debugRenderLog)
+        config.insert("debug_render_log", debugRenderLog);
+    if (debugChiakiLog)
+        config.insert("debug_chiaki_log", debugChiakiLog);
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", static_cast<int>(globalGyroSource));
 
@@ -1107,6 +1123,46 @@ bool SettingsManager::getEnableFileLogging() const {
 
 void SettingsManager::setEnableFileLogging(bool enabled) {
     enableFileLogging = enabled;
+}
+
+bool SettingsManager::getDebugLwipLog() const {
+    return debugLwipLog;
+}
+
+void SettingsManager::setDebugLwipLog(bool enabled) {
+    debugLwipLog = enabled;
+}
+
+bool SettingsManager::getDebugWireguardLog() const {
+    return debugWireguardLog;
+}
+
+void SettingsManager::setDebugWireguardLog(bool enabled) {
+    debugWireguardLog = enabled;
+}
+
+bool SettingsManager::getDebugRenderLog() const {
+    return debugRenderLog;
+}
+
+void SettingsManager::setDebugRenderLog(bool enabled) {
+    debugRenderLog = enabled;
+}
+
+bool SettingsManager::getDebugChiakiLog() const {
+    return debugChiakiLog;
+}
+
+void SettingsManager::setDebugChiakiLog(bool enabled) {
+    debugChiakiLog = enabled;
+}
+
+bool SettingsManager::isStreamingActive() const {
+    return streamingActive;
+}
+
+void SettingsManager::setStreamingActive(bool active) {
+    streamingActive = active;
 }
 
 std::string SettingsManager::getLogFilePath() {

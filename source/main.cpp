@@ -59,6 +59,10 @@ void initCustomTheme()
 
 static void chiaki_to_brls_log(ChiakiLogLevel level, const char* msg, void* user)
 {
+    auto* settings = SettingsManager::getInstance();
+    if (settings->isStreamingActive() && !settings->getDebugChiakiLog())
+        return;
+
     switch (level)
     {
         case CHIAKI_LOG_ERROR:
@@ -72,7 +76,6 @@ static void chiaki_to_brls_log(ChiakiLogLevel level, const char* msg, void* user
             break;
         case CHIAKI_LOG_DEBUG:
         case CHIAKI_LOG_VERBOSE:
-            // filter out for now 
             break;
     }
 }

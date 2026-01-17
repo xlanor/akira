@@ -184,6 +184,7 @@ void StreamView::startStream()
                 brls::Application::popActivity();
             });
             dialog->open();
+            brls::Application::forceUnblockInputs();
         });
     }
 }
@@ -215,7 +216,8 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
                       brls::Style style, brls::FrameContext* ctx)
 {
     static int drawCount = 0;
-    if (drawCount++ % 60 == 0) {
+    ++drawCount;
+    if (settings->getDebugRenderLog() && drawCount % 60 == 0) {
         brls::Logger::info("StreamView::draw #{}: streamActive={}, sessionStarted={}, menuOpen={}",
             drawCount, streamActive, sessionStarted, menuOpen);
     }
@@ -376,8 +378,10 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
         }
 
         if ((reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED ||
-             reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN) && !self->wakeAttempted) {
-            brls::Logger::info("Connection failed (reason={}) - attempting wake and retry", static_cast<int>(reason));
+             reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN) &&
+            self->wakeRetryCount < MAX_WAKE_RETRIES) {
+            brls::Logger::info("Connection failed (reason={}) - attempting wake and retry ({}/{})",
+                              static_cast<int>(reason), self->wakeRetryCount + 1, MAX_WAKE_RETRIES);
             self->retryWithWake();
             return;
         }
@@ -396,6 +400,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
                 brls::Application::popActivity();
             });
             dialog->open();
+            brls::Application::forceUnblockInputs();
         }
     });
 }
@@ -577,29 +582,35 @@ void StreamView::renderLogs(NVGcontext* vg, float x, float y, float width, float
 
 void StreamView::retryWithWake()
 {
+    wakeRetryCount++;
     wakeAttempted = true;
 
     host->finiSession();
     io->FreeController();
 
-    int wakeResult = host->wakeup();
-    if (wakeResult != 0) {
-        brls::Logger::error("Wake failed with code {}", wakeResult);
-        stopStream();
-        SharedViewHolder::release(this);
-        auto* dialog = new brls::Dialog("Failed to wake console");
-        dialog->addButton("OK", []() {
-            brls::Application::popActivity();
-        });
-        dialog->open();
-        return;
+    if (wakeRetryCount == 1) {
+        int wakeResult = host->wakeup();
+        if (wakeResult != 0) {
+            brls::Logger::error("Wake failed with code {}", wakeResult);
+            stopStream();
+            SharedViewHolder::release(this);
+            auto* dialog = new brls::Dialog("Failed to wake console");
+            dialog->addButton("OK", []() {
+                brls::Application::popActivity();
+            });
+            dialog->open();
+            brls::Application::forceUnblockInputs();
+            return;
+        }
+        brls::Logger::info("Wake sent, retrying connection...");
     }
 
-    brls::Logger::info("Wake sent, retrying connection...");
-    brls::Application::notify("Waking console...");
+    int delaySeconds = 5 + (wakeRetryCount - 1) * 3;
+    brls::Logger::info("Wake retry attempt {}/{}, waiting {} seconds...",
+                       wakeRetryCount, MAX_WAKE_RETRIES, delaySeconds);
+    brls::Application::notify("Waking console (attempt " + std::to_string(wakeRetryCount) + "/" + std::to_string(MAX_WAKE_RETRIES) + ")...");
 
-    brls::Logger::info("Sleeping for 5 seconds to allow console to wake...");
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
 
     sessionStarted = false;
     streamActive = false;
@@ -614,15 +625,19 @@ void StreamView::retryWithWake()
         streamActive = true;
         brls::Logger::info("Retry connection started");
     } catch (const Exception& e) {
-        brls::Logger::error("Retry failed: {}", e.what());
+        brls::Logger::error("Retry attempt {} failed: {}", wakeRetryCount, e.what());
         io->FreeController();
         host->finiSession();
-        SharedViewHolder::release(this);
-        std::string errorMsg = e.what();
-        auto* dialog = new brls::Dialog("Connection Failed\n\n" + errorMsg);
-        dialog->addButton("OK", []() {
-            brls::Application::popActivity();
-        });
-        dialog->open();
+
+        if (wakeRetryCount >= MAX_WAKE_RETRIES) {
+            SharedViewHolder::release(this);
+            std::string errorMsg = e.what();
+            auto* dialog = new brls::Dialog("Connection Failed after " + std::to_string(MAX_WAKE_RETRIES) + " attempts\n\n" + errorMsg);
+            dialog->addButton("OK", []() {
+                brls::Application::popActivity();
+            });
+            dialog->open();
+            brls::Application::forceUnblockInputs();
+        }
     }
 }

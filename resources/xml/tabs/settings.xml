@@ -297,14 +297,85 @@
                 marginTop="5"
                 marginBottom="10"/>
 
+        </brls:Box>
+
+        <brls:Header
+            title="Debug Logging"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30">
+
             <brls:BooleanCell
                 id="settings/enableFileLogging"
-                title="Enable File Logging"
+                title="File Logging"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
                 text="Save logs to SD card (/switch/akira/logs/). Requires app restart."
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:BooleanCell
+                id="settings/debugLwipLog"
+                title="lwIP Relay Log"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Enable verbose lwIP relay logging (very spammy during streaming)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:BooleanCell
+                id="settings/debugWireguardLog"
+                title="WireGuard Log"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Enable WireGuard library logging (handshakes, keepalives, packet stats)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:BooleanCell
+                id="settings/debugRenderLog"
+                title="Render Log"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Enable renderer logging (draw calls, texture bindings, stats overlay)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:BooleanCell
+                id="settings/debugChiakiLog"
+                title="Chiaki Log"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Enable chiaki library logging during streaming (CTRL, heartbeats, etc.)"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"

@@ -178,7 +178,6 @@ add_custom_target(wireguard_build DEPENDS ${WIREGUARD_LIB})
 ###########################################
 set(LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/library/lwip)
 
-# Minimal lwIP sources - only core + IPv4 (no socket/netconn API, no apps)
 set(LWIP_SRCS
     ${LWIP_DIR}/src/core/init.c
     ${LWIP_DIR}/src/core/def.c
@@ -199,7 +198,6 @@ set(LWIP_SRCS
     ${LWIP_DIR}/src/core/ipv4/icmp.c
 )
 
-# WireGuard netif and lwIP arch implementations
 set(WG_NETIF_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/source/core/wg_netif.c
     ${CMAKE_CURRENT_SOURCE_DIR}/source/core/sys_arch.c
@@ -209,7 +207,6 @@ set(WG_NETIF_SRCS
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 
-# Add lwIP and wg_netif sources to target
 target_sources(${PROJECT_NAME} PRIVATE ${LWIP_SRCS} ${WG_NETIF_SRCS})
 
 # Include directories
@@ -225,7 +222,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${WIREGUARD_DIR}/include
     # lwIP includes
     ${LWIP_DIR}/src/include
-    ${LWIP_DIR}  # For lwipopts.h and arch/cc.h
+    ${LWIP_DIR}
     ${APP_PLATFORM_INCLUDE}
 )
 

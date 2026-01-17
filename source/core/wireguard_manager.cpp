@@ -1,5 +1,6 @@
 #include "core/wireguard_manager.hpp"
 #include "core/lwip_relay.hpp"
+#include "core/settings_manager.hpp"
 #include <borealis.hpp>
 #include <fstream>
 #include <sstream>
@@ -14,7 +15,8 @@ WireGuardManager& WireGuardManager::instance() {
 }
 
 static void wg_lib_log_callback(const char* msg) {
-    brls::Logger::info("WG-LIB: {}", msg);
+    if (SettingsManager::getInstance()->getDebugWireguardLog())
+        brls::Logger::info("WG-LIB: {}", msg);
 }
 
 static void wg_relay_recv_callback(void* user, const void* data, size_t len) {
