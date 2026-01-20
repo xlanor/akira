@@ -3,6 +3,10 @@ Akira is a hombrew application built with xfangfang's fork of [borealis](https:/
 
 This is still considered unstable/beta, bugs are expected. However I am personally happy with the stream quality at the current state and am playing on it daily.
 
+## Disclaimer
+This project is not endorsed or certified by Sony Interactive Entertainment LLC. This project is free and open-source, and licensed under the same license as the core library it uses, chiaki-ng.
+
+
 <p align="center" width="100%">
   <img src="readme/akira_hosts_020.jpg"
 </p>
