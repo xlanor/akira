@@ -52,6 +52,7 @@ SettingsTab::SettingsTab() {
     initInvertABToggle();
     initGyroSourceSelector();
     initSleepOnExitToggle();
+    initEnableThreadAffinityToggle();
     initHolepunchRetryToggle();
     initPsnAccountSection();
     initCompanionSection();
@@ -451,6 +452,20 @@ void SettingsTab::initSleepOnExitToggle() {
         [this](bool isOn) {
             settings->setSleepOnExit(isOn);
             settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initEnableThreadAffinityToggle() {
+    bool currentValue = settings->getEnableThreadAffinity();
+
+    enableThreadAffinityToggle->init(
+        "Enable Thread Affinity",
+        currentValue,
+        [this](bool isOn) {
+            settings->setEnableThreadAffinity(isOn);
+            settings->writeFile();
+            brls::Logger::info("Thread affinity set to {} (requires restart)", isOn ? "true" : "false");
         }
     );
 }

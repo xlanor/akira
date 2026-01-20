@@ -1,8 +1,10 @@
 #include "views/connection_view.hpp"
 #include "views/stream_view.hpp"
 #include "core/discovery_manager.hpp"
+#include "core/thread_affinity.h"
 #include "util/shared_view_holder.hpp"
 #include <chiaki/remote/holepunch.h>
+#include <chiaki/thread.h>
 
 ConnectionView::ConnectionView(Host* host)
     : host(host)
@@ -150,6 +152,7 @@ void ConnectionView::startConnection()
 
 void* ConnectionView::connectionThreadFunc(void* user)
 {
+    akira_thread_set_affinity(AKIRA_THREAD_NAME_CONNECTION);
     auto* args = static_cast<ConnectionThreadArgs*>(user);
     auto weak = args->weak;
     Host* host = args->host;

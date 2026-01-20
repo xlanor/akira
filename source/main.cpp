@@ -24,6 +24,7 @@
 #include "views/connection_view.hpp"
 #include "core/io.hpp"
 #include "core/settings_manager.hpp"
+#include "core/thread_affinity.h"
 
 static std::string getLocalIpAddress() {
     u32 ip = 0;
@@ -191,6 +192,12 @@ int main(int argc, char* argv[])
     {
         brls::Logger::error("Chiaki lib init failed: {}", chiaki_error_string(err));
         return EXIT_FAILURE;
+    }
+
+    if (SettingsManager::getInstance()->getEnableThreadAffinity()) {
+        chiaki_thread_affinity_init();
+        akira_thread_set_affinity(AKIRA_THREAD_NAME_MAIN);
+        brls::Logger::info("Thread affinity enabled");
     }
 
     static ChiakiLog chiakiLog;

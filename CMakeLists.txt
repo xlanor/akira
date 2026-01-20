@@ -23,7 +23,7 @@ include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 project(akira)
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "3")
-set(VERSION_REVISION "0")
+set(VERSION_REVISION "1")
 set(APP_TITLE "Akira")
 set(PROJECT_AUTHOR "xlanor")
 set(PACKAGE_NAME "io.github.akira")
@@ -201,6 +201,7 @@ set(LWIP_SRCS
 set(WG_NETIF_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/source/core/wg_netif.c
     ${CMAKE_CURRENT_SOURCE_DIR}/source/core/sys_arch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/core/thread_affinity.cpp
 )
 
 # Main target
@@ -220,6 +221,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/chiaki-lib/include
     # WireGuard
     ${WIREGUARD_DIR}/include
+    ${WIREGUARD_DIR}/src
     # lwIP includes
     ${LWIP_DIR}/src/include
     ${LWIP_DIR}

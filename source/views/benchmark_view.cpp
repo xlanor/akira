@@ -1,6 +1,8 @@
 #include "views/benchmark_view.hpp"
 #include "core/settings_manager.hpp"
+#include "core/thread_affinity.h"
 #include "crypto/libnx/gmac.h"
+#include <chiaki/thread.h>
 
 #include <vector>
 #include <chrono>
@@ -100,6 +102,7 @@ void BenchmarkView::updateLogDisplay()
 
 void* BenchmarkView::benchmarkThreadFunc(void* user)
 {
+    akira_thread_set_affinity(AKIRA_THREAD_NAME_BENCHMARK);
     auto* args = static_cast<BenchmarkThreadArgs*>(user);
     BenchmarkView* view = args->view;
     delete args;
