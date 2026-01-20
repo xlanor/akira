@@ -49,11 +49,17 @@ jobs:
               /build/scripts/build-docker.sh
             "
 
-      - name: Upload artifact
+      - name: Upload NRO artifact
         uses: actions/upload-artifact@v4
         with:
           name: akira-nro
           path: build/akira.nro
+
+      - name: Upload ELF artifact (debug symbols)
+        uses: actions/upload-artifact@v4
+        with:
+          name: akira-elf
+          path: build/akira.elf
 
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -113,6 +119,11 @@ jobs:
         with:
           name: akira-nro
 
+      - name: Download akira-elf artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: akira-elf
+
       - name: Download companion artifacts
         uses: actions/download-artifact@v4
         with:
@@ -125,6 +136,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: |
             akira.nro
+            akira.elf
             akira-companion-*
           generate_release_notes: true
           draft: false
