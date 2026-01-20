@@ -1,6 +1,7 @@
 #include "core/lwip_relay.hpp"
 #include "core/wg_netif.h"
 #include "core/settings_manager.hpp"
+#include "core/thread_affinity.h"
 #include <borealis.hpp>
 #include <cstring>
 #include <unistd.h>
@@ -194,6 +195,7 @@ void LwipRelay::tick() {
 }
 
 void LwipRelay::runLoop() {
+    akira_thread_set_affinity(AKIRA_THREAD_NAME_LWIP_LOOP);
     brls::Logger::info("LwipRelay: loop started");
 
     while (running_) {

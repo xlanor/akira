@@ -229,7 +229,7 @@
         </brls:Box>
 
         <brls:Header
-            title="Network"
+            title="Performance"
             marginBottom="10"/>
 
         <brls:Box
@@ -240,6 +240,20 @@
             backgroundColor="@theme/color/card"
             cornerRadius="8"
             marginBottom="30">
+
+            <brls:BooleanCell
+                id="settings/enableThreadAffinity"
+                title="Enable Thread Affinity"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Pin threads to specific CPU cores for better performance. Requires app restart."
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
 
             <brls:BooleanCell
                 id="settings/holepunchRetry"

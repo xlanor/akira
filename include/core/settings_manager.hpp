@@ -63,6 +63,7 @@ private:
     bool requestIdrOnFecFailure = true;
     float packetLossMax = 0.05f;
     bool enableFileLogging = false;
+    bool enableThreadAffinity = false;
 
     // Debug logging settings
     bool debugLwipLog = false;
@@ -217,6 +218,9 @@ public:
 
     bool getEnableFileLogging() const;
     void setEnableFileLogging(bool enabled);
+
+    bool getEnableThreadAffinity() const;
+    void setEnableThreadAffinity(bool enabled);
 
     // Debug logging
     bool getDebugLwipLog() const;

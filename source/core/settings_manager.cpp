@@ -172,6 +172,8 @@ void SettingsManager::parseTomlFile() {
             packetLossMax = static_cast<float>(*val);
         if (auto val = config["enable_file_logging"].value<bool>())
             enableFileLogging = *val;
+        if (auto val = config["enable_thread_affinity"].value<bool>())
+            enableThreadAffinity = *val;
         if (auto val = config["debug_lwip_log"].value<bool>())
             debugLwipLog = *val;
         if (auto val = config["debug_wireguard_log"].value<bool>())
@@ -496,6 +498,8 @@ int SettingsManager::writeFile() {
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
     config.insert("packet_loss_max", static_cast<double>(packetLossMax));
     config.insert("enable_file_logging", enableFileLogging);
+    if (enableThreadAffinity)
+        config.insert("enable_thread_affinity", enableThreadAffinity);
     if (debugLwipLog)
         config.insert("debug_lwip_log", debugLwipLog);
     if (debugWireguardLog)
@@ -1123,6 +1127,14 @@ bool SettingsManager::getEnableFileLogging() const {
 
 void SettingsManager::setEnableFileLogging(bool enabled) {
     enableFileLogging = enabled;
+}
+
+bool SettingsManager::getEnableThreadAffinity() const {
+    return enableThreadAffinity;
+}
+
+void SettingsManager::setEnableThreadAffinity(bool enabled) {
+    enableThreadAffinity = enabled;
 }
 
 bool SettingsManager::getDebugLwipLog() const {

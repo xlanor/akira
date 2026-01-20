@@ -26,6 +26,7 @@ private:
     BRLS_BIND(brls::BooleanCell, invertABToggle, "settings/invertAB");
     BRLS_BIND(brls::SelectorCell, gyroSourceSelector, "settings/gyroSource");
     BRLS_BIND(brls::BooleanCell, sleepOnExitToggle, "settings/sleepOnExit");
+    BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
     BRLS_BIND(brls::BooleanCell, requestIdrOnFecFailureToggle, "settings/requestIdrOnFecFailure");
     BRLS_BIND(brls::SliderCell, packetLossMaxSlider, "settings/packetLossMax");
@@ -81,6 +82,7 @@ private:
     void initInvertABToggle();
     void initGyroSourceSelector();
     void initSleepOnExitToggle();
+    void initEnableThreadAffinityToggle();
     void initHolepunchRetryToggle();
     void initRequestIdrOnFecFailureToggle();
     void initPacketLossMaxSlider();
