@@ -6,6 +6,8 @@ This is still considered unstable/beta, bugs are expected. However I am personal
 ## Disclaimer
 This project is not endorsed or certified by Sony Interactive Entertainment LLC. This project is free and open-source, and licensed under the same license as the core library it uses, chiaki-ng.
 
+## Read the Wiki
+Please, [read the wiki](https://github.com/xlanor/akira/wiki).
 
 <p align="center" width="100%">
   <img src="readme/akira_hosts_020.jpg"
