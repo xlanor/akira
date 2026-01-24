@@ -219,13 +219,8 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (SettingsManager::getInstance()->getEnableExperimentalCrypto()) {
-        chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
-        brls::Logger::info("GHASH mode: PMULL");
-    } else {
-        chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
-        brls::Logger::info("GHASH mode: TABLE (default)");
-    }
+    chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
+    brls::Logger::info("GHASH mode: PMULL");
 
     brls::Logger::info("Chiaki library initialized");
 

@@ -52,6 +52,8 @@ void StreamView::setupCallbacks()
         }
     });
 
+    io->getInputManager()->setTargetPS5(host->isPS5());
+
     host->setOnMotionReset([weak]() {
         if (auto self = weak.lock()) {
             if (self->io->getInputManager()) {

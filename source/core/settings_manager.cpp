@@ -1,9 +1,12 @@
 #include "core/settings_manager.hpp"
+#include "core/swipe_direction.hpp"
 #include "core/host.hpp"
 
 #include <borealis.hpp>
 #include <chiaki/base64.h>
+#include <chiaki/controller.h>
 #include <toml++/toml.hpp>
+#include <switch.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -13,9 +16,127 @@
 #include <regex>
 #include <sys/stat.h>
 
+namespace {
+
+std::string hidButtonToConfigString(uint64_t button) {
+    switch (button) {
+        case HidNpadButton_A: return "A";
+        case HidNpadButton_B: return "B";
+        case HidNpadButton_X: return "X";
+        case HidNpadButton_Y: return "Y";
+        case HidNpadButton_L: return "L";
+        case HidNpadButton_R: return "R";
+        case HidNpadButton_ZL: return "ZL";
+        case HidNpadButton_ZR: return "ZR";
+        case HidNpadButton_Plus: return "Plus";
+        case HidNpadButton_Minus: return "Minus";
+        case HidNpadButton_StickL: return "L Stick";
+        case HidNpadButton_StickR: return "R Stick";
+        case HidNpadButton_LeftSL: return "SL(L)";
+        case HidNpadButton_LeftSR: return "SR(L)";
+        case HidNpadButton_RightSL: return "SL(R)";
+        case HidNpadButton_RightSR: return "SR(R)";
+        case HidNpadButton_Up: return "D-Up";
+        case HidNpadButton_Down: return "D-Down";
+        case HidNpadButton_Left: return "D-Left";
+        case HidNpadButton_Right: return "D-Right";
+        case HidNpadButton_StickLUp: return "LS-Up";
+        case HidNpadButton_StickLDown: return "LS-Down";
+        case HidNpadButton_StickLLeft: return "LS-Left";
+        case HidNpadButton_StickLRight: return "LS-Right";
+        case HidNpadButton_StickRUp: return "RS-Up";
+        case HidNpadButton_StickRDown: return "RS-Down";
+        case HidNpadButton_StickRLeft: return "RS-Left";
+        case HidNpadButton_StickRRight: return "RS-Right";
+        default: return "";
+    }
+}
+
+uint64_t configStringToHidButton(const std::string& name) {
+    if (name == "A") return HidNpadButton_A;
+    if (name == "B") return HidNpadButton_B;
+    if (name == "X") return HidNpadButton_X;
+    if (name == "Y") return HidNpadButton_Y;
+    if (name == "L") return HidNpadButton_L;
+    if (name == "R") return HidNpadButton_R;
+    if (name == "ZL") return HidNpadButton_ZL;
+    if (name == "ZR") return HidNpadButton_ZR;
+    if (name == "Plus") return HidNpadButton_Plus;
+    if (name == "Minus") return HidNpadButton_Minus;
+    if (name == "L Stick") return HidNpadButton_StickL;
+    if (name == "R Stick") return HidNpadButton_StickR;
+    if (name == "SL(L)") return HidNpadButton_LeftSL;
+    if (name == "SR(L)") return HidNpadButton_LeftSR;
+    if (name == "SL(R)") return HidNpadButton_RightSL;
+    if (name == "SR(R)") return HidNpadButton_RightSR;
+    if (name == "D-Up") return HidNpadButton_Up;
+    if (name == "D-Down") return HidNpadButton_Down;
+    if (name == "D-Left") return HidNpadButton_Left;
+    if (name == "D-Right") return HidNpadButton_Right;
+    if (name == "LS-Up") return HidNpadButton_StickLUp;
+    if (name == "LS-Down") return HidNpadButton_StickLDown;
+    if (name == "LS-Left") return HidNpadButton_StickLLeft;
+    if (name == "LS-Right") return HidNpadButton_StickLRight;
+    if (name == "RS-Up") return HidNpadButton_StickRUp;
+    if (name == "RS-Down") return HidNpadButton_StickRDown;
+    if (name == "RS-Left") return HidNpadButton_StickRLeft;
+    if (name == "RS-Right") return HidNpadButton_StickRRight;
+    return 0;
+}
+
+std::string chiakiButtonToConfigKey(uint32_t button) {
+    switch (button) {
+        case CHIAKI_CONTROLLER_BUTTON_CROSS: return "cross";
+        case CHIAKI_CONTROLLER_BUTTON_MOON: return "circle";
+        case CHIAKI_CONTROLLER_BUTTON_BOX: return "square";
+        case CHIAKI_CONTROLLER_BUTTON_PYRAMID: return "triangle";
+        case CHIAKI_CONTROLLER_BUTTON_L1: return "l1";
+        case CHIAKI_CONTROLLER_BUTTON_R1: return "r1";
+        case CHIAKI_CONTROLLER_ANALOG_BUTTON_L2: return "l2";
+        case CHIAKI_CONTROLLER_ANALOG_BUTTON_R2: return "r2";
+        case CHIAKI_CONTROLLER_BUTTON_L3: return "l3";
+        case CHIAKI_CONTROLLER_BUTTON_R3: return "r3";
+        case CHIAKI_CONTROLLER_BUTTON_OPTIONS: return "options";
+        case CHIAKI_CONTROLLER_BUTTON_SHARE: return "share";
+        case CHIAKI_CONTROLLER_BUTTON_TOUCHPAD: return "touchpad";
+        case CHIAKI_CONTROLLER_BUTTON_PS: return "ps";
+        case SWIPE_TOUCHPAD_UP: return "swipe_up";
+        case SWIPE_TOUCHPAD_DOWN: return "swipe_down";
+        case SWIPE_TOUCHPAD_LEFT: return "swipe_left";
+        case SWIPE_TOUCHPAD_RIGHT: return "swipe_right";
+        default: return "";
+    }
+}
+
+uint32_t configKeyToChiakiButton(const std::string& key) {
+    if (key == "cross") return CHIAKI_CONTROLLER_BUTTON_CROSS;
+    if (key == "circle") return CHIAKI_CONTROLLER_BUTTON_MOON;
+    if (key == "square") return CHIAKI_CONTROLLER_BUTTON_BOX;
+    if (key == "triangle") return CHIAKI_CONTROLLER_BUTTON_PYRAMID;
+    if (key == "l1") return CHIAKI_CONTROLLER_BUTTON_L1;
+    if (key == "r1") return CHIAKI_CONTROLLER_BUTTON_R1;
+    if (key == "l2") return CHIAKI_CONTROLLER_ANALOG_BUTTON_L2;
+    if (key == "r2") return CHIAKI_CONTROLLER_ANALOG_BUTTON_R2;
+    if (key == "l3") return CHIAKI_CONTROLLER_BUTTON_L3;
+    if (key == "r3") return CHIAKI_CONTROLLER_BUTTON_R3;
+    if (key == "options") return CHIAKI_CONTROLLER_BUTTON_OPTIONS;
+    if (key == "share") return CHIAKI_CONTROLLER_BUTTON_SHARE;
+    if (key == "touchpad") return CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
+    if (key == "ps") return CHIAKI_CONTROLLER_BUTTON_PS;
+    if (key == "swipe_up") return SWIPE_TOUCHPAD_UP;
+    if (key == "swipe_down") return SWIPE_TOUCHPAD_DOWN;
+    if (key == "swipe_left") return SWIPE_TOUCHPAD_LEFT;
+    if (key == "swipe_right") return SWIPE_TOUCHPAD_RIGHT;
+    return 0;
+}
+
+} // anonymous namespace
+
 SettingsManager* SettingsManager::instance = nullptr;
 
-SettingsManager::SettingsManager() {}
+SettingsManager::SettingsManager() {
+    buttonMapping = getDefaultButtonMapping();
+}
 
 void SettingsManager::setLogger(ChiakiLog* logger) {
     this->log = logger;
@@ -104,12 +225,46 @@ Host* SettingsManager::findHostByDuid(const std::string& duid) {
 void SettingsManager::parseFile() {
     if (fileExists(TOML_CONFIG_FILE)) {
         parseTomlFile();
+        removeLegacyConfig();
     } else if (fileExists(LEGACY_CONFIG_FILE)) {
         brls::Logger::info("Migrating from legacy config format");
         parseLegacyFile();
         writeFile();
     } else {
         brls::Logger::info("No config file found, using defaults");
+    }
+}
+
+void SettingsManager::removeLegacyConfig() {
+    static const std::vector<std::string> legacyKeys = {
+        "invert_ab",
+        "enable_experimental_crypto",
+        "video_resolution",
+        "video_fps",
+        "video_bitrate",
+        "power_user_mode",
+    };
+
+    std::string content;
+    FILE* f = fopen(TOML_CONFIG_FILE, "r");
+    if (!f) return;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    content.resize(size);
+    fread(&content[0], 1, size, f);
+    fclose(f);
+
+    bool needsRewrite = false;
+    for (const auto& key : legacyKeys) {
+        if (content.find(key) != std::string::npos) {
+            brls::Logger::info("Removing legacy config key: {}", key);
+            needsRewrite = true;
+        }
+    }
+
+    if (needsRewrite) {
+        writeFile();
     }
 }
 
@@ -152,8 +307,6 @@ void SettingsManager::parseTomlFile() {
             globalPsnTokenExpiresAt = *val;
         if (auto val = config["global_duid"].value<std::string>())
             globalDuid = *val;
-        if (auto val = config["invert_ab"].value<bool>())
-            globalInvertAB = *val;
         if (auto val = config["holepunch_retry"].value<bool>())
             holepunchRetry = *val;
         if (auto val = config["power_user_menu_unlocked"].value<bool>())
@@ -162,8 +315,6 @@ void SettingsManager::parseTomlFile() {
             powerUserMenuUnlocked = *val;
         if (auto val = config["unlock_bitrate_max"].value<bool>())
             unlockBitrateMax = *val;
-        if (auto val = config["enable_experimental_crypto"].value<bool>())
-            enableExperimentalCrypto = *val;
         if (auto val = config["sleep_on_exit"].value<bool>())
             sleepOnExit = *val;
         if (auto val = config["request_idr_on_fec_failure"].value<bool>())
@@ -211,10 +362,35 @@ void SettingsManager::parseTomlFile() {
         if (auto val = config["vpn_video_fps"].value<int64_t>())
             vpnVideoFPS = (*val == 30) ? CHIAKI_VIDEO_FPS_PRESET_30 : CHIAKI_VIDEO_FPS_PRESET_60;
 
+        if (auto mappingTable = config["button_mapping"].as_table()) {
+            for (auto& [key, value] : *mappingTable) {
+                std::string keyStr(key.str());
+                uint32_t chiakiBtn = configKeyToChiakiButton(keyStr);
+                if (chiakiBtn == 0) continue;
+
+                if (auto* arr = value.as_array()) {
+                    std::vector<uint64_t> combo;
+                    for (auto& elem : *arr) {
+                        if (auto btnName = elem.value<std::string>()) {
+                            uint64_t hidBtn = configStringToHidButton(*btnName);
+                            if (hidBtn != 0) {
+                                combo.push_back(hidBtn);
+                            }
+                        }
+                    }
+                    buttonMapping[chiakiBtn] = combo;
+                }
+            }
+            brls::Logger::info("Loaded button mapping from config");
+        }
+
         for (auto& [key, value] : config) {
             if (!value.is_table()) continue;
 
             std::string hostName(key.str());
+
+            if (hostName == "button_mapping") continue;
+
             auto* table = value.as_table();
 
             std::string cleanName = hostName;
@@ -300,7 +476,7 @@ void SettingsManager::parseLegacyFile() {
         Unknown, HostName, HostAddr, PsnOnlineId, PsnAccountId, PsnRefreshToken,
         PsnAccessToken, ConsolePIN, RpKey, RpKeyType, RpRegistKey, VideoResolution,
         VideoFps, Target, Haptic, RemoteDuid, CompanionHost, CompanionPort,
-        PsnTokenExpiresAt, GlobalDuid, InvertAB
+        PsnTokenExpiresAt, GlobalDuid
     };
 
     const std::map<ConfigItem, std::regex> regexMap = {
@@ -322,8 +498,7 @@ void SettingsManager::parseLegacyFile() {
         {ConfigItem::CompanionHost, std::regex("^\\s*companion_host\\s*=\\s*\"?([\\w.-]+)\"?")},
         {ConfigItem::CompanionPort, std::regex("^\\s*companion_port\\s*=\\s*\"?(\\d+)\"?")},
         {ConfigItem::PsnTokenExpiresAt, std::regex("^\\s*psn_token_expires_at\\s*=\\s*\"?(\\d+)\"?")},
-        {ConfigItem::GlobalDuid, std::regex("^\\s*global_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
-        {ConfigItem::InvertAB, std::regex("^\\s*invert_ab\\s*=\\s*\"?(true|false|1|0)\"?")}
+        {ConfigItem::GlobalDuid, std::regex("^\\s*global_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")}
     };
 
     auto parseLine = [&regexMap](const std::string& line, std::string& value) -> ConfigItem {
@@ -435,9 +610,6 @@ void SettingsManager::parseLegacyFile() {
             case ConfigItem::GlobalDuid:
                 globalDuid = value;
                 break;
-            case ConfigItem::InvertAB:
-                globalInvertAB = (value == "true" || value == "1");
-                break;
         }
 
         if (rpKeySet && rpRegistKeySet && rpKeyTypeSet && currentHost) {
@@ -483,16 +655,12 @@ int SettingsManager::writeFile() {
         config.insert("companion_host", companionHost);
     if (companionPort != 8080)
         config.insert("companion_port", companionPort);
-    if (globalInvertAB)
-        config.insert("invert_ab", globalInvertAB);
     if (holepunchRetry)
         config.insert("holepunch_retry", holepunchRetry);
     if (powerUserMenuUnlocked)
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
     if (unlockBitrateMax)
         config.insert("unlock_bitrate_max", unlockBitrateMax);
-    if (enableExperimentalCrypto)
-        config.insert("enable_experimental_crypto", enableExperimentalCrypto);
     if (sleepOnExit)
         config.insert("sleep_on_exit", sleepOnExit);
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
@@ -510,6 +678,28 @@ int SettingsManager::writeFile() {
         config.insert("debug_chiaki_log", debugChiakiLog);
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", static_cast<int>(globalGyroSource));
+
+    {
+        ButtonMapping defaults = getDefaultButtonMapping();
+        bool hasCustomMappings = (buttonMapping != defaults);
+        if (hasCustomMappings) {
+            toml::table mappingTable;
+            for (const auto& [chiakiBtn, combo] : buttonMapping) {
+                std::string key = chiakiButtonToConfigKey(chiakiBtn);
+                if (key.empty()) continue;
+
+                toml::array arr;
+                for (uint64_t hidBtn : combo) {
+                    std::string btnName = hidButtonToConfigString(hidBtn);
+                    if (!btnName.empty()) {
+                        arr.push_back(btnName);
+                    }
+                }
+                mappingTable.insert(key, arr);
+            }
+            config.insert("button_mapping", mappingTable);
+        }
+    }
 
     for (const auto& [name, host] : hosts) {
         brls::Logger::debug("Writing host config: {}", name);
@@ -1036,14 +1226,6 @@ void SettingsManager::setGlobalDuid(const std::string& duid) {
     globalDuid = duid;
 }
 
-bool SettingsManager::getInvertAB() const {
-    return globalInvertAB;
-}
-
-void SettingsManager::setInvertAB(bool invert) {
-    globalInvertAB = invert;
-}
-
 bool SettingsManager::getHolepunchRetry() const {
     return holepunchRetry;
 }
@@ -1079,14 +1261,6 @@ int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res)
         }
     }
     return 1000;
-}
-
-bool SettingsManager::getEnableExperimentalCrypto() const {
-    return enableExperimentalCrypto;
-}
-
-void SettingsManager::setEnableExperimentalCrypto(bool enabled) {
-    enableExperimentalCrypto = enabled;
 }
 
 GyroSource SettingsManager::getGyroSource() const {
@@ -1175,6 +1349,37 @@ bool SettingsManager::isStreamingActive() const {
 
 void SettingsManager::setStreamingActive(bool active) {
     streamingActive = active;
+}
+
+const ButtonMapping& SettingsManager::getButtonMapping() const {
+    return buttonMapping;
+}
+
+void SettingsManager::setButtonMapping(const ButtonMapping& mapping) {
+    buttonMapping = mapping;
+}
+
+ButtonMapping SettingsManager::getDefaultButtonMapping() const {
+    ButtonMapping defaults;
+    defaults[CHIAKI_CONTROLLER_BUTTON_CROSS]    = {HidNpadButton_B};
+    defaults[CHIAKI_CONTROLLER_BUTTON_MOON]     = {HidNpadButton_A};
+    defaults[CHIAKI_CONTROLLER_BUTTON_BOX]      = {HidNpadButton_Y};
+    defaults[CHIAKI_CONTROLLER_BUTTON_PYRAMID]  = {HidNpadButton_X};
+    defaults[CHIAKI_CONTROLLER_BUTTON_L1]       = {HidNpadButton_L};
+    defaults[CHIAKI_CONTROLLER_BUTTON_R1]       = {HidNpadButton_R};
+    defaults[CHIAKI_CONTROLLER_ANALOG_BUTTON_L2] = {HidNpadButton_ZL};
+    defaults[CHIAKI_CONTROLLER_ANALOG_BUTTON_R2] = {HidNpadButton_ZR};
+    defaults[CHIAKI_CONTROLLER_BUTTON_L3]       = {HidNpadButton_StickL};
+    defaults[CHIAKI_CONTROLLER_BUTTON_R3]       = {HidNpadButton_StickR};
+    defaults[CHIAKI_CONTROLLER_BUTTON_OPTIONS]  = {HidNpadButton_Plus};
+    defaults[CHIAKI_CONTROLLER_BUTTON_SHARE]    = {};
+    defaults[CHIAKI_CONTROLLER_BUTTON_TOUCHPAD] = {};
+    defaults[CHIAKI_CONTROLLER_BUTTON_PS]       = {HidNpadButton_Minus};
+    defaults[SWIPE_TOUCHPAD_UP]    = {};
+    defaults[SWIPE_TOUCHPAD_DOWN]  = {};
+    defaults[SWIPE_TOUCHPAD_LEFT]  = {};
+    defaults[SWIPE_TOUCHPAD_RIGHT] = {};
+    return defaults;
 }
 
 std::string SettingsManager::getLogFilePath() {

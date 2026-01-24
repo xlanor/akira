@@ -1,0 +1,92 @@
+<brls:Box
+    width="100%"
+    height="100%"
+    axis="column"
+    backgroundColor="@theme/brls/background"
+    paddingTop="30"
+    paddingLeft="30"
+    paddingRight="30"
+    paddingBottom="30">
+
+    <brls:Label
+        id="remap/title"
+        text="Button Mapping"
+        fontSize="24"
+        marginBottom="15"/>
+
+    <brls:Box
+        id="remap/mainContent"
+        width="auto"
+        height="auto"
+        grow="1.0"
+        axis="row"
+        alignItems="stretch">
+
+        <brls:Box
+            width="60%"
+            height="auto"
+            justifyContent="center"
+            alignItems="center">
+            <brls:Image
+                id="remap/controllerImage"
+                width="90%"
+                height="auto"
+                scalingType="fit"/>
+        </brls:Box>
+
+        <brls:Box
+            width="40%"
+            height="auto"
+            axis="column"
+            grow="1.0">
+
+            <brls:ScrollingFrame
+                id="remap/scroll"
+                width="auto"
+                height="auto"
+                grow="1.0">
+
+                <brls:Box
+                    id="remap/list"
+                    width="auto"
+                    height="auto"
+                    axis="column"
+                    grow="1.0"/>
+
+            </brls:ScrollingFrame>
+
+        </brls:Box>
+
+    </brls:Box>
+
+    <brls:Box
+        id="remap/captureOverlay"
+        width="auto"
+        height="auto"
+        grow="1.0"
+        axis="column"
+        justifyContent="center"
+        alignItems="center"
+        visibility="gone">
+
+        <brls:Label
+            id="remap/captureLabel"
+            text="Press button(s) for:"
+            fontSize="22"
+            marginBottom="10"/>
+
+        <brls:Label
+            id="remap/captureButtons"
+            text=""
+            fontSize="28"
+            textColor="#00CC88"
+            marginBottom="20"/>
+
+        <brls:Label
+            text="Release all buttons to confirm. Hold X on any entry to reset."
+            fontSize="14"
+            textColor="#888888"/>
+
+    </brls:Box>
+
+</brls:Box>

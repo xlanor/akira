@@ -1,7 +1,7 @@
 #include "views/settings_tab.hpp"
 #include "views/benchmark_view.hpp"
+#include "views/controller_remap_view.hpp"
 #include "core/discovery_manager.hpp"
-#include "crypto/libnx/gmac.h"
 
 #include <ctime>
 #include <iomanip>
@@ -49,15 +49,14 @@ SettingsTab::SettingsTab() {
     initVpnFpsSelector();
     initVpnBitrateSlider();
     initHapticSelector();
-    initInvertABToggle();
     initGyroSourceSelector();
     initSleepOnExitToggle();
+    initButtonMappingCell();
     initEnableThreadAffinityToggle();
     initHolepunchRetryToggle();
     initPsnAccountSection();
     initCompanionSection();
     initPowerUserSection();
-    initExperimentalCryptoToggle();
     initRequestIdrOnFecFailureToggle();
     initPacketLossMaxSlider();
     initEnableFileLoggingToggle();
@@ -413,19 +412,6 @@ void SettingsTab::initHapticSelector() {
     );
 }
 
-void SettingsTab::initInvertABToggle() {
-    bool currentValue = settings->getInvertAB();
-
-    invertABToggle->init(
-        "Invert A and B",
-        currentValue,
-        [this](bool isOn) {
-            settings->setInvertAB(isOn);
-            settings->writeFile();
-            brls::Logger::info("Invert A/B set to {}", isOn ? "true" : "false");
-        }
-    );
-}
 
 void SettingsTab::initGyroSourceSelector() {
     std::vector<std::string> options = {"Auto", "Left Joy-Con", "Right Joy-Con"};
@@ -454,6 +440,17 @@ void SettingsTab::initSleepOnExitToggle() {
             settings->writeFile();
         }
     );
+}
+
+void SettingsTab::initButtonMappingCell() {
+    buttonMappingCell->setText("Button Mapping");
+    buttonMappingCell->setDetailText("Configure");
+
+    buttonMappingCell->registerClickAction([](brls::View*) {
+        auto* remapView = new ControllerRemapView();
+        brls::Application::pushActivity(new brls::Activity(remapView), brls::TransitionAnimation::NONE);
+        return true;
+    });
 }
 
 void SettingsTab::initEnableThreadAffinityToggle() {
@@ -822,24 +819,6 @@ void SettingsTab::updatePowerUserVisibility() {
     }
 }
 
-void SettingsTab::initExperimentalCryptoToggle() {
-    bool currentValue = settings->getEnableExperimentalCrypto();
-
-    experimentalCryptoToggle->init(
-        "Enable Experimental PMULL GHASH",
-        currentValue,
-        [this](bool isOn) {
-            settings->setEnableExperimentalCrypto(isOn);
-            settings->writeFile();
-            if (isOn) {
-                chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
-            } else {
-                chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
-            }
-            brls::Logger::info("GHASH mode: {}", isOn ? "PMULL" : "TABLE");
-        }
-    );
-}
 
 void SettingsTab::runGhashBenchmark() {
     auto* benchmarkView = new BenchmarkView();

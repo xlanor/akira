@@ -1,5 +1,4 @@
 #include "views/benchmark_view.hpp"
-#include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
 #include "crypto/libnx/gmac.h"
 #include <chiaki/thread.h>
@@ -189,12 +188,7 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         view->addLogLine("");
     }
 
-    auto* settings = SettingsManager::getInstance();
-    if (settings->getEnableExperimentalCrypto()) {
-        chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
-    } else {
-        chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
-    }
+    chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
 
     view->addLogLine("========================================");
     view->addLogLine("         Benchmark Complete!");

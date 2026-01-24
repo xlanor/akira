@@ -23,9 +23,9 @@ private:
     BRLS_BIND(brls::SelectorCell, vpnFpsSelector, "settings/vpnFps");
     BRLS_BIND(brls::SliderCell, vpnBitrateSlider, "settings/vpnBitrate");
     BRLS_BIND(brls::SelectorCell, hapticSelector, "settings/haptic");
-    BRLS_BIND(brls::BooleanCell, invertABToggle, "settings/invertAB");
     BRLS_BIND(brls::SelectorCell, gyroSourceSelector, "settings/gyroSource");
     BRLS_BIND(brls::BooleanCell, sleepOnExitToggle, "settings/sleepOnExit");
+    BRLS_BIND(brls::DetailCell, buttonMappingCell, "settings/buttonMapping");
     BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
     BRLS_BIND(brls::BooleanCell, requestIdrOnFecFailureToggle, "settings/requestIdrOnFecFailure");
@@ -55,7 +55,6 @@ private:
     BRLS_BIND(brls::Label, versionLabel, "settings/version");
     BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
     BRLS_BIND(brls::BooleanCell, unlockBitrateMaxToggle, "settings/unlockBitrateMax");
-    BRLS_BIND(brls::BooleanCell, experimentalCryptoToggle, "settings/experimentalCrypto");
     BRLS_BIND(brls::Button, runBenchmarkBtn, "settings/runBenchmark");
 
     SettingsManager* settings = nullptr;
@@ -79,9 +78,9 @@ private:
     void initVpnBitrateSlider();
     void updateVpnBitrateSlider();
     void initHapticSelector();
-    void initInvertABToggle();
     void initGyroSourceSelector();
     void initSleepOnExitToggle();
+    void initButtonMappingCell();
     void initEnableThreadAffinityToggle();
     void initHolepunchRetryToggle();
     void initRequestIdrOnFecFailureToggle();
@@ -95,7 +94,6 @@ private:
     void initCompanionSection();
     void initPowerUserSection();
     void updatePowerUserVisibility();
-    void initExperimentalCryptoToggle();
     void runGhashBenchmark();
 };
 
