@@ -2,7 +2,9 @@
 #define AKIRA_SETTINGS_MANAGER_HPP
 
 #include <map>
+#include <set>
 #include <string>
+#include <vector>
 
 #include <chiaki/common.h>
 #include <chiaki/session.h>
@@ -22,6 +24,8 @@ enum class GyroSource {
     Left = 1,
     Right = 2
 };
+
+using ButtonMapping = std::map<uint32_t, std::vector<uint64_t>>;
 
 class SettingsManager {
 protected:
@@ -48,7 +52,6 @@ private:
     int64_t globalPsnTokenExpiresAt = 0;
     std::string globalDuid;
     HapticPreset globalHaptic = HapticPreset::Disabled;
-    bool globalInvertAB = false;
     int localVideoBitrate = 10000;
     int remoteVideoBitrate = 10000;
     int vpnVideoBitrate = 5000;
@@ -57,7 +60,6 @@ private:
     bool holepunchRetry = false;
     bool powerUserMenuUnlocked = false;
     bool unlockBitrateMax = false;
-    bool enableExperimentalCrypto = true;
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
@@ -78,8 +80,11 @@ private:
     std::string companionHost;
     int companionPort = 8080;
 
+    ButtonMapping buttonMapping;
+
     void parseTomlFile();
     void parseLegacyFile();
+    void removeLegacyConfig();
     static size_t getB64EncodeSize(size_t inputSize);
     static bool fileExists(const char* path);
 
@@ -189,9 +194,6 @@ public:
     int getCompanionPort() const;
     void setCompanionPort(int port);
 
-    bool getInvertAB() const;
-    void setInvertAB(bool invert);
-
     GyroSource getGyroSource() const;
     void setGyroSource(GyroSource source);
 
@@ -204,8 +206,6 @@ public:
     void setUnlockBitrateMax(bool enabled);
     int getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const;
 
-    bool getEnableExperimentalCrypto() const;
-    void setEnableExperimentalCrypto(bool enabled);
 
     bool getSleepOnExit() const;
     void setSleepOnExit(bool enabled);
@@ -231,6 +231,10 @@ public:
     void setDebugRenderLog(bool enabled);
     bool getDebugChiakiLog() const;
     void setDebugChiakiLog(bool enabled);
+
+    const ButtonMapping& getButtonMapping() const;
+    void setButtonMapping(const ButtonMapping& mapping);
+    ButtonMapping getDefaultButtonMapping() const;
 
     // Runtime state (not persisted)
     bool isStreamingActive() const;

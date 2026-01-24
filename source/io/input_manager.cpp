@@ -1,7 +1,10 @@
 #include "core/io/input_manager.hpp"
 #include "core/settings_manager.hpp"
+#include "core/swipe_direction.hpp"
 #include <borealis.hpp>
+#include <chiaki/controller.h>
 #include <cmath>
+#include <algorithm>
 #include <array>
 
 InputManager::InputManager()
@@ -64,46 +67,94 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
     u64 buttons = padGetButtons(&m_pad);
 
     state->buttons = 0;
+    state->l2_state = 0x00;
+    state->r2_state = 0x00;
 
-    bool invertAB = SettingsManager::getInstance()->getInvertAB();
-    if (invertAB) {
-        if (buttons & HidNpadButton_A) state->buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS;     // A -> Cross (inverted)
-        if (buttons & HidNpadButton_B) state->buttons |= CHIAKI_CONTROLLER_BUTTON_MOON;      // B -> Circle (inverted)
-    } else {
-        if (buttons & HidNpadButton_A) state->buttons |= CHIAKI_CONTROLLER_BUTTON_MOON;      // A -> Circle
-        if (buttons & HidNpadButton_B) state->buttons |= CHIAKI_CONTROLLER_BUTTON_CROSS;     // B -> Cross
+    const ButtonMapping& mapping = SettingsManager::getInstance()->getButtonMapping();
+
+    u64 consumedButtons = 0;
+    for (const auto& [chiakiBtn, combo] : mapping) {
+        if (combo.size() <= 1) continue;
+        bool allHeld = true;
+        for (uint64_t hidBtn : combo) {
+            if (!(buttons & hidBtn)) { allHeld = false; break; }
+        }
+        if (allHeld) {
+            for (uint64_t hidBtn : combo)
+                consumedButtons |= hidBtn;
+        }
     }
-    if (buttons & HidNpadButton_X) state->buttons |= CHIAKI_CONTROLLER_BUTTON_PYRAMID;   // X -> Triangle
-    if (buttons & HidNpadButton_Y) state->buttons |= CHIAKI_CONTROLLER_BUTTON_BOX;       // Y -> Square
+    static constexpr uint32_t swipeConstants[4] = {
+        SWIPE_TOUCHPAD_UP, SWIPE_TOUCHPAD_DOWN,
+        SWIPE_TOUCHPAD_LEFT, SWIPE_TOUCHPAD_RIGHT
+    };
+    for (int i = 0; i < 4; i++) {
+        if (m_swipes[i].phase == SyntheticSwipe::Phase::ACTIVE) {
+            auto it = mapping.find(swipeConstants[i]);
+            if (it != mapping.end()) {
+                for (uint64_t hidBtn : it->second)
+                    consumedButtons |= hidBtn;
+            }
+        }
+    }
 
-    if (buttons & HidNpadButton_Left)  state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT;
-    if (buttons & HidNpadButton_Right) state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT;
-    if (buttons & HidNpadButton_Up)    state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP;
-    if (buttons & HidNpadButton_Down)  state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN;
+    u64 dpadButtons = buttons & ~consumedButtons;
+    if (dpadButtons & HidNpadButton_Left)  state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT;
+    if (dpadButtons & HidNpadButton_Right) state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT;
+    if (dpadButtons & HidNpadButton_Up)    state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP;
+    if (dpadButtons & HidNpadButton_Down)  state->buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN;
 
-    if (buttons & HidNpadButton_L) state->buttons |= CHIAKI_CONTROLLER_BUTTON_L1;
-    if (buttons & HidNpadButton_R) state->buttons |= CHIAKI_CONTROLLER_BUTTON_R1;
+    for (const auto& [chiakiBtn, combo] : mapping) {
+        if (combo.empty()) continue;
+        if (chiakiBtn & 0xFF000000) continue;
 
-    state->l2_state = (buttons & HidNpadButton_ZL) ? 0xff : 0x00;
-    state->r2_state = (buttons & HidNpadButton_ZR) ? 0xff : 0x00;
+        if (combo.size() == 1 && (consumedButtons & combo[0]))
+            continue;
 
-    if (buttons & HidNpadButton_StickL) state->buttons |= CHIAKI_CONTROLLER_BUTTON_L3;
-    if (buttons & HidNpadButton_StickR) state->buttons |= CHIAKI_CONTROLLER_BUTTON_R3;
+        bool allHeld = true;
+        for (uint64_t hidBtn : combo) {
+            if (!(buttons & hidBtn)) { allHeld = false; break; }
+        }
 
-    if (buttons & HidNpadButton_Plus)  state->buttons |= CHIAKI_CONTROLLER_BUTTON_OPTIONS;
-    if (buttons & HidNpadButton_Minus) state->buttons |= CHIAKI_CONTROLLER_BUTTON_PS;
+        if (allHeld) {
+            if (chiakiBtn == CHIAKI_CONTROLLER_ANALOG_BUTTON_L2) {
+                state->l2_state = 0xff;
+            } else if (chiakiBtn == CHIAKI_CONTROLLER_ANALOG_BUTTON_R2) {
+                state->r2_state = 0xff;
+            } else {
+                state->buttons |= chiakiBtn;
+            }
+        }
+    }
+
 
     HidAnalogStickState left = padGetStickPos(&m_pad, 0);
     HidAnalogStickState right = padGetStickPos(&m_pad, 1);
-    state->left_x = left.x;
-    state->left_y = -left.y;
-    state->right_x = right.x;
-    state->right_y = -right.y;
+
+    static constexpr u64 leftStickDirs = HidNpadButton_StickLUp | HidNpadButton_StickLDown
+                                       | HidNpadButton_StickLLeft | HidNpadButton_StickLRight;
+    static constexpr u64 rightStickDirs = HidNpadButton_StickRUp | HidNpadButton_StickRDown
+                                        | HidNpadButton_StickRLeft | HidNpadButton_StickRRight;
+
+    if (consumedButtons & leftStickDirs) {
+        state->left_x = 0;
+        state->left_y = 0;
+    } else {
+        state->left_x = left.x;
+        state->left_y = -left.y;
+    }
+
+    if (consumedButtons & rightStickDirs) {
+        state->right_x = 0;
+        state->right_y = 0;
+    } else {
+        state->right_x = right.x;
+        state->right_y = -right.y;
+    }
 
     readTouchScreen(state, finger_id_touch_id);
+    updateSyntheticSwipes(state, buttons);
 
-    // Throttle six-axis sensor reading to every 3 frames
-    // hidGetSixAxisSensorStates() can block and cause video blackout
     if (++m_sixaxis_frame_counter >= 3) {
         m_sixaxis_frame_counter = 0;
         readSixAxis(state);
@@ -116,7 +167,6 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
 
     bool ret = false;
     hidGetTouchScreenStates(&sw_state, 1);
-    chiaki_state->buttons &= ~CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
 
     // Un-touch all old touches
     for (auto it = finger_id_touch_id->begin(); it != finger_id_touch_id->end();)
@@ -142,14 +192,17 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         }
     }
 
+    const float trackpadMaxX = m_is_ps5 ? 1919.0f : 1920.0f;
+    const float trackpadMaxY = m_is_ps5 ? 1079.0f : 942.0f;
+
     for (int i = 0; i < sw_state.count; i++)
     {
-        uint16_t x = sw_state.touches[i].x * ((float)DS4_TRACKPAD_MAX_X / (float)SWITCH_TOUCHSCREEN_MAX_X);
-        uint16_t y = sw_state.touches[i].y * ((float)DS4_TRACKPAD_MAX_Y / (float)SWITCH_TOUCHSCREEN_MAX_Y);
+        uint16_t x = sw_state.touches[i].x * (trackpadMaxX / (float)SWITCH_TOUCHSCREEN_MAX_X);
+        uint16_t y = sw_state.touches[i].y * (trackpadMaxY / (float)SWITCH_TOUCHSCREEN_MAX_Y);
 
         // Use nintendo switch border's 5% to trigger the touchpad button
-        if (x <= (DS4_TRACKPAD_MAX_X * 0.05) || x >= (DS4_TRACKPAD_MAX_X * 0.95) ||
-            y <= (DS4_TRACKPAD_MAX_Y * 0.05) || y >= (DS4_TRACKPAD_MAX_Y * 0.95))
+        if (x <= (trackpadMaxX * 0.05f) || x >= (trackpadMaxX * 0.95f) ||
+            y <= (trackpadMaxY * 0.05f) || y >= (trackpadMaxY * 0.95f))
         {
             chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
         }
@@ -282,4 +335,93 @@ void InputManager::resetMotionControls()
 
     brls::Logger::info("Motion controls reset: zero offset = ({}, {}, {})",
         m_accel_zero_x, m_accel_zero_y, m_accel_zero_z);
+}
+
+void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 buttons)
+{
+    static constexpr uint32_t swipeConstants[4] = {
+        SWIPE_TOUCHPAD_UP, SWIPE_TOUCHPAD_DOWN,
+        SWIPE_TOUCHPAD_LEFT, SWIPE_TOUCHPAD_RIGHT
+    };
+
+    const int16_t padMaxX = m_is_ps5 ? 1919 : 1920;
+    const int16_t padMaxY = m_is_ps5 ? 1079 : 942;
+
+    const int16_t dyStep = (padMaxY + SyntheticSwipe::SWIPE_FRAMES - 1) / SyntheticSwipe::SWIPE_FRAMES;
+    const int16_t dxStep = (padMaxX + SyntheticSwipe::SWIPE_FRAMES - 1) / SyntheticSwipe::SWIPE_FRAMES;
+
+    struct SwipeConfig {
+        int16_t startX, startY;
+        int16_t dx, dy;
+    };
+    SwipeConfig configs[4] = {
+        {(int16_t)(padMaxX / 2), padMaxY,  0, (int16_t)-dyStep},
+        {(int16_t)(padMaxX / 2), 0,        0, dyStep},
+        {padMaxX, (int16_t)(padMaxY / 2), (int16_t)-dxStep, 0},
+        {0, (int16_t)(padMaxY / 2),        dxStep, 0},
+    };
+
+    const ButtonMapping& mapping = SettingsManager::getInstance()->getButtonMapping();
+
+    HidAnalogStickState leftStick = padGetStickPos(&m_pad, 0);
+    HidAnalogStickState rightStick = padGetStickPos(&m_pad, 1);
+
+    for (int i = 0; i < 4; i++) {
+        SyntheticSwipe& swipe = m_swipes[i];
+        auto it = mapping.find(swipeConstants[i]);
+        if (it == mapping.end() || it->second.empty()) {
+            swipe.buttonWasPressed = false;
+            continue;
+        }
+
+        bool comboHeld = true;
+        for (uint64_t hidBtn : it->second) {
+            if (!(buttons & hidBtn)) {
+                comboHeld = false;
+                break;
+            }
+        }
+
+        bool stickDirectionValid = true;
+        if (comboHeld) {
+            for (uint64_t hidBtn : it->second) {
+                if (hidBtn == HidNpadButton_StickRUp || hidBtn == HidNpadButton_StickRDown) {
+                    if (abs(rightStick.x) > abs(rightStick.y)) { stickDirectionValid = false; break; }
+                } else if (hidBtn == HidNpadButton_StickRLeft || hidBtn == HidNpadButton_StickRRight) {
+                    if (abs(rightStick.y) > abs(rightStick.x)) { stickDirectionValid = false; break; }
+                } else if (hidBtn == HidNpadButton_StickLUp || hidBtn == HidNpadButton_StickLDown) {
+                    if (abs(leftStick.x) > abs(leftStick.y)) { stickDirectionValid = false; break; }
+                } else if (hidBtn == HidNpadButton_StickLLeft || hidBtn == HidNpadButton_StickLRight) {
+                    if (abs(leftStick.y) > abs(leftStick.x)) { stickDirectionValid = false; break; }
+                }
+            }
+        }
+
+        if (swipe.phase == SyntheticSwipe::Phase::IDLE) {
+            if (comboHeld && stickDirectionValid && !swipe.buttonWasPressed) {
+                swipe.curX = configs[i].startX;
+                swipe.curY = configs[i].startY;
+                swipe.dx = configs[i].dx;
+                swipe.dy = configs[i].dy;
+                swipe.touchId = chiaki_controller_state_start_touch(state, swipe.curX, swipe.curY);
+                if (swipe.touchId >= 0) {
+                    swipe.phase = SyntheticSwipe::Phase::ACTIVE;
+                    swipe.frameCounter = 0;
+                }
+            }
+            swipe.buttonWasPressed = comboHeld && stickDirectionValid;
+        } else {
+            swipe.frameCounter++;
+            if (swipe.frameCounter >= SyntheticSwipe::SWIPE_FRAMES) {
+                chiaki_controller_state_stop_touch(state, (uint8_t)swipe.touchId);
+                swipe.phase = SyntheticSwipe::Phase::IDLE;
+                swipe.touchId = -1;
+                swipe.buttonWasPressed = comboHeld && stickDirectionValid;
+            } else {
+                swipe.curX = (int16_t)std::clamp((int)(swipe.curX + swipe.dx), 0, (int)padMaxX);
+                swipe.curY = (int16_t)std::clamp((int)(swipe.curY + swipe.dy), 0, (int)padMaxY);
+                chiaki_controller_state_set_touch_pos(state, (uint8_t)swipe.touchId, swipe.curX, swipe.curY);
+            }
+        }
+    }
 }

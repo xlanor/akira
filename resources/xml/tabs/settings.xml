@@ -208,11 +208,6 @@
                 marginLeft="15"
                 marginRight="15"/>
 
-            <brls:BooleanCell
-                id="settings/invertAB"
-                title="Invert A and B"
-                marginLeft="15"
-                marginRight="15"/>
 
             <brls:SelectorCell
                 id="settings/gyroSource"
@@ -223,6 +218,12 @@
             <brls:BooleanCell
                 id="settings/sleepOnExit"
                 title="Sleep Console on Exit"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:DetailCell
+                id="settings/buttonMapping"
+                title="Button Mapping"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -263,20 +264,6 @@
 
             <brls:Label
                 text="Automatically retry holepunch up to 4 times with increasing delays (3s, 6s, 9s)"
-                fontSize="14"
-                textColor="#666666"
-                marginLeft="15"
-                marginTop="5"
-                marginBottom="10"/>
-
-            <brls:BooleanCell
-                id="settings/experimentalCrypto"
-                title="Enable Experimental PMULL GHASH"
-                marginLeft="15"
-                marginRight="15"/>
-
-            <brls:Label
-                text="Uses ARM NEON PMULL for GHASH (faster). Turn off if you experience issues."
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -573,7 +560,7 @@
 
         <brls:Label
             id="settings/version"
-            text="Akira v0.2.2"
+            text="Akira v0.4.0"
             fontSize="14"
             textColor="#666666"
             marginTop="20"
