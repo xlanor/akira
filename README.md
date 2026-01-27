@@ -36,20 +36,21 @@ And some horribly compressed encodes to fit < 10mb:
 ## Blurb
 I initially started working on this when FW 21 broke chiaki-ng.The changes I was going to be making was very invasive, and so I took it out of tree first, switching to a homebrew nro that wraps chiaki-ng as a dependency. I may upstream this back into chiaki-ng eventually. 
 
-At this point I'm a place where I can seat back and enjoy my christmas break to play Avatar while my partner watches something else on the telly.
-
 ## Changes from in-tree
 [Read this](https://github.com/xlanor/akira/wiki/Additional-changes)
-
-The biggest change is probably the removal of openGL and cutover to deko3d.
-
-The second biggest change is probably ensuring that hardware accelerated crypto is used on the network stream
 
 The biggest feature change is the addition of PSN remote play. Thanks to the hard work by Streetpea on chiaki-ng and grill2010 for reverse engineering the PSN api, I just call whatever he has built. You should see two screens come up if this is successful.
 
 The first screen is going to be for the CTRL holepunching, and the second screen for DATA holepunching after the session has been initalised. Rather than show an empty screen I decided to just stream the logs.
 
+Other features that are listed there but I'll reproduce here include
 
+- Remappable input buttons/touchscreen
+- Initial wireguard support
+- deko3d over OpenGL
+- Selectable gyro source. This allows you to select left/right joycon as the actual gyro source when playing in detached.
+
+At this point, I think I've tackled most of the major feature asks that I've seen across gbatemp/github and it's time to enjoy playing my backlog of multiple AC games + Ghost of Tsushima that I picked up specifically to celebrate this.
 
 ## How to get started
 [Read this for local](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Local-Network))
