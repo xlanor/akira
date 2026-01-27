@@ -17,7 +17,7 @@ I will not respond to direct pings, please try to use the search button and/or [
 
 I'd also love to hear if you're using this application and it works well for you.
 
-If you find a bug or have a feature request, please open a PR with the fix/implemented feature. 
+If you find a bug or have a feature request, please help out and open a PR with the fix/implemented feature. 
 
 <p align="center" width="100%">
   <img src="readme/akira_hosts_020.jpg"
