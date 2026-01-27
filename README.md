@@ -9,6 +9,16 @@ This project is not endorsed or certified by Sony Interactive Entertainment LLC.
 ## Read the Wiki
 Please, [read the wiki](https://github.com/xlanor/akira/wiki).
 
+## Issues
+
+I am present on chiaki-ng discord's switch-support channel, where StreetPea has graciously allowed me to seed akira amongst existing chiaki-ng users.
+
+I will not respond to direct pings, please try to use the search button and/or [read the wiki](https://github.com/xlanor/akira/wiki) first and then post a message with details of what you've tried.
+
+I'd also love to hear if you're using this application and it works well for you.
+
+If you find a bug or have a feature request, please open a PR with the fix/implemented feature. 
+
 <p align="center" width="100%">
   <img src="readme/akira_hosts_020.jpg"
 </p>
@@ -84,8 +94,6 @@ This software was built with reference/code from:
 - [micro-ecc](https://github.com/kmackay/micro-ecc) for the ECDH implementation that was vendored in.
 - [vecteezy](https://www.vecteezy.com/vector-art/67445984-adorable-capybara-illustration-enjoying-a-drink) for the capybara logo.
 
-## Issues
 
-If you find a bug or have a feature request, please open a PR with the fix/implemented feature. Thanks!
 
 
