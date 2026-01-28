@@ -9,7 +9,9 @@
 #include <arpa/inet.h>
 
 #define LWIP_NO_STDINT_H 0
+#ifndef SSIZE_MAX
 #define SSIZE_MAX INT_MAX
+#endif
 
 typedef uint8_t  u8_t;
 typedef int8_t   s8_t;

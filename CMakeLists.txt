@@ -198,9 +198,10 @@ set(LWIP_SRCS
     ${LWIP_DIR}/src/core/ipv4/icmp.c
 )
 
-set(WG_NETIF_SRCS
-    ${CMAKE_CURRENT_SOURCE_DIR}/source/core/wg_netif.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/source/core/sys_arch.c
+set(LWIP_RELAY_SRCS
+    ${WIREGUARD_DIR}/lwip-relay/src/wg_lwip_relay.cpp
+    ${WIREGUARD_DIR}/lwip-relay/src/wg_netif.c
+    ${WIREGUARD_DIR}/lwip-relay/src/sys_arch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/source/core/thread_affinity.cpp
 )
 
@@ -208,7 +209,7 @@ set(WG_NETIF_SRCS
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 
-target_sources(${PROJECT_NAME} PRIVATE ${LWIP_SRCS} ${WG_NETIF_SRCS})
+target_sources(${PROJECT_NAME} PRIVATE ${LWIP_SRCS} ${LWIP_RELAY_SRCS})
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -222,9 +223,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     # WireGuard
     ${WIREGUARD_DIR}/include
     ${WIREGUARD_DIR}/src
+    ${WIREGUARD_DIR}/lwip-relay/include
     # lwIP includes
     ${LWIP_DIR}/src/include
-    ${LWIP_DIR}
     ${APP_PLATFORM_INCLUDE}
 )
 
