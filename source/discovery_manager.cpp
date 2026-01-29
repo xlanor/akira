@@ -482,33 +482,50 @@ void DiscoveryManager::fetchCompanionCredentials(
 
     res = curl_easy_perform(curl);
 
-    if (res == CURLE_OK)
+    if (res != CURLE_OK)
     {
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-        if (http_code == 200)
-        {
-            parsed_json = json_tokener_parse(response_data.c_str());
-            if (parsed_json)
-            {
-                struct json_object* access_token_obj;
-                struct json_object* refresh_token_obj;
-                struct json_object* expires_at_obj;
+        onError(std::string("Token fetch failed: ") + curl_easy_strerror(res));
+        curl_easy_cleanup(curl);
+        return;
+    }
 
-                if (json_object_object_get_ex(parsed_json, "access_token", &access_token_obj))
-                {
-                    accessToken = json_object_get_string(access_token_obj);
-                }
-                if (json_object_object_get_ex(parsed_json, "refresh_token", &refresh_token_obj))
-                {
-                    refreshToken = json_object_get_string(refresh_token_obj);
-                }
-                if (json_object_object_get_ex(parsed_json, "expires_at", &expires_at_obj))
-                {
-                    expiresAt = json_object_get_int64(expires_at_obj);
-                }
-                json_object_put(parsed_json);
-            }
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    if (http_code != 200)
+    {
+        onError("Token fetch HTTP error: " + std::to_string(http_code));
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    parsed_json = json_tokener_parse(response_data.c_str());
+    if (parsed_json)
+    {
+        struct json_object* access_token_obj;
+        struct json_object* refresh_token_obj;
+        struct json_object* expires_at_obj;
+        struct json_object* error_obj;
+
+        if (json_object_object_get_ex(parsed_json, "error", &error_obj))
+        {
+            onError(std::string("Token error: ") + json_object_get_string(error_obj));
+            json_object_put(parsed_json);
+            curl_easy_cleanup(curl);
+            return;
         }
+
+        if (json_object_object_get_ex(parsed_json, "access_token", &access_token_obj))
+        {
+            accessToken = json_object_get_string(access_token_obj);
+        }
+        if (json_object_object_get_ex(parsed_json, "refresh_token", &refresh_token_obj))
+        {
+            refreshToken = json_object_get_string(refresh_token_obj);
+        }
+        if (json_object_object_get_ex(parsed_json, "expires_at", &expires_at_obj))
+        {
+            expiresAt = json_object_get_int64(expires_at_obj);
+        }
+        json_object_put(parsed_json);
     }
 
     std::string duidUrl = "http://" + host + ":" + std::to_string(port) + "/duid";
@@ -517,31 +534,43 @@ void DiscoveryManager::fetchCompanionCredentials(
 
     res = curl_easy_perform(curl);
 
-    if (res == CURLE_OK)
+    if (res != CURLE_OK)
     {
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-        if (http_code == 200)
+        onError(std::string("DUID fetch failed: ") + curl_easy_strerror(res));
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    if (http_code != 200)
+    {
+        onError("DUID fetch HTTP error: " + std::to_string(http_code));
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    parsed_json = json_tokener_parse(response_data.c_str());
+    if (parsed_json)
+    {
+        struct json_object* duid_obj;
+        struct json_object* error_obj;
+
+        if (json_object_object_get_ex(parsed_json, "error", &error_obj))
         {
-            parsed_json = json_tokener_parse(response_data.c_str());
-            if (parsed_json)
-            {
-                struct json_object* duid_obj;
-                if (json_object_object_get_ex(parsed_json, "duid", &duid_obj))
-                {
-                    duid = json_object_get_string(duid_obj);
-                }
-                json_object_put(parsed_json);
-            }
+            onError(std::string("DUID error: ") + json_object_get_string(error_obj));
+            json_object_put(parsed_json);
+            curl_easy_cleanup(curl);
+            return;
         }
+
+        if (json_object_object_get_ex(parsed_json, "duid", &duid_obj))
+        {
+            duid = json_object_get_string(duid_obj);
+        }
+        json_object_put(parsed_json);
     }
 
     curl_easy_cleanup(curl);
-
-    if (accountId.empty() && onlineId.empty() && accessToken.empty() && refreshToken.empty() && duid.empty())
-    {
-        onError("No credentials available from companion");
-        return;
-    }
 
     onSuccess(onlineId, accountId, accessToken, refreshToken, expiresAt, duid);
 }
