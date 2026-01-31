@@ -29,9 +29,9 @@
             alignItems="center">
             <brls:Image
                 id="remap/controllerImage"
-                width="90%"
+                width="100%"
                 height="auto"
-                scalingType="fit"/>
+                scalingType="center"/>
         </brls:Box>
 
         <brls:Box

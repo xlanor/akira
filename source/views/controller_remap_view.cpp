@@ -11,7 +11,8 @@ ControllerRemapView::ControllerRemapView()
 
     titleLabel = (brls::Label*)this->getView("remap/title");
     mainContent = (brls::Box*)this->getView("remap/mainContent");
-    ((brls::Image*)this->getView("remap/controllerImage"))->setImageFromRes("img/ps5/controller.png");
+    auto* controllerImg = (brls::Image*)this->getView("remap/controllerImage");
+    controllerImg->setImageFromRes("img/ps5/controller.png");
     scrollFrame = (brls::ScrollingFrame*)this->getView("remap/scroll");
     scrollFrame->setScrollingBehavior(brls::ScrollingBehavior::CENTERED);
     this->setDefaultFocusedIndex(1);
