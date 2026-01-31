@@ -510,7 +510,8 @@ void Host::sendFeedbackState()
 
 void Host::connectionEventCallback(ChiakiEvent* event)
 {
-    brls::Logger::info("connectionEventCallback: event type={}", static_cast<int>(event->type));
+    if (SettingsManager::getInstance()->getDebugChiakiLog())
+        brls::Logger::info("connectionEventCallback: event type={}", static_cast<int>(event->type));
 
     switch (event->type)
     {
@@ -531,8 +532,8 @@ void Host::connectionEventCallback(ChiakiEvent* event)
             break;
 
         case CHIAKI_EVENT_RUMBLE:
-            brls::Logger::info("RUMBLE EVENT: left={}, right={}", event->rumble.left, event->rumble.right);
-            brls::Logger::debug("EventCB CHIAKI_EVENT_RUMBLE");
+            if (SettingsManager::getInstance()->getDebugChiakiLog())
+                brls::Logger::info("RUMBLE EVENT: left={}, right={}", event->rumble.left, event->rumble.right);
             if (onRumble)
             {
                 onRumble(event->rumble.left, event->rumble.right);
