@@ -13,11 +13,13 @@ Please, [read the wiki](https://github.com/xlanor/akira/wiki).
 
 I am present on chiaki-ng discord's switch-support channel, where StreetPea has graciously allowed me to seed akira amongst existing chiaki-ng users.
 
-I will not respond to direct pings, please try to use the search button and/or [read the wiki](https://github.com/xlanor/akira/wiki) first and then post a message with details of what you've tried.
+I will not respond to direct pings, please try to use the search button and/or [read the wiki](https://github.com/xlanor/akira/wiki) first and then post a message with details of what you've tried. 
 
 I'd also love to hear if you're using this application and it works well for you.
 
 If you find a bug or have a feature request, please help out and open a PR with the fix/implemented feature. 
+
+I do not support anything but the latest version, please ensure you are always on the latest version avaliable in releases.
 
 <p align="center" width="100%">
   <img src="readme/akira_hosts_020.jpg"
