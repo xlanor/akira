@@ -89,14 +89,12 @@ bool VideoDecoder::initCodec(bool is_PS5, int width, int height)
     return true;
 }
 
-bool VideoDecoder::initVideo(int video_width, int video_height, int screen_width, int screen_height)
+bool VideoDecoder::initVideo(int video_width, int video_height)
 {
     brls::Logger::info("VideoDecoder: initVideo {}x{}", video_width, video_height);
 
     m_video_width = video_width;
     m_video_height = video_height;
-    m_screen_width = screen_width;
-    m_screen_height = screen_height;
 
     // Wait for IDR frame at session start
     // PS5 may resume with P-frames; returning false triggers CORRUPTFRAME → keyframe request

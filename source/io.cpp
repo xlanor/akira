@@ -100,14 +100,12 @@ void IO::AudioCB(int16_t* buf, size_t samples_count)
     }
 }
 
-bool IO::InitVideo(int video_width, int video_height, int screen_width, int screen_height)
+bool IO::InitVideo(int video_width, int video_height)
 {
     brls::Logger::info("load InitVideo");
-    this->quit = false; 
-    this->screen_width = screen_width;
-    this->screen_height = screen_height;
+    this->quit = false;
 
-    if (!m_video_decoder || !m_video_decoder->initVideo(video_width, video_height, screen_width, screen_height))
+    if (!m_video_decoder || !m_video_decoder->initVideo(video_width, video_height))
     {
         brls::Logger::error("Failed to initialize video decoder");
         return false;
@@ -116,7 +114,7 @@ bool IO::InitVideo(int video_width, int video_height, int screen_width, int scre
     brls::Logger::info("Creating Deko3d renderer");
     m_video_renderer = std::make_unique<Deko3dRenderer>();
 
-    if (!m_video_renderer->initialize(video_width, video_height, screen_width, screen_height, this->log))
+    if (!m_video_renderer->initialize(video_width, video_height, this->log))
     {
         throw Exception("Failed to initialize video renderer");
     }

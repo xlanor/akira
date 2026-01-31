@@ -31,9 +31,6 @@ private:
     ChiakiLog* log;
     bool quit = false;
 
-    int screen_width = 1280;
-    int screen_height = 720;
-
     std::unique_ptr<AudioManager> m_audio_manager;
     std::unique_ptr<HapticManager> m_haptic_manager;
     std::unique_ptr<InputManager> m_input_manager;
@@ -71,7 +68,7 @@ public:
     bool VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user);
     void InitAudioCB(unsigned int channels, unsigned int rate);
     void AudioCB(int16_t* buf, size_t samples_count);
-    bool InitVideo(int video_width, int video_height, int screen_width, int screen_height);
+    bool InitVideo(int video_width, int video_height);
     bool InitAVCodec(bool is_PS5, int video_width = 0, int video_height = 0);
     bool FreeVideo();
     bool InitController();

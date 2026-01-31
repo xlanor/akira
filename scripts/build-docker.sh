@@ -75,6 +75,9 @@ build_akira() {
     # Extract curl version from curlver.h
     CURL_VERSION=$(grep 'LIBCURL_VERSION "' ${BUILD_DIR}/library/curl-libnx/include/curl/curlver.h | sed 's/.*"\([^"]*\)".*/\1/' || echo "unknown")
 
+    # Extract ffmpeg version from RELEASE file
+    FFMPEG_VERSION=$(cat ${BUILD_DIR}/library/ffmpeg/RELEASE 2>/dev/null || echo "unknown")
+
     # Extract Akira version from CMakeLists.txt
     AKIRA_MAJOR=$(grep 'set(VERSION_MAJOR' ${BUILD_DIR}/CMakeLists.txt | sed 's/[^0-9]*//g')
     AKIRA_MINOR=$(grep 'set(VERSION_MINOR' ${BUILD_DIR}/CMakeLists.txt | sed 's/[^0-9]*//g')
@@ -91,6 +94,7 @@ build_akira() {
     echo "=== Custom Libraries ===" >> ${BUILD_DIR}/resources/build_info.txt
     echo "chiaki-ng ${CHIAKI_VERSION}" >> ${BUILD_DIR}/resources/build_info.txt
     echo "curl ${CURL_VERSION} (libnx TLS)" >> ${BUILD_DIR}/resources/build_info.txt
+    echo "ffmpeg ${FFMPEG_VERSION} (nvtegra)" >> ${BUILD_DIR}/resources/build_info.txt
     echo "" >> ${BUILD_DIR}/resources/build_info.txt
     echo "=== DevkitPro Packages ===" >> ${BUILD_DIR}/resources/build_info.txt
     dkp-pacman -Q >> ${BUILD_DIR}/resources/build_info.txt

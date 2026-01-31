@@ -96,7 +96,7 @@ Deko3dRenderer::~Deko3dRenderer()
     m_text_fragment_shader.destroy();
 }
 
-bool Deko3dRenderer::initialize(int frame_width, int frame_height, int screen_width, int screen_height, ChiakiLog* log)
+bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* log)
 {
     if (m_initialized)
         return true;
@@ -104,11 +104,8 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, int screen_wi
     m_log = log;
     m_frame_width = frame_width;
     m_frame_height = frame_height;
-    m_screen_width = screen_width;
-    m_screen_height = screen_height;
 
-    brls::Logger::info("Deko3dRenderer::initialize: frame={}x{}, screen={}x{}",
-                frame_width, frame_height, screen_width, screen_height);
+    brls::Logger::info("Deko3dRenderer::initialize: frame={}x{}", frame_width, frame_height);
 
     // Get deko3d context from borealis
     m_vctx = (brls::SwitchVideoContext*)brls::Application::getPlatform()->getVideoContext();
@@ -336,16 +333,19 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
         return;
     }
 
+    unsigned screenW = brls::Application::windowWidth;
+    unsigned screenH = brls::Application::windowHeight;
+
     // Build command list fresh each frame
     m_cmdbuf.clear();
 
-    // Bind render target 
+    // Bind render target
     dk::ImageView colorTarget { *framebuffer };
     m_cmdbuf.bindRenderTargets(&colorTarget);
 
     // Set viewport and scissors to match screen dimensions
-    m_cmdbuf.setViewports(0, { { 0.0f, 0.0f, (float)m_screen_width, (float)m_screen_height, 0.0f, 1.0f } });
-    m_cmdbuf.setScissors(0, { { 0, 0, (uint32_t)m_screen_width, (uint32_t)m_screen_height } });
+    m_cmdbuf.setViewports(0, { { 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f } });
+    m_cmdbuf.setScissors(0, { { 0, 0, (uint32_t)screenW, (uint32_t)screenH } });
 
     // Set up GPU render stat
     // disable depth/stencil, no face culling
@@ -863,9 +863,12 @@ void Deko3dRenderer::renderStatsOverlay()
     float bgX2 = MARGIN + boxWidth;
     float bgY2 = MARGIN + boxHeight;
 
+    unsigned screenW = brls::Application::windowWidth;
+    unsigned screenH = brls::Application::windowHeight;
+
     float ndcX1, ndcY1, ndcX2, ndcY2;
-    pixelToNDC(bgX1, bgY1, m_screen_width, m_screen_height, ndcX1, ndcY1);
-    pixelToNDC(bgX2, bgY2, m_screen_width, m_screen_height, ndcX2, ndcY2);
+    pixelToNDC(bgX1, bgY1, screenW, screenH, ndcX1, ndcY1);
+    pixelToNDC(bgX2, bgY2, screenW, screenH, ndcX2, ndcY2);
 
     // Background quad (two triangles) - use UV outside font range for solid color
     vertices.push_back({{ ndcX1, ndcY1, 0.0f }, { -1.0f, -1.0f }, { bgR, bgG, bgB, bgA }});
@@ -899,8 +902,8 @@ void Deko3dRenderer::renderStatsOverlay()
         float cx2 = cursorX + charW;
         float cy2 = cursorY + charH;
 
-        pixelToNDC(cx1, cy1, m_screen_width, m_screen_height, ndcX1, ndcY1);
-        pixelToNDC(cx2, cy2, m_screen_width, m_screen_height, ndcX2, ndcY2);
+        pixelToNDC(cx1, cy1, screenW, screenH, ndcX1, ndcY1);
+        pixelToNDC(cx2, cy2, screenW, screenH, ndcX2, ndcY2);
 
         // Two triangles for the character quad
         vertices.push_back({{ ndcX1, ndcY1, 0.0f }, { u1, v1 }, { txR, txG, txB, txA }});
@@ -942,8 +945,8 @@ void Deko3dRenderer::renderStatsOverlay()
     dk::ImageView colorTarget{*framebuffer};
     m_cmdbuf.bindRenderTargets(&colorTarget);
 
-    m_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)m_screen_width, (float)m_screen_height, 0.0f, 1.0f }});
-    m_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)m_screen_width, (uint32_t)m_screen_height }});
+    m_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
+    m_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
 
     // Enable alpha blending
     m_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));

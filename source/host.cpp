@@ -419,7 +419,7 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
         throw Exception("Failed to initiate libav codec");
     }
 
-    if (!io->InitVideo(connectInfo.video_profile.width, connectInfo.video_profile.height, 1280, 720))
+    if (!io->InitVideo(connectInfo.video_profile.width, connectInfo.video_profile.height))
     {
         throw Exception("Failed to initiate video");
     }
