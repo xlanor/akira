@@ -39,3 +39,7 @@
 [submodule "library/lwip"]
 	path = library/lwip
 	url = https://github.com/lwip-tcpip/lwip.git
+[submodule "library/ffmpeg"]
+	path = library/ffmpeg
+	url = https://github.com/xlanor/FFmpeg.git
+	branch = ffmpeg-8.0.1
