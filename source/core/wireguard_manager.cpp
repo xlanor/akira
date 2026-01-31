@@ -1,6 +1,6 @@
 #include "core/wireguard_manager.hpp"
-#include "core/lwip_relay.hpp"
 #include "core/settings_manager.hpp"
+#include <wg_lwip_relay.hpp>
 #include <borealis.hpp>
 #include <fstream>
 #include <sstream>
@@ -256,7 +256,7 @@ std::string WireGuardManager::getLastError() const {
 }
 
 void WireGuardManager::routeIncomingPacket(const void* data, size_t len) {
-    LwipRelay* relay = lwipRelay_.get();
+    wgnx::LwipRelay* relay = lwipRelay_.get();
     if (relay) {
         relay->handleIncomingPacket(data, len);
     }
@@ -269,7 +269,17 @@ uint16_t WireGuardManager::startTcpRelay(const std::string& targetIp, uint16_t t
         return 0;
 
     if (!lwipRelay_) {
-        lwipRelay_ = std::make_unique<LwipRelay>(tunnel);
+        wgnx::LwipRelayConfig config;
+        config.log_callback = [](wgnx::LogLevel level, const char* msg) {
+            if (level == wgnx::LogLevel::Error) {
+                brls::Logger::error("LwipRelay: {}", msg);
+            } else {
+                brls::Logger::info("LwipRelay: {}", msg);
+            }
+        };
+        config.debug_logging = SettingsManager::getInstance()->getDebugLwipLog();
+
+        lwipRelay_ = std::make_unique<wgnx::LwipRelay>(tunnel, config);
         if (!lwipRelay_->start(tunnelIP, targetIp)) {
             brls::Logger::error("WG: Failed to start lwIP relay");
             lwipRelay_.reset();
@@ -290,7 +300,17 @@ uint16_t WireGuardManager::startUdpRelay(const std::string& targetIp, uint16_t t
         return 0;
 
     if (!lwipRelay_) {
-        lwipRelay_ = std::make_unique<LwipRelay>(tunnel);
+        wgnx::LwipRelayConfig config;
+        config.log_callback = [](wgnx::LogLevel level, const char* msg) {
+            if (level == wgnx::LogLevel::Error) {
+                brls::Logger::error("LwipRelay: {}", msg);
+            } else {
+                brls::Logger::info("LwipRelay: {}", msg);
+            }
+        };
+        config.debug_logging = SettingsManager::getInstance()->getDebugLwipLog();
+
+        lwipRelay_ = std::make_unique<wgnx::LwipRelay>(tunnel, config);
         if (!lwipRelay_->start(tunnelIP, targetIp)) {
             brls::Logger::error("WG: Failed to start lwIP relay");
             lwipRelay_.reset();

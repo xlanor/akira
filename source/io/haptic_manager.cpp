@@ -1,4 +1,5 @@
 #include "core/io/haptic_manager.hpp"
+#include "core/settings_manager.hpp"
 #include <algorithm>
 #include <cstring>
 #include <borealis.hpp>
@@ -13,11 +14,8 @@ HapticManager::~HapticManager()
 
 void HapticManager::setRumble(uint8_t left, uint8_t right)
 {
-    // Log all non-zero rumble events
-    if (left > 0 || right > 0)
-    {
+    if (SettingsManager::getInstance()->getDebugChiakiLog() && (left > 0 || right > 0))
         brls::Logger::info("setRumble: left={}, right={}, strength={:.2f}", left, right, m_rumble_strength);
-    }
 
     // Convert uint8 (0-255) to float (0.0-1.0), apply strength multiplier
     float leftAmp = ((float)left / 255.0f) * m_rumble_strength;
@@ -26,8 +24,6 @@ void HapticManager::setRumble(uint8_t left, uint8_t right)
     // Convert back to unsigned short (0-65535) for Borealis
     unsigned short lowFreqMotor = (unsigned short)(leftAmp * 65535.0f);
     unsigned short highFreqMotor = (unsigned short)(rightAmp * 65535.0f);
-
-    brls::Logger::debug("setRumble: lowFreq={}, highFreq={}", lowFreqMotor, highFreqMotor);
 
     auto* inputMgr = brls::Application::getPlatform()->getInputManager();
     inputMgr->sendRumble(0, lowFreqMotor, highFreqMotor);

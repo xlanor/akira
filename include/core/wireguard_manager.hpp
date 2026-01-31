@@ -11,7 +11,9 @@ extern "C" {
 #include <wireguard.h>
 }
 
+namespace wgnx {
 class LwipRelay;
+}
 
 class WireGuardManager {
 public:
@@ -44,7 +46,7 @@ private:
     std::string parseValue(const std::string& line);
 
     WgTunnel* tunnel = nullptr;
-    std::unique_ptr<LwipRelay> lwipRelay_;
+    std::unique_ptr<wgnx::LwipRelay> lwipRelay_;
     std::string targetIp_;
     WgConfig config = {};
     bool configLoaded = false;
