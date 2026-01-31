@@ -17,7 +17,6 @@ public:
     virtual ~IVideoRenderer() = default;
 
     virtual bool initialize(int frame_width, int frame_height,
-                           int screen_width, int screen_height,
                            ChiakiLog* log) = 0;
 
     virtual bool isInitialized() const = 0;

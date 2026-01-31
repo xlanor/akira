@@ -27,7 +27,7 @@ public:
     bool initCodec(bool is_PS5, int width = 0, int height = 0);
 
     // Initialize video with frame queue
-    bool initVideo(int video_width, int video_height, int screen_width, int screen_height);
+    bool initVideo(int video_width, int video_height);
 
     // Decode a video packet (returns false if waiting for keyframe)
     bool decode(uint8_t* buf, size_t buf_size);
@@ -58,8 +58,6 @@ private:
 
     int m_video_width = 0;
     int m_video_height = 0;
-    int m_screen_width = 1280;
-    int m_screen_height = 720;
 
     bool m_hw_accel_enabled = true;
     bool m_is_hevc = false;  // true for PS5 (HEVC), false for PS4 (H.264)

@@ -27,7 +27,6 @@ public:
     ~Deko3dRenderer() override;
 
     bool initialize(int frame_width, int frame_height,
-                   int screen_width, int screen_height,
                    ChiakiLog* log) override;
     bool isInitialized() const override { return m_initialized; }
     void draw(AVFrame* frame) override;
@@ -68,8 +67,6 @@ private:
 
     int m_frame_width = 0;
     int m_frame_height = 0;
-    int m_screen_width = 0;
-    int m_screen_height = 0;
 
     // borealis also uses deko3d, this is the context from
     // borealis
