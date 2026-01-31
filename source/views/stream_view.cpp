@@ -185,8 +185,8 @@ void StreamView::startStream()
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
-            dialog->open();
             brls::Application::forceUnblockInputs();
+            dialog->open();
         });
     }
 }
@@ -401,8 +401,8 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
-            dialog->open();
             brls::Application::forceUnblockInputs();
+            dialog->open();
         }
     });
 }
@@ -600,8 +600,8 @@ void StreamView::retryWithWake()
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
-            dialog->open();
             brls::Application::forceUnblockInputs();
+            dialog->open();
             return;
         }
         brls::Logger::info("Wake sent, retrying connection...");
@@ -638,8 +638,8 @@ void StreamView::retryWithWake()
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
-            dialog->open();
             brls::Application::forceUnblockInputs();
+            dialog->open();
         }
     }
 }
