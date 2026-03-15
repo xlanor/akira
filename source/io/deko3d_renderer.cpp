@@ -221,13 +221,38 @@ void Deko3dRenderer::draw(AVFrame* frame)
     if (m_paused)
         return;
 
-    updateFrameBindings(frame);
+    // Hold a ref to prevent FFmpeg from recycling this GPU buffer
+    // while we render from it (zero-copy requires the source memory to stay valid)
+    AVFrame* new_ref = av_frame_alloc();
+    if (!new_ref || av_frame_ref(new_ref, frame) < 0)
+    {
+        if (new_ref) av_frame_free(&new_ref);
+        brls::Logger::error("draw: Failed to ref frame");
+        return;
+    }
+
+    if (m_current_frame)
+        av_frame_free(&m_current_frame);
+
+    m_current_frame = new_ref;
+    m_frame_bound = true;
 }
 
 void Deko3dRenderer::renderVideo(AVFrame* frame)
 {
-    if (!m_initialized || !m_textures_initialized || !m_frame_bound)
+    if (!m_initialized || !m_textures_initialized || !m_frame_bound || !m_current_frame)
         return;
+
+    // Ensure GPU is done reading the previous frame's buffer
+    // before we release its ref (which lets FFmpeg recycle it)
+    if (m_prev_frame)
+    {
+        m_queue.waitIdle();
+        av_frame_free(&m_prev_frame);
+    }
+
+    // Update memblock/image/descriptor state for the current frame (CPU-side only)
+    updateFrameBindings(m_current_frame);
 
     // Get current framebuffer from borealis
     dk::Image* framebuffer = m_vctx->getFramebuffer();
@@ -240,8 +265,13 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
     unsigned screenW = brls::Application::windowWidth;
     unsigned screenH = brls::Application::windowHeight;
 
-    // Build command list fresh each frame
+    // Build a single command list with descriptor updates + draw commands
+    // so the GPU processes them in one submission without cmdbuf memory reuse issues
     m_cmdbuf.clear();
+
+    // Update texture descriptors in the same command list as the draw
+    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_desc);
+    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_desc);
 
     // Bind render target
     dk::ImageView colorTarget { *framebuffer };
@@ -286,12 +316,15 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
 
     // Submit video commands and FLUSH to kick GPU execution
     m_queue.submitCommands(list);
-    m_queue.flush();  // KEY: This actually sends commands to GPU
+    m_queue.flush();
+
+    // GPU is now reading from m_current_frame's buffer.
+    // Hold onto it as m_prev_frame so we can waitIdle before releasing
+    // it on the next renderVideo() call.
+    m_prev_frame = m_current_frame;
+    m_current_frame = nullptr;
 
     // Wait for video to complete before overlaying stats (only when stats enabled)
-    // Using waitIdle instead of fencing here - proper fence sync would require
-    // tracking fence values and resetting between frames, not worth the complexity
-    // for this use case since we're at end of frame anyway
     if (m_show_stats)
         m_queue.waitIdle();
 
@@ -361,16 +394,6 @@ void Deko3dRenderer::updateFrameBindings(AVFrame* frame)
     m_luma_desc.initialize(m_luma);
     m_chroma_desc.initialize(m_chroma);
 
-    m_cmdbuf.clear();
-    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_desc);
-    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_desc);
-    DkCmdList list = m_cmdbuf.finishList();
-    if (list)
-    {
-        m_queue.submitCommands(list);
-        m_queue.flush();
-    }
-
     m_frame_bound = true;
 }
 
@@ -384,6 +407,11 @@ void Deko3dRenderer::cleanup()
     unregisterCallback();
 
     m_queue.waitIdle();
+
+    if (m_current_frame)
+        av_frame_free(&m_current_frame);
+    if (m_prev_frame)
+        av_frame_free(&m_prev_frame);
 
     cleanupTextRendering();
 

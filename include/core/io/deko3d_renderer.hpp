@@ -105,6 +105,11 @@ private:
     void* m_current_map_addr = nullptr;
     bool m_frame_bound = false;
 
+    // Hold a ref to the current frame so FFmpeg doesn't recycle
+    // the GPU buffer while we're still rendering from it (zero-copy)
+    AVFrame* m_current_frame = nullptr;
+    AVFrame* m_prev_frame = nullptr;
+
     // Use this in the below function to actually draw
     void renderVideo(AVFrame* frame);
 
