@@ -1,10 +1,9 @@
-name: Build and Release
+name: Weekly Build
 
 on:
-  push:
-    tags:
-      - '*'
-      - '!docker-*'
+  schedule:
+    - cron: '0 3 * * 0' # Every Sunday at 3:00 AM UTC
+  workflow_dispatch:
 
 permissions: read-all
 
@@ -17,16 +16,6 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
-
-      - name: Extract version from CMakeLists.txt
-        id: version
-        run: |
-          VERSION_MAJOR=$(grep 'set(VERSION_MAJOR' CMakeLists.txt | sed 's/[^0-9]*//g')
-          VERSION_MINOR=$(grep 'set(VERSION_MINOR' CMakeLists.txt | sed 's/[^0-9]*//g')
-          VERSION_REVISION=$(grep 'set(VERSION_REVISION' CMakeLists.txt | sed 's/[^0-9]*//g')
-          VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REVISION}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Detected version: ${VERSION}"
 
       - name: Log in to Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -62,9 +51,6 @@ jobs:
         with:
           name: akira-elf
           path: build/akira.elf
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
 
   build-companion:
     strategy:
@@ -116,30 +102,37 @@ jobs:
       contents: write
 
     steps:
-      - name: Download akira-nro artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: akira-nro
+      - name: Set date tag
+        id: tag
+        run: echo "date=$(date -u +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
 
-      - name: Download akira-elf artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: akira-elf
-
-      - name: Download companion artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: akira-companion-*
           merge-multiple: true
 
-      - name: Create Release
+      - name: Create weekly release
         uses: softprops/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae # v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: nightly-${{ steps.tag.outputs.date }}
+          name: "Weekly Build ${{ steps.tag.outputs.date }}"
           files: |
             akira.nro
             akira.elf
             akira-companion-*
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          prerelease: true
+          body: "Automated weekly build from `master` — ${{ steps.tag.outputs.date }} (${{ github.sha }})"
+
+      - name: Prune old weekly releases (keep latest 10)
+        run: |
+          gh release list --json tagName --jq '.[].tagName' |
+            grep '^nightly-' |
+            sort -r |
+            tail -n +11 |
+            while read -r tag; do
+              echo "Deleting release $tag"
+              gh release delete "$tag" --yes --cleanup-tag
+            done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
