@@ -164,41 +164,18 @@ bool Deko3dRenderer::setupTextures(AVFrame* frame)
     if (m_textures_initialized)
         return true;
 
-    brls::Logger::info("Deko3dRenderer::setupTextures: setting up NV12 texture resources");
-    brls::Logger::info("Frame info: format={}, width={}, height={}, linesize[0]={}, linesize[1]={}",
-        static_cast<int>(frame->format), frame->width, frame->height, frame->linesize[0], frame->linesize[1]);
+    brls::Logger::info("Deko3dRenderer::setupTextures: frame={}x{}, format={}",
+        frame->width, frame->height, static_cast<int>(frame->format));
 
-    // Check if this is a hardware frame
     if (frame->format != AV_PIX_FMT_NVTEGRA)
     {
-        brls::Logger::error("Frame is not a hardware frame (format={}, expected NVTEGRA)", static_cast<int>(frame->format));
+        brls::Logger::error("Frame is not NVTEGRA (format={})", static_cast<int>(frame->format));
         return false;
     }
 
-    // Get GPU memory map
-    AVNVTegraMap* map = av_nvtegra_frame_get_fbuf_map(frame);
-    if (!map)
-    {
-        brls::Logger::error("Failed to get NVTEGRA map from frame");
-        return false;
-    }
-
-    void* map_addr = av_nvtegra_map_get_addr(map);
-    size_t map_size = av_nvtegra_map_get_size(map);
-
-    brls::Logger::info("NVTEGRA map: addr={}, size={}", map_addr, map_size);
-    brls::Logger::info("Frame data: data[0]={}, data[1]={}", (void*)frame->data[0], (void*)frame->data[1]);
-
-    // Allocate image indexes from borealis
     m_luma_texture_id = m_vctx->allocateImageIndex();
     m_chroma_texture_id = m_vctx->allocateImageIndex();
 
-    brls::Logger::info("Allocated texture IDs: luma={}, chroma={}", m_luma_texture_id, m_chroma_texture_id);
-
-    brls::Logger::info("Creating image layouts: luma={}x{}, chroma={}x{}",
-        m_frame_width, m_frame_height, m_frame_width / 2, m_frame_height / 2);
-
-    // Luma: actual frame dimensions
     dk::ImageLayoutMaker{m_device}
         .setType(DkImageType_2D)
         .setFormat(DkImageFormat_R8_Unorm)
@@ -206,7 +183,6 @@ bool Deko3dRenderer::setupTextures(AVFrame* frame)
         .setFlags(DkImageFlags_UsageLoadStore | DkImageFlags_Usage2DEngine | DkImageFlags_UsageVideo)
         .initialize(m_luma_layout);
 
-    // Chroma: half dimensions (NV12)
     dk::ImageLayoutMaker{m_device}
         .setType(DkImageType_2D)
         .setFormat(DkImageFormat_RG8_Unorm)
@@ -214,50 +190,8 @@ bool Deko3dRenderer::setupTextures(AVFrame* frame)
         .setFlags(DkImageFlags_UsageLoadStore | DkImageFlags_Usage2DEngine | DkImageFlags_UsageVideo)
         .initialize(m_chroma_layout);
 
-    // Create memory block from GPU memory
-    m_mapping_memblock = dk::MemBlockMaker{m_device, map_size}
-        .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
-        .setStorage(map_addr)
-        .create();
-
-    // Initialize images with correct offsets from map base
-    // data[0] may not be at start of map - need to calculate offset
-    ptrdiff_t luma_offset = frame->data[0] - (uint8_t*)map_addr;
-    ptrdiff_t chroma_offset = frame->data[1] - (uint8_t*)map_addr;
-
-    brls::Logger::info("Offsets from map: luma={}, chroma={}", luma_offset, chroma_offset);
-
-    m_luma.initialize(m_luma_layout, m_mapping_memblock, luma_offset);
-    m_chroma.initialize(m_chroma_layout, m_mapping_memblock, chroma_offset);
-
-    brls::Logger::info("Images initialized: luma_offset={}, chroma_offset={}", luma_offset, chroma_offset);
-
-    // Create image descriptors
-    m_luma_desc.initialize(m_luma);
-    m_chroma_desc.initialize(m_chroma);
-
-    // Update image descriptors and submit 
-    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_desc);
-    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_desc);
-
-    // Submit and flush to kick GPU execution
-    DkCmdList list = m_cmdbuf.finishList();
-    if (!list)
-    {
-        brls::Logger::error("setupTextures: finishList returned NULL!");
-        return false;
-    }
-    m_queue.submitCommands(list);
-    m_queue.flush();  
-    m_queue.waitIdle(); 
-
-    brls::Logger::info("Image descriptors updated");
-
-    // Track the current map address to detect changes
-    m_current_map_addr = map_addr;
-
     m_textures_initialized = true;
-    brls::Logger::info("Deko3dRenderer: texture setup complete");
+    brls::Logger::info("Deko3dRenderer::setupTextures: luma_id={}, chroma_id={}", m_luma_texture_id, m_chroma_texture_id);
     return true;
 }
 
@@ -266,7 +200,7 @@ void Deko3dRenderer::draw(AVFrame* frame)
     static int call = 0;
     ++call;
     if (SettingsManager::getInstance()->getDebugRenderLog() && call % 100 == 1)
-        brls::Logger::info("draw #{}, init={}, tex={}, buf={}", call, m_initialized, m_textures_initialized, m_buffers_initialized);
+        brls::Logger::info("draw #{}, init={}, tex={}", call, m_initialized, m_textures_initialized);
 
     if (!m_initialized)
         return;
@@ -284,45 +218,15 @@ void Deko3dRenderer::draw(AVFrame* frame)
         }
     }
 
-    if (!m_buffers_initialized)
-    {
-        if (!initPersistentBuffers(frame))
-        {
-            brls::Logger::error("draw: initPersistentBuffers failed");
-            return;
-        }
-    }
-
     if (m_paused)
         return;
 
-    AVNVTegraMap* map = av_nvtegra_frame_get_fbuf_map(frame);
-    if (map)
-    {
-        void* map_addr = av_nvtegra_map_get_addr(map);
-        if (map_addr != m_current_map_addr)
-        {
-            updateTextureBindings(frame, map);
-            m_current_map_addr = map_addr;
-        }
-    }
-
-    copyFrameToBuffer();
-
-    m_cmdbuf.clear();
-    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_descs[m_current_buffer]);
-    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_descs[m_current_buffer]);
-    DkCmdList list = m_cmdbuf.finishList();
-    if (list)
-    {
-        m_queue.submitCommands(list);
-        m_queue.flush();
-    }
+    updateFrameBindings(frame);
 }
 
 void Deko3dRenderer::renderVideo(AVFrame* frame)
 {
-    if (!m_initialized || !m_textures_initialized || !m_buffers_initialized)
+    if (!m_initialized || !m_textures_initialized || !m_frame_bound)
         return;
 
     // Get current framebuffer from borealis
@@ -401,7 +305,7 @@ void Deko3dRenderer::registerCallback()
         return;
 
     brls::Application::setPostRenderCallback([this]() {
-        if (m_buffers_initialized && !m_paused)
+        if (m_frame_bound && !m_paused)
         {
             renderVideo(nullptr);
         }
@@ -418,91 +322,56 @@ void Deko3dRenderer::unregisterCallback()
 
     brls::Application::setPostRenderCallback(nullptr);
     m_callback_registered = false;
-    m_pending_frame = nullptr;
     brls::Logger::info("Deko3dRenderer: post-render callback unregistered");
 }
 
-void Deko3dRenderer::updateTextureBindings(AVFrame* frame, AVNVTegraMap* map)
+void Deko3dRenderer::updateFrameBindings(AVFrame* frame)
 {
+    AVNVTegraMap* map = av_nvtegra_frame_get_fbuf_map(frame);
+    if (!map)
+        return;
+
     void* map_addr = av_nvtegra_map_get_addr(map);
-    size_t map_size = av_nvtegra_map_get_size(map);
 
-    static uint32_t update_count = 0;
-    ++update_count;
-    if (SettingsManager::getInstance()->getDebugRenderLog() && update_count % 300 == 0)
-        brls::Logger::info("updateTextureBindings #{}, addr={}", update_count, map_addr);
-
-    if (m_mapping_memblock)
+    if (map_addr != m_current_map_addr)
     {
-        m_queue.waitIdle();
-        dkMemBlockDestroy(m_mapping_memblock);
-        m_mapping_memblock = nullptr;
+        size_t map_size = av_nvtegra_map_get_size(map);
+
+        if (m_mapping_memblock)
+        {
+            m_queue.waitIdle();
+            dkMemBlockDestroy(m_mapping_memblock);
+            m_mapping_memblock = nullptr;
+        }
+
+        m_mapping_memblock = dk::MemBlockMaker{m_device, map_size}
+            .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
+            .setStorage(map_addr)
+            .create();
+
+        m_current_map_addr = map_addr;
     }
 
-    m_mapping_memblock = dk::MemBlockMaker{m_device, map_size}
-        .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
-        .setStorage(map_addr)
-        .create();
+    ptrdiff_t luma_offset = frame->data[0] - (uint8_t*)map_addr;
+    ptrdiff_t chroma_offset = frame->data[1] - (uint8_t*)map_addr;
 
-    m_luma.initialize(m_luma_layout, m_mapping_memblock, 0);
-    m_chroma.initialize(m_chroma_layout, m_mapping_memblock, frame->data[1] - frame->data[0]);
+    m_luma.initialize(m_luma_layout, m_mapping_memblock, luma_offset);
+    m_chroma.initialize(m_chroma_layout, m_mapping_memblock, chroma_offset);
 
     m_luma_desc.initialize(m_luma);
     m_chroma_desc.initialize(m_chroma);
-}
-
-bool Deko3dRenderer::initPersistentBuffers(AVFrame* frame)
-{
-    if (m_buffers_initialized)
-        return true;
-
-    AVNVTegraMap* map = av_nvtegra_frame_get_fbuf_map(frame);
-    size_t frame_size = av_nvtegra_map_get_size(map);
-    frame_size = (frame_size + 0xFFF) & ~0xFFF;
-
-    brls::Logger::info("initPersistentBuffers: creating {} GPU buffers of size {}", GPU_BUFFER_COUNT, frame_size);
-
-    for (int i = 0; i < GPU_BUFFER_COUNT; i++)
-    {
-        m_frame_buffers[i] = dk::MemBlockMaker{m_device, frame_size}
-            .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
-            .create();
-
-        m_luma_buffers[i].initialize(m_luma_layout, m_frame_buffers[i], 0);
-
-        size_t chroma_offset = m_luma_layout.getSize();
-        m_chroma_buffers[i].initialize(m_chroma_layout, m_frame_buffers[i], chroma_offset);
-
-        m_luma_descs[i].initialize(m_luma_buffers[i]);
-        m_chroma_descs[i].initialize(m_chroma_buffers[i]);
-    }
-
-    m_buffers_initialized = true;
-    brls::Logger::info("initPersistentBuffers: GPU circular buffer initialized");
-    return true;
-}
-
-void Deko3dRenderer::copyFrameToBuffer()
-{
-    dk::ImageView srcLuma{m_luma};
-    dk::ImageView srcChroma{m_chroma};
-
-    dk::ImageView dstLuma{m_luma_buffers[m_next_buffer]};
-    dk::ImageView dstChroma{m_chroma_buffers[m_next_buffer]};
-
-    DkImageRect lumaRect = {0, 0, 0, (uint32_t)m_frame_width, (uint32_t)m_frame_height, 1};
-    DkImageRect chromaRect = {0, 0, 0, (uint32_t)(m_frame_width / 2), (uint32_t)(m_frame_height / 2), 1};
 
     m_cmdbuf.clear();
-    m_cmdbuf.copyImage(srcLuma, lumaRect, dstLuma, lumaRect);
-    m_cmdbuf.copyImage(srcChroma, chromaRect, dstChroma, chromaRect);
-
+    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_desc);
+    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_desc);
     DkCmdList list = m_cmdbuf.finishList();
-    m_queue.submitCommands(list);
-    m_queue.waitIdle();
+    if (list)
+    {
+        m_queue.submitCommands(list);
+        m_queue.flush();
+    }
 
-    m_current_buffer = m_next_buffer;
-    m_next_buffer = (m_next_buffer + 1) % GPU_BUFFER_COUNT;
+    m_frame_bound = true;
 }
 
 void Deko3dRenderer::cleanup()
@@ -535,23 +404,6 @@ void Deko3dRenderer::cleanup()
         m_mapping_memblock = nullptr;
     }
 
-    if (m_buffers_initialized)
-    {
-        for (int i = 0; i < GPU_BUFFER_COUNT; i++)
-        {
-            if (m_frame_buffers[i])
-            {
-                dkMemBlockDestroy(m_frame_buffers[i]);
-                m_frame_buffers[i] = nullptr;
-            }
-            m_luma_buffers[i] = dk::Image{};
-            m_chroma_buffers[i] = dk::Image{};
-            m_luma_descs[i] = dk::ImageDescriptor{};
-            m_chroma_descs[i] = dk::ImageDescriptor{};
-        }
-        m_buffers_initialized = false;
-    }
-
     m_luma = dk::Image{};
     m_chroma = dk::Image{};
     m_luma_desc = dk::ImageDescriptor{};
@@ -560,14 +412,10 @@ void Deko3dRenderer::cleanup()
     m_chroma_layout = dk::ImageLayout{};
 
     m_current_map_addr = nullptr;
-    m_current_buffer = 0;
-    m_next_buffer = 0;
+    m_frame_bound = false;
 
     m_initialized = false;
     m_textures_initialized = false;
-    m_first_frame = true;
-    m_ready_fence = {};
-    m_done_fence = {};
 }
 
 void Deko3dRenderer::waitIdle()

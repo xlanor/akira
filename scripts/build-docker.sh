@@ -8,12 +8,10 @@ build_curl() {
     echo "=== Building custom curl with libnx TLS + websockets ==="
     cd ${BUILD_DIR}/library/curl-libnx
 
-    if [ ! -f configure ]; then
-        echo "Running buildconf..."
-        ./buildconf
-    fi
-
     make distclean 2>/dev/null || true
+
+    echo "Running buildconf..."
+    ./buildconf
 
     LDFLAGS="-specs=${DEVKITPRO}/libnx/switch.specs ${LDFLAGS}" \
     ./configure \

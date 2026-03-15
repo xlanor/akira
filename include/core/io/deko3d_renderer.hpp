@@ -100,41 +100,10 @@ private:
     bool m_textures_initialized = false;
 
     bool setupTextures(AVFrame* frame);
-
-    void updateTextureBindings(AVFrame* frame, AVNVTegraMap* map);
-
-    static constexpr int GPU_BUFFER_COUNT = 3;
-    dk::MemBlock m_frame_buffers[GPU_BUFFER_COUNT];
-    dk::Image m_luma_buffers[GPU_BUFFER_COUNT];
-    dk::Image m_chroma_buffers[GPU_BUFFER_COUNT];
-    dk::ImageDescriptor m_luma_descs[GPU_BUFFER_COUNT];
-    dk::ImageDescriptor m_chroma_descs[GPU_BUFFER_COUNT];
-    int m_current_buffer = 0;
-    int m_next_buffer = 0;
-    bool m_buffers_initialized = false;
-
-    bool initPersistentBuffers(AVFrame* frame);
-    void copyFrameToBuffer();
+    void updateFrameBindings(AVFrame* frame);
 
     void* m_current_map_addr = nullptr;
-
-    DkFence m_copy_fences[GPU_BUFFER_COUNT] = {};
-    AVFrame* m_pending_nvtegra_release = nullptr;
-
-    // Fences for GPU synchronization
-    // Borealis is ready
-    DkFence m_ready_fence = {};  
-    // finished rendering
-    DkFence m_done_fence = {}; 
-    // wait for first frame, after that let gpu handle it,
-    // dont wait for idle on every frame
-    bool m_first_frame = true;    
-
-    // Dont ask me why but borealis drew a very nice background on top
-    // of what we were rending in deko3d
-    // so we end up ahving to add a callback to it to actually render the
-    // video frame AFTER borealis has drawn whatever it needs to draw
-    AVFrame* m_pending_frame = nullptr;
+    bool m_frame_bound = false;
 
     // Use this in the below function to actually draw
     void renderVideo(AVFrame* frame);

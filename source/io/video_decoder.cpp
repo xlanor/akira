@@ -101,7 +101,7 @@ bool VideoDecoder::initVideo(int video_width, int video_height)
     m_waiting_for_idr = true;
     brls::Logger::info("VideoDecoder: Waiting for IDR frame to start decoding");
 
-    m_frame_queue.setLimit(10);
+    m_frame_queue.setLimit(3);
 
     m_tmp_frame = av_frame_alloc();
     if (!m_tmp_frame)
