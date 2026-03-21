@@ -29,20 +29,11 @@
             textColor="#888888"/>
     </brls:Box>
 
-    <brls:ScrollingFrame
-        id="connection/scroll"
+    <brls:Box
+        id="connection/logArea"
         width="auto"
         height="auto"
-        grow="1.0">
-
-        <brls:Box
-            id="connection/logs"
-            width="auto"
-            height="auto"
-            axis="column"
-            grow="1.0"/>
-
-    </brls:ScrollingFrame>
+        grow="1.0"/>
 
     <brls:Box
         width="auto"

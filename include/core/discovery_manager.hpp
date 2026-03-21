@@ -27,6 +27,7 @@ public:
 private:
     SettingsManager* settings = nullptr;
     ChiakiLog* log = nullptr;
+    ChiakiLog discoveryLog;
     ChiakiDiscoveryService service;
     ChiakiDiscovery discovery;
 
