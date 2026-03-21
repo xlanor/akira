@@ -1,6 +1,7 @@
 #include "views/connection_view.hpp"
 #include "views/stream_view.hpp"
 #include "core/discovery_manager.hpp"
+#include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
 #include "util/shared_view_holder.hpp"
 #include <chiaki/remote/holepunch.h>
@@ -11,9 +12,6 @@ ConnectionView::ConnectionView(Host* host)
 {
     this->io = IO::GetInstance();
     this->inflateFromXMLRes("xml/views/connection_view.xml");
-
-    logContainer = (brls::Box*)this->getView("connection/logs");
-    scrollFrame = (brls::ScrollingFrame*)this->getView("connection/scroll");
 
     auto* titleLabel = (brls::Label*)this->getView("connection/title");
     titleLabel->setText("Connecting to " + host->getHostName());
@@ -45,6 +43,13 @@ void ConnectionView::setupAndStart()
                 self->addLogLine(msg, level);
             }
         });
+
+    switchToConnectionLog();
+
+    std::string connType = host->isRemote() ? "remote" : "local";
+    brls::Logger::info("========================================");
+    brls::Logger::info("CONNECTION ATTEMPT: {} to {}", connType, host->getHostName());
+    brls::Logger::info("========================================");
 
     addLogLine("Starting connection...", brls::LogLevel::LOG_INFO);
 
@@ -91,35 +96,61 @@ void ConnectionView::addLogLine(const std::string& line, brls::LogLevel level)
         logLines.pop_front();
     }
 
-    logsNeedUpdate = true;
 }
 
-void ConnectionView::updateLogDisplay()
+void ConnectionView::switchToConnectionLog()
 {
-    if (!logsNeedUpdate) return;
+    if (!SettingsManager::getInstance()->getEnableFileLogging())
+        return;
 
+    std::string connType = host->isRemote() ? "remote" : "local";
+    std::string logPath = SettingsManager::getConnectionLogFilePath(connType);
+
+    FILE* newLogFile = fopen(logPath.c_str(), "w");
+    if (newLogFile) {
+        brls::Logger::setLogOutput(newLogFile);
+        brls::Logger::info("Switched to connection log: {}", logPath);
+    }
+}
+
+void ConnectionView::renderLogs(NVGcontext* vg, float x, float y, float width, float height)
+{
     std::lock_guard<std::mutex> lock(logMutex);
 
-    std::string combinedText;
-    for (size_t i = 0; i < logLines.size(); i++) {
-        if (i > 0) combinedText += "\n";
-        combinedText += logLines[i];
+    nvgSave(vg);
+    nvgScissor(vg, x, y, width, height);
+
+    nvgFontSize(vg, 16);
+    nvgFillColor(vg, nvgRGBA(200, 200, 200, 255));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+
+    float padding = 20;
+    float maxTextWidth = width - padding * 2;
+    float availableHeight = height - padding * 2;
+
+    // Calculate line heights from bottom up to find which lines fit
+    size_t startIdx = logLines.size();
+    float totalHeight = 0;
+    while (startIdx > 0) {
+        float bounds[4];
+        nvgTextBoxBounds(vg, 0, 0, maxTextWidth, logLines[startIdx - 1].c_str(), nullptr, bounds);
+        float lineH = bounds[3] - bounds[1];
+        if (totalHeight + lineH > availableHeight)
+            break;
+        totalHeight += lineH;
+        startIdx--;
     }
 
-    if (logContainer->getChildren().empty()) {
-        auto* label = new brls::Label();
-        label->setFontSize(18);
-        label->setTextColor(nvgRGBA(200, 200, 200, 255));
-        logContainer->addView(label);
+    float currentY = y + padding;
+    for (size_t i = startIdx; i < logLines.size(); i++) {
+        nvgTextBox(vg, x + padding, currentY, maxTextWidth, logLines[i].c_str(), nullptr);
+
+        float bounds[4];
+        nvgTextBoxBounds(vg, x + padding, currentY, maxTextWidth, logLines[i].c_str(), nullptr, bounds);
+        currentY += (bounds[3] - bounds[1]);
     }
 
-    auto* label = dynamic_cast<brls::Label*>(logContainer->getChildren().front());
-    if (label) {
-        label->setText(combinedText);
-    }
-
-    needsScrollToBottom = true;
-    logsNeedUpdate = false;
+    nvgRestore(vg);
 }
 
 // Helper struct to pass weak_ptr through C thread API
@@ -234,8 +265,6 @@ void ConnectionView::onConnectionComplete()
 void ConnectionView::draw(NVGcontext* vg, float x, float y, float width, float height,
                           brls::Style style, brls::FrameContext* ctx)
 {
-    updateLogDisplay();
-
     if (connectionFinished && !transitionPending) {
         transitionPending = true;
         onConnectionComplete();
@@ -243,12 +272,10 @@ void ConnectionView::draw(NVGcontext* vg, float x, float y, float width, float h
 
     Box::draw(vg, x, y, width, height, style, ctx);
 
-    if (needsScrollToBottom && scrollFrame && logContainer) {
-        float contentHeight = logContainer->getHeight();
-        float frameHeight = scrollFrame->getHeight();
-        if (contentHeight > frameHeight) {
-            scrollFrame->setContentOffsetY(-(contentHeight - frameHeight), false);
-        }
-        needsScrollToBottom = false;
+    // Render logs directly with NVG into the logArea space
+    auto* logArea = this->getView("connection/logArea");
+    if (logArea) {
+        renderLogs(vg, logArea->getX(), logArea->getY(),
+                   logArea->getWidth(), logArea->getHeight());
     }
 }

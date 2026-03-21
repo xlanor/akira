@@ -72,6 +72,7 @@ private:
     bool debugWireguardLog = false;
     bool debugRenderLog = false;
     bool debugChiakiLog = false;
+    bool debugDiscoveryLog = false;
 
     // Runtime state (not persisted)
     bool streamingActive = false;
@@ -231,6 +232,8 @@ public:
     void setDebugRenderLog(bool enabled);
     bool getDebugChiakiLog() const;
     void setDebugChiakiLog(bool enabled);
+    bool getDebugDiscoveryLog() const;
+    void setDebugDiscoveryLog(bool enabled);
 
     const ButtonMapping& getButtonMapping() const;
     void setButtonMapping(const ButtonMapping& mapping);
@@ -242,6 +245,7 @@ public:
 
     static constexpr const char* LOG_DIR = "sdmc:/switch/akira/logs";
     static std::string getLogFilePath();
+    static std::string getConnectionLogFilePath(const std::string& connType);
 };
 
 #endif // AKIRA_SETTINGS_MANAGER_HPP

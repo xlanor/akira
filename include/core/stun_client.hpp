@@ -12,6 +12,7 @@ enum class NATType {
     RestrictedCone,
     PortRestrictedCone,
     Symmetric,
+    SymmetricPortOnly,
     UDPBlocked
 };
 

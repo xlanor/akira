@@ -30,8 +30,6 @@ private:
     Host* host = nullptr;
     IO* io = nullptr;
 
-    brls::Box* logContainer = nullptr;
-    brls::ScrollingFrame* scrollFrame = nullptr;
     std::deque<std::string> logLines;
     std::mutex logMutex;
     static constexpr size_t MAX_LOG_LINES = 100;
@@ -45,13 +43,12 @@ private:
     std::atomic<bool> connectionFinished{false};
     std::string connectionError;
 
-    bool logsNeedUpdate = false;
     bool transitionPending = false;
-    bool needsScrollToBottom = false;
 
     void startConnection();
+    void switchToConnectionLog();
     void addLogLine(const std::string& line, brls::LogLevel level);
-    void updateLogDisplay();
+    void renderLogs(NVGcontext* vg, float x, float y, float width, float height);
     void onConnectionComplete();
 
     static void* connectionThreadFunc(void* user);

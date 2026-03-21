@@ -149,6 +149,7 @@ void NetworkUtilitiesTab::onCheckNatClicked() {
 
     isChecking = true;
     clearResults();
+    addResultRow("", "Testing...", nvgRGBA(150, 150, 150, 255));
 
     StunResult result = StunClient::detectNATType();
 
@@ -168,18 +169,22 @@ void NetworkUtilitiesTab::displayResult(const StunResult& result) {
         return;
     }
 
-    std::string mappingStr = StunClient::natTypeToString(result.type);
-    NVGcolor mappingColor;
+    std::string typeStr = StunClient::natTypeToString(result.type);
+    std::string descStr = StunClient::natTypeDescription(result.type);
+    NVGcolor typeColor;
     if (result.type == NATType::FullCone || result.type == NATType::OpenInternet ||
         result.type == NATType::RestrictedCone || result.type == NATType::PortRestrictedCone) {
-        mappingColor = nvgRGBA(16, 185, 129, 255);
-    } else if (result.type == NATType::Symmetric || result.type == NATType::UDPBlocked) {
-        mappingColor = nvgRGBA(239, 68, 68, 255);
+        typeColor = nvgRGBA(16, 185, 129, 255);
+    } else if (result.type == NATType::UDPBlocked) {
+        typeColor = nvgRGBA(239, 68, 68, 255);
+    } else if (result.type == NATType::Symmetric || result.type == NATType::SymmetricPortOnly) {
+        typeColor = nvgRGBA(245, 158, 11, 255);
     } else {
-        mappingColor = nvgRGBA(245, 158, 11, 255);
+        typeColor = nvgRGBA(150, 150, 150, 255);
     }
 
-    addResultRow("Mapping", mappingStr, mappingColor);
+    addResultRow("NAT Type", typeStr, typeColor);
+    addResultRow("", descStr, nvgRGBA(150, 150, 150, 255));
 
     std::string filteringStr = StunClient::filteringTypeToString(result.filtering);
     NVGcolor filteringColor;
@@ -239,10 +244,10 @@ void NetworkUtilitiesTab::addCompatibilityTable() {
     };
 
     std::vector<CompatRow> mappingRows = {
-        {"Endpoint-Independent", "Endpoint-Independent", "Works", nvgRGBA(16, 185, 129, 255)},
-        {"Endpoint-Independent", "Addr and Port-Dep", "Won't work", nvgRGBA(239, 68, 68, 255)},
-        {"Addr and Port-Dep", "Endpoint-Independent", "Won't work", nvgRGBA(239, 68, 68, 255)},
-        {"Addr and Port-Dep", "Addr and Port-Dep", "Won't work", nvgRGBA(239, 68, 68, 255)},
+        {"Cone", "Cone", "Works", nvgRGBA(16, 185, 129, 255)},
+        {"Cone", "Symmetric", "May work", nvgRGBA(245, 158, 11, 255)},
+        {"Symmetric", "Cone", "May work", nvgRGBA(245, 158, 11, 255)},
+        {"Symmetric", "Symmetric", "Unlikely", nvgRGBA(239, 68, 68, 255)},
     };
 
     auto* headerRow = new brls::Box();
@@ -308,17 +313,17 @@ void NetworkUtilitiesTab::addCompatibilityTable() {
     resultContainer->addView(spacer2);
 
     auto* filteringHeader = new brls::Label();
-    filteringHeader->setText("Filtering (if mapping is Endpoint-Independent)");
+    filteringHeader->setText("Filtering (if Cone NAT)");
     filteringHeader->setFontSize(18);
     filteringHeader->setTextColor(nvgRGBA(150, 150, 150, 255));
     filteringHeader->setMarginBottom(8);
     resultContainer->addView(filteringHeader);
 
     std::vector<CompatRow> filteringRows = {
-        {"Endpoint-Independent", "Endpoint-Independent", "Works", nvgRGBA(16, 185, 129, 255)},
-        {"Endpoint-Independent", "Address-Dependent", "Works", nvgRGBA(16, 185, 129, 255)},
-        {"Address-Dependent", "Endpoint-Independent", "Works", nvgRGBA(16, 185, 129, 255)},
-        {"Address-Dependent", "Address-Dependent", "May fail", nvgRGBA(245, 158, 11, 255)},
+        {"Open", "Open", "Works", nvgRGBA(16, 185, 129, 255)},
+        {"Open", "Restricted", "Works", nvgRGBA(16, 185, 129, 255)},
+        {"Restricted", "Open", "Works", nvgRGBA(16, 185, 129, 255)},
+        {"Restricted", "Restricted", "May fail", nvgRGBA(245, 158, 11, 255)},
     };
 
     auto* headerRow2 = new brls::Box();
