@@ -44,7 +44,7 @@
 
             <brls:SliderCell
                 id="settings/localBitrate"
-                title="Target Bitrate"
+                title="Target Bitrate (ceiling, actual may be lower)"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -85,7 +85,7 @@
 
             <brls:SliderCell
                 id="settings/remoteBitrate"
-                title="Target Bitrate"
+                title="Target Bitrate (ceiling, actual may be lower)"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -126,7 +126,7 @@
 
             <brls:SliderCell
                 id="settings/vpnBitrate"
-                title="Target Bitrate"
+                title="Target Bitrate (ceiling, actual may be lower)"
                 marginLeft="15"
                 marginRight="15"/>
 

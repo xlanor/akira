@@ -811,19 +811,19 @@ int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset 
 int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) const {
     if (unlockBitrateMax) {
         switch (res) {
-            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 30000;
-            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 25000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 50000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 40000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 5000;
-            default: return 25000;
+            default: return 40000;
         }
     }
     switch (res) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 20000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 15000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 25000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 20000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 5000;
-        default: return 15000;
+        default: return 20000;
     }
 }
 
