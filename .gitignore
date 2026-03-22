@@ -16,7 +16,8 @@ logs/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
+**/Makefile
+!/Makefile
 compile_commands.json
 
 # OS
