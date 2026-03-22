@@ -15,6 +15,16 @@
 #include <curl/curl.h>
 #include <json-c/json.h>
 
+static void discovery_log_cb(ChiakiLogLevel level, const char* msg, void* user)
+{
+    if (!SettingsManager::getInstance()->getDebugDiscoveryLog())
+        return;
+
+    ChiakiLog* mainLog = static_cast<ChiakiLog*>(user);
+    if (mainLog)
+        chiaki_log(mainLog, level, "%s", msg);
+}
+
 #define PING_MS 500
 #define HOSTS_MAX 16
 #define DROP_PINGS 3
@@ -119,8 +129,10 @@ void DiscoveryManager::setServiceEnabled(bool enable)
         options.send_addr_size = sizeof(in_addr);
         options.send_host = nullptr;
 
+        chiaki_log_init(&discoveryLog, CHIAKI_LOG_ALL, discovery_log_cb, log);
+
         brls::Logger::info("Calling chiaki_discovery_service_init...");
-        ChiakiErrorCode err = chiaki_discovery_service_init(&service, &options, log);
+        ChiakiErrorCode err = chiaki_discovery_service_init(&service, &options, &discoveryLog);
         if (err != CHIAKI_ERR_SUCCESS)
         {
             brls::Logger::error("Discovery service init FAILED: {}", chiaki_error_string(err));

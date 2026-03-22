@@ -333,6 +333,8 @@ void SettingsManager::parseTomlFile() {
             debugRenderLog = *val;
         if (auto val = config["debug_chiaki_log"].value<bool>())
             debugChiakiLog = *val;
+        if (auto val = config["debug_discovery_log"].value<bool>())
+            debugDiscoveryLog = *val;
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -676,6 +678,8 @@ int SettingsManager::writeFile() {
         config.insert("debug_render_log", debugRenderLog);
     if (debugChiakiLog)
         config.insert("debug_chiaki_log", debugChiakiLog);
+    if (debugDiscoveryLog)
+        config.insert("debug_discovery_log", debugDiscoveryLog);
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", static_cast<int>(globalGyroSource));
 
@@ -807,19 +811,19 @@ int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset 
 int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) const {
     if (unlockBitrateMax) {
         switch (res) {
-            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 30000;
-            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 25000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 50000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 40000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 5000;
-            default: return 25000;
+            default: return 40000;
         }
     }
     switch (res) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 20000;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 15000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 25000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 20000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: return 5000;
-        default: return 15000;
+        default: return 20000;
     }
 }
 
@@ -1343,6 +1347,14 @@ void SettingsManager::setDebugChiakiLog(bool enabled) {
     debugChiakiLog = enabled;
 }
 
+bool SettingsManager::getDebugDiscoveryLog() const {
+    return debugDiscoveryLog;
+}
+
+void SettingsManager::setDebugDiscoveryLog(bool enabled) {
+    debugDiscoveryLog = enabled;
+}
+
 bool SettingsManager::isStreamingActive() const {
     return streamingActive;
 }
@@ -1410,8 +1422,43 @@ std::string SettingsManager::getLogFilePath() {
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
     char filename[64];
-    snprintf(filename, sizeof(filename), "%02d%02d%02d%02d%02d%02d.log",
+    snprintf(filename, sizeof(filename), "%02d%02d%02d_%02d%02d%02d.log",
              t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
              t->tm_hour, t->tm_min, t->tm_sec);
+    return std::string(LOG_DIR) + "/" + filename;
+}
+
+std::string SettingsManager::getConnectionLogFilePath(const std::string& connType) {
+    mkdir(LOG_DIR, 0755);
+
+    DIR* dir = opendir(LOG_DIR);
+    if (dir) {
+        std::vector<std::string> logFiles;
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string name = entry->d_name;
+            if (name.size() > 4 && name.substr(name.size() - 4) == ".log") {
+                logFiles.push_back(name);
+            }
+        }
+        closedir(dir);
+
+        if (logFiles.size() >= 10) {
+            std::sort(logFiles.begin(), logFiles.end());
+            size_t toDelete = logFiles.size() - 9;
+            for (size_t i = 0; i < toDelete; i++) {
+                std::string path = std::string(LOG_DIR) + "/" + logFiles[i];
+                remove(path.c_str());
+            }
+        }
+    }
+
+    time_t now = time(nullptr);
+    struct tm* t = localtime(&now);
+    char filename[128];
+    snprintf(filename, sizeof(filename), "%02d%02d%02d_%02d%02d%02d_%s.log",
+             t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
+             t->tm_hour, t->tm_min, t->tm_sec,
+             connType.c_str());
     return std::string(LOG_DIR) + "/" + filename;
 }

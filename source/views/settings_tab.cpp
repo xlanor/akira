@@ -64,6 +64,7 @@ SettingsTab::SettingsTab() {
     initDebugWireguardLogToggle();
     initDebugRenderLogToggle();
     initDebugChiakiLogToggle();
+    initDebugDiscoveryLogToggle();
 
     runBenchmarkBtn->registerClickAction([this](brls::View*) {
         runGhashBenchmark();
@@ -919,6 +920,19 @@ void SettingsTab::initDebugChiakiLogToggle() {
         currentValue,
         [this](bool isOn) {
             settings->setDebugChiakiLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugDiscoveryLogToggle() {
+    bool currentValue = settings->getDebugDiscoveryLog();
+
+    debugDiscoveryLogToggle->init(
+        "Discovery Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugDiscoveryLog(isOn);
             settings->writeFile();
         }
     );

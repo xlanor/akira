@@ -44,7 +44,7 @@
 
             <brls:SliderCell
                 id="settings/localBitrate"
-                title="Target Bitrate"
+                title="Target Bitrate (ceiling, actual may be lower)"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -85,7 +85,7 @@
 
             <brls:SliderCell
                 id="settings/remoteBitrate"
-                title="Target Bitrate"
+                title="Target Bitrate (ceiling, actual may be lower)"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -126,7 +126,7 @@
 
             <brls:SliderCell
                 id="settings/vpnBitrate"
-                title="Target Bitrate"
+                title="Target Bitrate (ceiling, actual may be lower)"
                 marginLeft="15"
                 marginRight="15"/>
 
@@ -383,6 +383,20 @@
                 marginTop="5"
                 marginBottom="10"/>
 
+            <brls:BooleanCell
+                id="settings/debugDiscoveryLog"
+                title="Discovery Log"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Enable verbose discovery logging (host discovery broadcasts, responses)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
         </brls:Box>
 
         <brls:Header
@@ -560,7 +574,7 @@
 
         <brls:Label
             id="settings/version"
-            text="Akira v0.4.5"
+            text="Akira v0.4.6"
             fontSize="14"
             textColor="#666666"
             marginTop="20"
