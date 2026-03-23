@@ -13,6 +13,7 @@
 #include <netinet/in.h>
 
 #include <curl/curl.h>
+#include "util/curl_wrappers.hpp"
 #include <json-c/json.h>
 
 static void discovery_log_cb(ChiakiLogLevel level, const char* msg, void* user)
@@ -347,7 +348,7 @@ void DiscoveryManager::lookupPsnAccountId(
     std::function<void(const std::string&)> onSuccess,
     std::function<void(const std::string&)> onError)
 {
-    CURL* curl = curl_easy_init();
+    CurlHandle curl;
     if (!curl)
     {
         onError("Failed to initialize CURL");
@@ -371,7 +372,6 @@ void DiscoveryManager::lookupPsnAccountId(
     if (res != CURLE_OK)
     {
         onError(curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -380,7 +380,6 @@ void DiscoveryManager::lookupPsnAccountId(
     if (!parsed_json)
     {
         onError("Failed to parse JSON response");
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -403,7 +402,6 @@ void DiscoveryManager::lookupPsnAccountId(
     }
 
     json_object_put(parsed_json);
-    curl_easy_cleanup(curl);
 }
 
 void DiscoveryManager::fetchCompanionCredentials(
@@ -419,7 +417,7 @@ void DiscoveryManager::fetchCompanionCredentials(
     )> onSuccess,
     std::function<void(const std::string&)> onError)
 {
-    CURL* curl = curl_easy_init();
+    CurlHandle curl;
     if (!curl)
     {
         onError("Failed to initialize CURL");
@@ -450,7 +448,6 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (res != CURLE_OK)
     {
         onError(curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -458,7 +455,6 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (http_code != 200)
     {
         onError("Account fetch HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -473,7 +469,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         {
             onError(json_object_get_string(error_obj));
             json_object_put(parsed_json);
-            curl_easy_cleanup(curl);
             return;
         }
 
@@ -497,7 +492,6 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (res != CURLE_OK)
     {
         onError(std::string("Token fetch failed: ") + curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -505,7 +499,6 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (http_code != 200)
     {
         onError("Token fetch HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -521,7 +514,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         {
             onError(std::string("Token error: ") + json_object_get_string(error_obj));
             json_object_put(parsed_json);
-            curl_easy_cleanup(curl);
             return;
         }
 
@@ -549,7 +541,6 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (res != CURLE_OK)
     {
         onError(std::string("DUID fetch failed: ") + curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -557,7 +548,6 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (http_code != 200)
     {
         onError("DUID fetch HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -571,7 +561,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         {
             onError(std::string("DUID error: ") + json_object_get_string(error_obj));
             json_object_put(parsed_json);
-            curl_easy_cleanup(curl);
             return;
         }
 
@@ -581,8 +570,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         }
         json_object_put(parsed_json);
     }
-
-    curl_easy_cleanup(curl);
 
     onSuccess(onlineId, accountId, accessToken, refreshToken, expiresAt, duid);
 }
@@ -604,7 +591,7 @@ void DiscoveryManager::refreshPsnToken(
         return;
     }
 
-    CURL* curl = curl_easy_init();
+    CurlHandle curl;
     if (!curl)
     {
         onError("Failed to initialize CURL");
@@ -612,13 +599,9 @@ void DiscoveryManager::refreshPsnToken(
     }
 
     std::string credentials = std::string(PSN_CLIENT_ID) + ":" + PSN_CLIENT_SECRET;
-    char* b64Credentials = nullptr;
-    size_t b64Len = 0;
-
     size_t credLen = credentials.length();
-    b64Len = ((4 * credLen / 3) + 3) & ~3;
-    b64Credentials = new char[b64Len + 1];
-    memset(b64Credentials, 0, b64Len + 1);
+    size_t b64Len = ((4 * credLen / 3) + 3) & ~3;
+    std::string b64Credentials(b64Len, '\0');
 
     static const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     size_t i = 0, j = 0;
@@ -639,9 +622,9 @@ void DiscoveryManager::refreshPsnToken(
         }
         b64Credentials[j++] = '=';
     }
+    b64Credentials.resize(j);
 
-    std::string authHeader = "Authorization: Basic " + std::string(b64Credentials);
-    delete[] b64Credentials;
+    std::string authHeader = "Authorization: Basic " + b64Credentials;
 
     std::string postData = "grant_type=refresh_token"
         "&refresh_token=" + refreshToken +
@@ -650,12 +633,12 @@ void DiscoveryManager::refreshPsnToken(
 
     std::string response_data;
 
-    struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, authHeader.c_str());
-    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+    CurlSlist headers;
+    headers.append(authHeader.c_str());
+    headers.append("Content-Type: application/x-www-form-urlencoded");
 
     curl_easy_setopt(curl, CURLOPT_URL, PSN_TOKEN_URL);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, static_cast<curl_slist*>(headers));
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
@@ -665,12 +648,9 @@ void DiscoveryManager::refreshPsnToken(
 
     CURLcode res = curl_easy_perform(curl);
 
-    curl_slist_free_all(headers);
-
     if (res != CURLE_OK)
     {
         onError(curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -681,7 +661,6 @@ void DiscoveryManager::refreshPsnToken(
     {
         brls::Logger::error("PSN token refresh failed with HTTP {}: {}", http_code, response_data);
         onError("HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -689,7 +668,6 @@ void DiscoveryManager::refreshPsnToken(
     if (!parsed_json)
     {
         onError("Failed to parse JSON response");
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -707,7 +685,6 @@ void DiscoveryManager::refreshPsnToken(
         }
         onError(errorMsg);
         json_object_put(parsed_json);
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -731,7 +708,6 @@ void DiscoveryManager::refreshPsnToken(
     }
 
     json_object_put(parsed_json);
-    curl_easy_cleanup(curl);
 
     if (newAccessToken.empty() || newRefreshToken.empty())
     {

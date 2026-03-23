@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <curl/curl.h>
 #include <borealis.hpp>
+#include "util/curl_wrappers.hpp"
 
 static FILE* s_natLogFile = nullptr;
 static FILE* s_prevLogOutput = nullptr;
@@ -105,7 +106,7 @@ static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, std::
 std::vector<std::string> StunClient::fetchRFC5780Servers() {
     std::vector<std::string> servers;
 
-    CURL* curl = curl_easy_init();
+    CurlHandle curl;
     if (!curl) {
         return servers;
     }
@@ -118,7 +119,6 @@ std::vector<std::string> StunClient::fetchRFC5780Servers() {
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 
     CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
 
     if (res != CURLE_OK) {
         return servers;
