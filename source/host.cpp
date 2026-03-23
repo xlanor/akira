@@ -493,6 +493,7 @@ void Host::startSession()
     if (err != CHIAKI_ERR_SUCCESS)
     {
         brls::Logger::error("chiaki_session_start failed with error: {}", chiaki_error_string(err));
+        sessionInit = false;
         chiaki_session_fini(&session);
         throw Exception("Chiaki Session Start failed");
     }
