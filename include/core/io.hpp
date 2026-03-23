@@ -1,6 +1,7 @@
 #ifndef AKIRA_IO_HPP
 #define AKIRA_IO_HPP
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -29,7 +30,7 @@ protected:
 
 private:
     ChiakiLog* log;
-    bool quit = false;
+    std::atomic<bool> quit = false;
 
     std::unique_ptr<AudioManager> m_audio_manager;
     std::unique_ptr<HapticManager> m_haptic_manager;
@@ -49,8 +50,8 @@ private:
 
     ChiakiSession* m_session = nullptr;
     std::chrono::steady_clock::time_point m_stream_start_time;
-    size_t m_network_frames_lost = 0;
-    size_t m_frames_recovered = 0;
+    std::atomic<size_t> m_network_frames_lost = 0;
+    std::atomic<size_t> m_frames_recovered = 0;
 
 public:
     // Singleton configuration
