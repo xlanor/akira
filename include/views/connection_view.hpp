@@ -45,8 +45,12 @@ private:
 
     bool transitionPending = false;
 
+    FILE* m_connectionLogFile = nullptr;
+    FILE* m_prevLogOutput = nullptr;
+
     void startConnection();
     void switchToConnectionLog();
+    void restoreMainLog();
     void addLogLine(const std::string& line, brls::LogLevel level);
     void renderLogs(NVGcontext* vg, float x, float y, float width, float height);
     void onConnectionComplete();

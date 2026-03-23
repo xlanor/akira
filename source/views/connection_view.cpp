@@ -66,6 +66,7 @@ ConnectionView::~ConnectionView()
         chiaki_thread_join(&connectionThread, nullptr);
     }
 
+    restoreMainLog();
     SharedViewHolder::release(this);
 }
 
@@ -108,8 +109,20 @@ void ConnectionView::switchToConnectionLog()
 
     FILE* newLogFile = fopen(logPath.c_str(), "w");
     if (newLogFile) {
+        m_prevLogOutput = brls::Logger::getLogOutput();
+        m_connectionLogFile = newLogFile;
         brls::Logger::setLogOutput(newLogFile);
         brls::Logger::info("Switched to connection log: {}", logPath);
+    }
+}
+
+void ConnectionView::restoreMainLog()
+{
+    if (m_connectionLogFile) {
+        brls::Logger::setLogOutput(m_prevLogOutput);
+        fclose(m_connectionLogFile);
+        m_connectionLogFile = nullptr;
+        m_prevLogOutput = nullptr;
     }
 }
 
