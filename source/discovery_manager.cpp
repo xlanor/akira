@@ -133,11 +133,11 @@ void DiscoveryManager::setServiceEnabled(bool enable)
 
         brls::Logger::info("Calling chiaki_discovery_service_init...");
         ChiakiErrorCode err = chiaki_discovery_service_init(&service, &options, &discoveryLog);
+        free(options.broadcast_addrs);
         if (err != CHIAKI_ERR_SUCCESS)
         {
             brls::Logger::error("Discovery service init FAILED: {}", chiaki_error_string(err));
             serviceEnabled = false;
-            free(options.broadcast_addrs);
             return;
         }
         brls::Logger::info("Discovery service started successfully!");
