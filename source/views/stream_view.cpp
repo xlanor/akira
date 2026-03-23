@@ -148,7 +148,7 @@ void StreamView::startStream()
                 if (err != CHIAKI_ERR_SUCCESS)
                 {
                     brls::Logger::error("Holepunch connection failed: {}", chiaki_error_string(err));
-                    throw Exception((std::string("Remote connection failed: ") + chiaki_error_string(err)).c_str());
+                    throw Exception(std::string("Remote connection failed: ") + chiaki_error_string(err));
                 }
 
                 brls::Logger::info("Holepunch successful!");

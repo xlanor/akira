@@ -7,11 +7,12 @@
 class Exception : public std::exception
 {
 private:
-    const char *msg;
+    std::string msg;
 
 public:
     explicit Exception(const char *msg) : msg(msg) {}
-    const char *what() const noexcept override { return msg; }
+    explicit Exception(std::string msg) : msg(std::move(msg)) {}
+    const char *what() const noexcept override { return msg.c_str(); }
 };
 
 #endif // AKIRA_EXCEPTION_HPP
