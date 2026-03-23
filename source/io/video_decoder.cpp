@@ -1,5 +1,6 @@
 #include "core/io/video_decoder.hpp"
 #include "core/exception.hpp"
+#include "util/av_wrappers.hpp"
 #include <borealis.hpp>
 
 #ifdef BOREALIS_USE_DEKO3D
@@ -146,7 +147,7 @@ bool VideoDecoder::decode(uint8_t* buf, size_t buf_size)
         }
     }
 
-    AVPacket* packet = av_packet_alloc();
+    AVPacketGuard packet;
     packet->data = buf;
     packet->size = buf_size;
 
@@ -161,7 +162,6 @@ send_packet:
             if (r != 0)
             {
                 brls::Logger::error("Failed to pull frame");
-                av_packet_free(&packet);
                 return false;
             }
             goto send_packet;
@@ -171,7 +171,6 @@ send_packet:
             char errbuf[128];
             av_make_error_string(errbuf, sizeof(errbuf), r);
             brls::Logger::error("Failed to push frame: {}", errbuf);
-            av_packet_free(&packet);
             return false;
         }
     }
@@ -182,12 +181,10 @@ send_packet:
     {
         m_frame_queue.push(m_tmp_frame);
     }
-    else if (r != AVERROR(EAGAIN)) 
+    else if (r != AVERROR(EAGAIN))
     {
         brls::Logger::warning("VideoDecoder: avcodec_receive_frame failed: {}", r);
     }
-
-    av_packet_free(&packet);
 
     return true;
 }
