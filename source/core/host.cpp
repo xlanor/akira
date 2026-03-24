@@ -1,5 +1,5 @@
 #include "core/host.hpp"
-#include "core/io.hpp"
+#include "stream/session.hpp"
 #include "core/exception.hpp"
 #include "core/settings_manager.hpp"
 #include "core/wireguard_manager.hpp"
@@ -14,26 +14,26 @@
 
 static void InitAudioCallback(unsigned int channels, unsigned int rate, void* user)
 {
-    IO* io = static_cast<IO*>(user);
-    io->InitAudioCB(channels, rate);
+    Session* session = static_cast<Session*>(user);
+    session->InitAudioCB(channels, rate);
 }
 
 static bool VideoCallback(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user)
 {
-    IO* io = static_cast<IO*>(user);
-    return io->VideoCB(buf, buf_size, frames_lost, frame_recovered, user);
+    Session* session = static_cast<Session*>(user);
+    return session->VideoCB(buf, buf_size, frames_lost, frame_recovered, user);
 }
 
 static void AudioCallback(int16_t* buf, size_t samples_count, void* user)
 {
-    IO* io = static_cast<IO*>(user);
-    io->AudioCB(buf, samples_count);
+    Session* session = static_cast<Session*>(user);
+    session->AudioCB(buf, samples_count);
 }
 
 static void HapticsFrameCallback(uint8_t* buf, size_t buf_size, void* user)
 {
-    IO* io = static_cast<IO*>(user);
-    io->HapticCB(buf, buf_size);
+    Session* session = static_cast<Session*>(user);
+    session->HapticCB(buf, buf_size);
 }
 
 static void EventCallback(ChiakiEvent* event, void* user)
@@ -286,12 +286,12 @@ int Host::registerHost(int pin)
     return HOST_REGISTER_OK;
 }
 
-int Host::initSession(IO* io)
+int Host::initSession(Session* streamSession)
 {
-    return initSessionWithHolepunch(io, nullptr);
+    return initSessionWithHolepunch(streamSession, nullptr);
 }
 
-int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
+int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSession holepunch)
 {
     auto resolution = settings->getVideoResolution(this);
     auto fps = settings->getVideoFPS(this);
@@ -302,7 +302,7 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
 
     ChiakiAudioSink audioSink = {};
     ChiakiAudioSink hapticsSink = {};
-    hapticsSink.user = io;
+    hapticsSink.user = streamSession;
     hapticsSink.frame_cb = HapticsFrameCallback;
 
     ChiakiConnectInfo connectInfo = {};
@@ -376,7 +376,7 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
         connectInfo.video_profile.codec = CHIAKI_CODEC_H265;
     }
 
-    io->setRequestedProfile(
+    streamSession->setRequestedProfile(
         connectInfo.video_profile.width,
         connectInfo.video_profile.height,
         connectInfo.video_profile.max_fps,
@@ -393,29 +393,29 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
         brls::Logger::info("Host::initSession: enable_dualsense=true");
         if (effectiveHaptic == 1)
         {
-            io->setHapticBase(128);
-            io->setRumbleStrength(0.5f);
+            streamSession->setHapticBase(128);
+            streamSession->setRumbleStrength(0.5f);
         }
         else
         {
-            io->setHapticBase(50);
-            io->setRumbleStrength(1.0f);
+            streamSession->setHapticBase(50);
+            streamSession->setRumbleStrength(1.0f);
         }
     }
     else
     {
         brls::Logger::info("Host::initSession: enable_dualsense=false (haptic disabled)");
-        io->setRumbleStrength(0.0f);
+        streamSession->setRumbleStrength(0.0f);
     }
 
     connectInfo.ps5 = isPS5();
 
-    if (!io->InitAVCodec(isPS5(), connectInfo.video_profile.width, connectInfo.video_profile.height))
+    if (!streamSession->InitAVCodec(isPS5(), connectInfo.video_profile.width, connectInfo.video_profile.height))
     {
         throw Exception("Failed to initiate libav codec");
     }
 
-    if (!io->InitVideo(connectInfo.video_profile.width, connectInfo.video_profile.height))
+    if (!streamSession->InitVideo(connectInfo.video_profile.width, connectInfo.video_profile.height))
     {
         throw Exception("Failed to initiate video");
     }
@@ -429,7 +429,7 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
         throw Exception(chiaki_error_string(err));
     }
 
-    // check chiaki session.c: 
+    // check chiaki session.c:
     // chiaki_holepunch_session_fini(session->holepunch_session);
     // dont hold to it because we might double free it.
     if (holepunch)
@@ -439,16 +439,16 @@ int Host::initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch)
 
     sessionInit = true;
 
-    io->setSession(&session);
-    io->startStreamTimer();
+    streamSession->setSession(&session);
+    streamSession->startStreamTimer();
 
     brls::Logger::info("Host::initSession: Setting up callbacks...");
-    chiaki_opus_decoder_set_cb(&opusDecoder, InitAudioCallback, AudioCallback, io);
+    chiaki_opus_decoder_set_cb(&opusDecoder, InitAudioCallback, AudioCallback, streamSession);
     chiaki_opus_decoder_get_sink(&opusDecoder, &audioSink);
     chiaki_session_set_audio_sink(&session, &audioSink);
     chiaki_session_set_haptics_sink(&session, &hapticsSink);
-    brls::Logger::info("Host::initSession: Setting video callback, io={}", (void*)io);
-    chiaki_session_set_video_sample_cb(&session, VideoCallback, io);
+    brls::Logger::info("Host::initSession: Setting video callback, session={}", (void*)streamSession);
+    chiaki_session_set_video_sample_cb(&session, VideoCallback, streamSession);
     chiaki_session_set_event_cb(&session, EventCallback, this);
     brls::Logger::info("Host::initSession: All callbacks set");
 

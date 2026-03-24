@@ -1,4 +1,4 @@
-#include "core/io/frame_queue.hpp"
+#include "stream/frame_queue.hpp"
 #include <borealis.hpp>
 
 FrameQueue::FrameQueue()

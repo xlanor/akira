@@ -9,7 +9,7 @@
 #include <atomic>
 
 #include "core/host.hpp"
-#include "core/io.hpp"
+#include "stream/session.hpp"
 
 class ConnectionView : public brls::Box, public std::enable_shared_from_this<ConnectionView> {
 public:
@@ -28,7 +28,7 @@ public:
 
 private:
     Host* host = nullptr;
-    IO* io = nullptr;
+    Session* session = nullptr;
 
     std::deque<std::string> logLines;
     std::mutex logMutex;

@@ -11,7 +11,7 @@
 ConnectionView::ConnectionView(Host* host)
     : host(host)
 {
-    this->io = IO::GetInstance();
+    this->session = Session::GetInstance();
     this->inflateFromXMLRes("xml/views/connection_view.xml");
 
     auto* titleLabel = (brls::Label*)this->getView("connection/title");

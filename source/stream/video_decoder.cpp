@@ -1,4 +1,4 @@
-#include "core/io/video_decoder.hpp"
+#include "stream/video_decoder.hpp"
 #include "core/exception.hpp"
 #include "util/av_wrappers.hpp"
 #include <borealis.hpp>

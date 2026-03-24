@@ -1,4 +1,4 @@
-#include "core/io/input_manager.hpp"
+#include "stream/input_manager.hpp"
 #include "core/settings_manager.hpp"
 #include "core/swipe_direction.hpp"
 #include <borealis.hpp>

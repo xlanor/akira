@@ -4,7 +4,7 @@
 #include "views/enter_pin_view.hpp"
 #include "views/host_settings_view.hpp"
 #include "core/host.hpp"
-#include "core/io.hpp"
+#include "stream/session.hpp"
 #include "util/shared_view_holder.hpp"
 
 #include <ctime>

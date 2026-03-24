@@ -1,5 +1,5 @@
-#ifndef AKIRA_IO_HPP
-#define AKIRA_IO_HPP
+#ifndef AKIRA_SESSION_HPP
+#define AKIRA_SESSION_HPP
 
 #include <atomic>
 #include <cstdint>
@@ -12,20 +12,20 @@
 #include <switch.h>
 #include <chrono>
 
-#include "exception.hpp"
-#include "core/io/stream_stats.hpp"
+#include "core/exception.hpp"
+#include "stream/stream_stats.hpp"
 
-// Forward declarations - full headers included in io.cpp only
+// Forward declarations - full headers included in session.cpp only
 class AudioManager;
 class HapticManager;
 class InputManager;
 class VideoDecoder;
 class IVideoRenderer;
 
-class IO
+class Session
 {
 protected:
-    IO();
+    Session();
 
 private:
     ChiakiLog* log;
@@ -53,16 +53,15 @@ private:
     std::atomic<size_t> m_frames_recovered = 0;
 
 public:
-    // Singleton configuration
-    IO(const IO&) = delete;
-    void operator=(const IO&) = delete;
-    static IO* GetInstance();
+    Session(const Session&) = delete;
+    void operator=(const Session&) = delete;
+    static Session* GetInstance();
 
     int getHapticBase() const;
     void setHapticBase(int base);
     void setRumbleStrength(float strength);
 
-    ~IO();
+    ~Session();
 
     void SetMesaConfig();
     bool VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user);
@@ -97,4 +96,4 @@ public:
     void resetStreamStats();
 };
 
-#endif // AKIRA_IO_HPP
+#endif // AKIRA_SESSION_HPP

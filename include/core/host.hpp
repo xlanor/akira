@@ -17,7 +17,7 @@
 
 // Forward declarations
 class SettingsManager;
-class IO;
+class Session;
 
 // Registration error codes
 enum HostRegisterError {
@@ -172,8 +172,8 @@ public:
     bool getVideoResolution(int* width, int* height) const;
 
     // Session management
-    int initSession(IO* io);
-    int initSessionWithHolepunch(IO* io, ChiakiHolepunchSession holepunch);
+    int initSession(Session* streamSession);
+    int initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSession holepunch);
     void startSession();
     void stopSession();
     void gotoBed();

@@ -1,4 +1,4 @@
-#include "core/io/haptic_manager.hpp"
+#include "stream/haptic_manager.hpp"
 #include "core/settings_manager.hpp"
 #include <algorithm>
 #include <cstring>

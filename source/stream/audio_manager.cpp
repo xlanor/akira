@@ -1,4 +1,4 @@
-#include "core/io/audio_manager.hpp"
+#include "stream/audio_manager.hpp"
 #include <borealis.hpp>
 #include <cstring>
 

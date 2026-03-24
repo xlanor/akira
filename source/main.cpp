@@ -11,6 +11,7 @@
 
 #include <chiaki/common.h>
 #include <chiaki/log.h>
+#include <curl/curl.h>
 #include "crypto/libnx/gmac.h"
 
 #include "views/host_list_tab.hpp"
@@ -22,7 +23,7 @@
 #include "views/stream_view.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/connection_view.hpp"
-#include "core/io.hpp"
+#include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
 
@@ -188,6 +189,8 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
     ChiakiErrorCode err = chiaki_lib_init();
     if (err != CHIAKI_ERR_SUCCESS)
     {
@@ -208,7 +211,7 @@ int main(int argc, char* argv[])
     chiaki_log_init(&chiakiLog, CHIAKI_LOG_ALL, chiaki_to_brls_log, nullptr);
 #endif
     SettingsManager::getInstance()->setLogger(&chiakiLog);
-    IO::GetInstance()->SetLogger(&chiakiLog);
+    Session::GetInstance()->SetLogger(&chiakiLog);
 
     static FILE* logFile = nullptr;
     if (SettingsManager::getInstance()->getEnableFileLogging()) {
@@ -228,7 +231,7 @@ int main(int argc, char* argv[])
     AppletType appletType = appletGetAppletType();
     brls::Logger::info("Applet type: {} ({})", appletTypeToString(appletType), static_cast<int>(appletType));
 
-    IO::GetInstance()->SetMesaConfig();
+    Session::GetInstance()->SetMesaConfig();
 
     brls::Application::registerXMLView("HostListTab", HostListTab::create);
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
@@ -265,6 +268,7 @@ int main(int argc, char* argv[])
     brls::Logger::info("Application exiting");
 
     SDL_Quit();
+    curl_global_cleanup();
 
     nvExit();
 

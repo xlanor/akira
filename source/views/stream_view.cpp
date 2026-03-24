@@ -3,7 +3,7 @@
 #include "views/enter_pin_view.hpp"
 #include <format>
 #include "core/exception.hpp"
-#include "core/io/input_manager.hpp"
+#include "stream/input_manager.hpp"
 #include "core/discovery_manager.hpp"
 #include "util/shared_view_holder.hpp"
 #include <switch.h>
@@ -13,7 +13,7 @@
 StreamView::StreamView(Host* host)
     : host(host)
 {
-    this->io = IO::GetInstance();
+    this->session = Session::GetInstance();
     this->settings = SettingsManager::getInstance();
 
     setFocusable(true);
@@ -49,16 +49,16 @@ void StreamView::setupCallbacks()
 
     host->setOnReadController([weak](ChiakiControllerState* state, std::map<uint32_t, int8_t>* fingerIdTouchId) {
         if (auto self = weak.lock()) {
-            self->io->UpdateControllerState(state, fingerIdTouchId);
+            self->session->UpdateControllerState(state, fingerIdTouchId);
         }
     });
 
-    io->getInputManager()->setTargetPS5(host->isPS5());
+    session->getInputManager()->setTargetPS5(host->isPS5());
 
     host->setOnMotionReset([weak]() {
         if (auto self = weak.lock()) {
-            if (self->io->getInputManager()) {
-                self->io->getInputManager()->resetMotionControls();
+            if (self->session->getInputManager()) {
+                self->session->getInputManager()->resetMotionControls();
             }
         }
     });
@@ -122,7 +122,7 @@ void StreamView::startStream()
 
     try
     {
-        if (!io->InitController())
+        if (!session->InitController())
         {
             brls::Logger::error("Failed to initialize controller");
             throw Exception("Failed to initialize controller");
@@ -156,11 +156,11 @@ void StreamView::startStream()
             }
 
             brls::Logger::info("Initializing session with holepunch...");
-            host->initSessionWithHolepunch(io, host->getHolepunchSession());
+            host->initSessionWithHolepunch(session, host->getHolepunchSession());
         }
         else
         {
-            host->initSession(io);
+            host->initSession(session);
         }
 
         host->startSession();
@@ -176,7 +176,7 @@ void StreamView::startStream()
     {
         brls::Logger::error("Failed to start stream: {}", e.what());
 
-        io->FreeController();
+        session->FreeController();
         host->cleanupHolepunch();
         host->finiSession();
 
@@ -209,8 +209,8 @@ void StreamView::stopStream()
     host->finiSession();
     host->cleanupHolepunch();
 
-    io->FreeController();
-    io->FreeVideo();
+    session->FreeController();
+    session->FreeVideo();
 
     sessionStarted = false;
 }
@@ -258,7 +258,7 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
     if (wasMenuOpen)
     {
         brls::Logger::info("StreamView::draw: resuming after menu close, stats_overlay={}",
-            io->getShowStatsOverlay());
+            session->getShowStatsOverlay());
         wasMenuOpen = false;
 
         // Skip one frame to let GPU state stabilize after menu closes
@@ -274,7 +274,7 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
     // Show logs while waiting for first video frame
     // This doesnt seem to make much sense but its mostly for remote
     // so that people dont think that its a black screen doing nothing.
-    if (!io->hasReceivedFirstFrame())
+    if (!session->hasReceivedFirstFrame())
     {
         nvgBeginPath(vg);
         nvgRect(vg, x, y, width, height);
@@ -284,13 +284,13 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
         renderLogs(vg, x, y, width, height);
 
         // Still process frames so we detect when first one arrives
-        io->MainLoop();
+        session->MainLoop();
         return;
     }
 
     host->sendFeedbackState();
 
-    if (!io->MainLoop())
+    if (!session->MainLoop())
     {
         brls::Logger::info("Quit requested via controller");
         stopStream();
@@ -410,7 +410,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
 
 void StreamView::onRumble(uint8_t left, uint8_t right)
 {
-    io->SetRumble(left, right);
+    session->SetRumble(left, right);
 }
 
 void StreamView::onLoginPinRequest(bool pinIncorrect)
@@ -490,20 +490,20 @@ void StreamView::showDisconnectMenu()
 {
     brls::Logger::info("showDisconnectMenu: entering");
     menuOpen = true;
-    io->setVideoPaused(true);
+    session->setVideoPaused(true);
     brls::Application::forceUnblockInputs();
 
     auto* menu = new StreamMenu();
 
-    menu->setStatsEnabled(io->getShowStatsOverlay());
+    menu->setStatsEnabled(session->getShowStatsOverlay());
 
     auto weak = weak_from_this();
 
     menu->setOnStatsToggle([weak](bool enabled) {
         if (auto self = weak.lock()) {
             brls::Logger::info("Stats overlay toggled: {}", enabled);
-            self->io->setShowStatsOverlay(enabled);
-            self->io->setVideoPaused(false);
+            self->session->setShowStatsOverlay(enabled);
+            self->session->setVideoPaused(false);
             self->menuOpen = false;
             brls::Application::blockInputs(true);
         }
@@ -512,10 +512,10 @@ void StreamView::showDisconnectMenu()
     menu->setOnGyroReset([weak]() {
         if (auto self = weak.lock()) {
             brls::Logger::info("Gyro reset triggered from menu");
-            if (self->io->getInputManager()) {
-                self->io->getInputManager()->resetMotionControls();
+            if (self->session->getInputManager()) {
+                self->session->getInputManager()->resetMotionControls();
             }
-            self->io->setVideoPaused(false);
+            self->session->setVideoPaused(false);
             self->menuOpen = false;
             brls::Application::blockInputs(true);
         }
@@ -531,7 +531,7 @@ void StreamView::showDisconnectMenu()
     menu->setOnDismiss([weak]() {
         if (auto self = weak.lock()) {
             brls::Logger::info("Menu dismissed");
-            self->io->setVideoPaused(false);
+            self->session->setVideoPaused(false);
             self->menuOpen = false;
             brls::Application::blockInputs(true);
         }
@@ -589,7 +589,7 @@ void StreamView::retryWithWake()
     wakeAttempted = true;
 
     host->finiSession();
-    io->FreeController();
+    session->FreeController();
 
     if (wakeRetryCount == 1) {
         int wakeResult = host->wakeup();
@@ -619,17 +619,17 @@ void StreamView::retryWithWake()
     streamActive = false;
 
     try {
-        if (!io->InitController()) {
+        if (!session->InitController()) {
             throw Exception("Failed to initialize controller");
         }
-        host->initSession(io);
+        host->initSession(session);
         host->startSession();
         sessionStarted = true;
         streamActive = true;
         brls::Logger::info("Retry connection started");
     } catch (const Exception& e) {
         brls::Logger::error("Retry attempt {} failed: {}", wakeRetryCount, e.what());
-        io->FreeController();
+        session->FreeController();
         host->finiSession();
 
         if (wakeRetryCount >= MAX_WAKE_RETRIES) {

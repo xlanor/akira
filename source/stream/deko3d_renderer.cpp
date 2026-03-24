@@ -1,7 +1,7 @@
 #ifdef BOREALIS_USE_DEKO3D
 
-#include "core/io/deko3d_renderer.hpp"
-#include "core/io/bitmap_font.hpp"
+#include "stream/deko3d_renderer.hpp"
+#include "stream/bitmap_font.hpp"
 #include "core/wireguard_manager.hpp"
 #include "core/settings_manager.hpp"
 #include "crypto/libnx/gmac.h"

@@ -4,6 +4,8 @@
 
 #include <borealis.hpp>
 #include <format>
+#include <ranges>
+#include <utility>
 #include <chiaki/base64.h>
 #include <chiaki/controller.h>
 #include <toml++/toml.hpp>
@@ -633,7 +635,7 @@ int SettingsManager::writeFile() {
     config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
     config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
     if (globalHaptic != HapticPreset::Disabled)
-        config.insert("haptic", static_cast<int>(globalHaptic));
+        config.insert("haptic", std::to_underlying(globalHaptic));
     if (!globalPsnOnlineId.empty())
         config.insert("psn_online_id", globalPsnOnlineId);
     if (!globalPsnAccountId.empty())
@@ -674,7 +676,7 @@ int SettingsManager::writeFile() {
     if (debugDiscoveryLog)
         config.insert("debug_discovery_log", debugDiscoveryLog);
     if (globalGyroSource != GyroSource::Auto)
-        config.insert("gyro_source", static_cast<int>(globalGyroSource));
+        config.insert("gyro_source", std::to_underlying(globalGyroSource));
 
     {
         ButtonMapping defaults = getDefaultButtonMapping();
@@ -705,7 +707,7 @@ int SettingsManager::writeFile() {
         toml::table hostTable;
         hostTable.insert("host_addr", host->getHostAddr());
         hostTable.insert("target", static_cast<int>(host->getChiakiTarget()));
-        hostTable.insert("host_type", static_cast<int>(host->hostType));
+        hostTable.insert("host_type", std::to_underlying(host->hostType));
 
         if (!host->psnOnlineId.empty())
             hostTable.insert("psn_online_id", host->psnOnlineId);
@@ -846,13 +848,7 @@ bool SettingsManager::isValidFQDN(const std::string& addr) {
         return false;
     }
     // TLDs must contain at least one letter - reject pure numeric strings like "192.168.50.266"
-    bool hasAlpha = false;
-    for (char c : addr) {
-        if (std::isalpha(static_cast<unsigned char>(c))) {
-            hasAlpha = true;
-            break;
-        }
-    }
+    bool hasAlpha = std::ranges::any_of(addr, [](unsigned char c) { return std::isalpha(c); });
     if (!hasAlpha) {
         return false;
     }

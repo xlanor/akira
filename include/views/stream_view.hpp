@@ -8,7 +8,7 @@
 #include <mutex>
 
 #include "core/host.hpp"
-#include "core/io.hpp"
+#include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 
 class StreamView : public brls::Box, public std::enable_shared_from_this<StreamView> {
@@ -32,7 +32,7 @@ public:
 
 private:
     Host* host = nullptr;
-    IO* io = nullptr;
+    Session* session = nullptr;
     SettingsManager* settings = nullptr;
     bool streamActive = false;
     bool sessionStarted = false;
