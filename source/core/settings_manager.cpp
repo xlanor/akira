@@ -149,14 +149,13 @@ void SettingsManager::setLogger(ChiakiLog* logger) {
 }
 
 SettingsManager* SettingsManager::getInstance() {
-    static SettingsManager instance;
-    static bool initialized = false;
-    if (!initialized) {
-        initialized = true;
-        instance.ensureConfigDir();
-        instance.parseFile();
+    static SettingsManager* instance = nullptr;
+    if (!instance) {
+        instance = new SettingsManager();
+        instance->ensureConfigDir();
+        instance->parseFile();
     }
-    return &instance;
+    return instance;
 }
 
 void SettingsManager::ensureConfigDir() {

@@ -12,8 +12,8 @@
 
 Session* Session::GetInstance()
 {
-    static Session instance;
-    return &instance;
+    static Session* instance = new Session();
+    return instance;
 }
 
 int Session::getHapticBase() const
