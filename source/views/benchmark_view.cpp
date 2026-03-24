@@ -3,6 +3,8 @@
 #include "crypto/libnx/gmac.h"
 #include <chiaki/thread.h>
 
+#include <format>
+#include <memory>
 #include <vector>
 #include <chrono>
 #include <cstdio>
@@ -48,15 +50,15 @@ void BenchmarkView::startBenchmark()
     benchmarkFinished = false;
     threadStarted = false;
 
-    auto* args = new BenchmarkThreadArgs{this};
+    auto args = std::make_unique<BenchmarkThreadArgs>(BenchmarkThreadArgs{this});
 
-    ChiakiErrorCode err = chiaki_thread_create(&benchmarkThread, benchmarkThreadFunc, args);
+    ChiakiErrorCode err = chiaki_thread_create(&benchmarkThread, benchmarkThreadFunc, args.get());
     if (err != CHIAKI_ERR_SUCCESS) {
-        delete args;
         benchmarkRunning = false;
         benchmarkFinished = true;
         addLogLine("ERROR: Failed to create benchmark thread");
     } else {
+        args.release();
         threadStarted = true;
     }
 }
@@ -115,7 +117,7 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
     const size_t sizes[] = {64, 256, 1024, 4096};
     const int numSizes = 4;
 
-    view->addLogLine("Iterations per test: " + std::to_string(iterations));
+    view->addLogLine(std::format("Iterations per test: {}", iterations));
     view->addLogLine("");
 
     uint8_t key[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
@@ -128,10 +130,10 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         uint8_t tag[16];
 
         view->addLogLine("----------------------------------------");
-        view->addLogLine("Testing " + std::to_string(size) + " byte blocks...");
+        view->addLogLine(std::format("Testing {} byte blocks...", size));
         view->addLogLine("");
 
-        view->addLogLine("  [TABLE] Running " + std::to_string(iterations) + " iterations...");
+        view->addLogLine(std::format("  [TABLE] Running {} iterations...", iterations));
         chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
         ChiakiGmacContext tableCtx;
         chiaki_gmac_context_init(&tableCtx);
@@ -147,13 +149,11 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         double tableOps = (iterations * 1000.0) / tableMs;
         double tableMBs = (iterations * size * 1000.0) / (tableMs * 1024.0 * 1024.0);
 
-        char tableBuf[128];
-        snprintf(tableBuf, sizeof(tableBuf), "  [TABLE] %.0f ops/s | %.2f MB/s | %.1f ms total",
-                 tableOps, tableMBs, tableMs);
-        view->addLogLine(tableBuf);
+        view->addLogLine(std::format("  [TABLE] {:.0f} ops/s | {:.2f} MB/s | {:.1f} ms total",
+                 tableOps, tableMBs, tableMs));
 
 #ifdef CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL
-        view->addLogLine("  [PMULL] Running " + std::to_string(iterations) + " iterations...");
+        view->addLogLine(std::format("  [PMULL] Running {} iterations...", iterations));
         chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
         ChiakiGmacContext pmullCtx;
         chiaki_gmac_context_init(&pmullCtx);
@@ -169,19 +169,15 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         double pmullOps = (iterations * 1000.0) / pmullMs;
         double pmullMBs = (iterations * size * 1000.0) / (pmullMs * 1024.0 * 1024.0);
 
-        char pmullBuf[128];
-        snprintf(pmullBuf, sizeof(pmullBuf), "  [PMULL] %.0f ops/s | %.2f MB/s | %.1f ms total",
-                 pmullOps, pmullMBs, pmullMs);
-        view->addLogLine(pmullBuf);
+        view->addLogLine(std::format("  [PMULL] {:.0f} ops/s | {:.2f} MB/s | {:.1f} ms total",
+                 pmullOps, pmullMBs, pmullMs));
 
         double speedup = tableMs / pmullMs;
-        char speedupBuf[64];
         if (speedup >= 1.0) {
-            snprintf(speedupBuf, sizeof(speedupBuf), "  >> PMULL is %.2fx faster", speedup);
+            view->addLogLine(std::format("  >> PMULL is {:.2f}x faster", speedup));
         } else {
-            snprintf(speedupBuf, sizeof(speedupBuf), "  >> TABLE is %.2fx faster", 1.0 / speedup);
+            view->addLogLine(std::format("  >> TABLE is {:.2f}x faster", 1.0 / speedup));
         }
-        view->addLogLine(speedupBuf);
 #else
         view->addLogLine("  [PMULL] Not compiled (CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL not set)");
 #endif

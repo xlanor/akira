@@ -3,6 +3,7 @@
 
 #include <borealis.hpp>
 #include <ctime>
+#include <format>
 
 #include <cstring>
 #include <cstdlib>
@@ -13,6 +14,7 @@
 #include <netinet/in.h>
 
 #include <curl/curl.h>
+#include "util/curl_wrappers.hpp"
 #include <json-c/json.h>
 
 static void discovery_log_cb(ChiakiLogLevel level, const char* msg, void* user)
@@ -44,14 +46,9 @@ static size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, std::
     return size * nmemb;
 }
 
-DiscoveryManager* DiscoveryManager::instance = nullptr;
-
 DiscoveryManager* DiscoveryManager::getInstance()
 {
-    if (!instance)
-    {
-        instance = new DiscoveryManager();
-    }
+    static DiscoveryManager* instance = new DiscoveryManager();
     return instance;
 }
 
@@ -133,11 +130,11 @@ void DiscoveryManager::setServiceEnabled(bool enable)
 
         brls::Logger::info("Calling chiaki_discovery_service_init...");
         ChiakiErrorCode err = chiaki_discovery_service_init(&service, &options, &discoveryLog);
+        free(options.broadcast_addrs);
         if (err != CHIAKI_ERR_SUCCESS)
         {
             brls::Logger::error("Discovery service init FAILED: {}", chiaki_error_string(err));
             serviceEnabled = false;
-            free(options.broadcast_addrs);
             return;
         }
         brls::Logger::info("Discovery service started successfully!");
@@ -311,7 +308,7 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
 
         Host* host;
         if (it != hostsMap->end()) {
-            host = it->second;
+            host = it->second.get();
         } else {
             host = settings->getOrCreateHost(data->hostName);
             host->setHostType(HostType::Auto);
@@ -347,7 +344,7 @@ void DiscoveryManager::lookupPsnAccountId(
     std::function<void(const std::string&)> onSuccess,
     std::function<void(const std::string&)> onError)
 {
-    CURL* curl = curl_easy_init();
+    CurlHandle curl;
     if (!curl)
     {
         onError("Failed to initialize CURL");
@@ -371,7 +368,6 @@ void DiscoveryManager::lookupPsnAccountId(
     if (res != CURLE_OK)
     {
         onError(curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -380,7 +376,6 @@ void DiscoveryManager::lookupPsnAccountId(
     if (!parsed_json)
     {
         onError("Failed to parse JSON response");
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -403,7 +398,6 @@ void DiscoveryManager::lookupPsnAccountId(
     }
 
     json_object_put(parsed_json);
-    curl_easy_cleanup(curl);
 }
 
 void DiscoveryManager::fetchCompanionCredentials(
@@ -419,7 +413,7 @@ void DiscoveryManager::fetchCompanionCredentials(
     )> onSuccess,
     std::function<void(const std::string&)> onError)
 {
-    CURL* curl = curl_easy_init();
+    CurlHandle curl;
     if (!curl)
     {
         onError("Failed to initialize CURL");
@@ -442,7 +436,7 @@ void DiscoveryManager::fetchCompanionCredentials(
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
 
-    std::string accountUrl = "http://" + host + ":" + std::to_string(port) + "/account";
+    std::string accountUrl = std::format("http://{}:{}/account", host, port);
     curl_easy_setopt(curl, CURLOPT_URL, accountUrl.c_str());
 
     res = curl_easy_perform(curl);
@@ -450,15 +444,13 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (res != CURLE_OK)
     {
         onError(curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code != 200)
     {
-        onError("Account fetch HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
+        onError(std::format("Account fetch HTTP error: {}", http_code));
         return;
     }
 
@@ -473,7 +465,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         {
             onError(json_object_get_string(error_obj));
             json_object_put(parsed_json);
-            curl_easy_cleanup(curl);
             return;
         }
 
@@ -488,7 +479,7 @@ void DiscoveryManager::fetchCompanionCredentials(
         json_object_put(parsed_json);
     }
 
-    std::string tokenUrl = "http://" + host + ":" + std::to_string(port) + "/token";
+    std::string tokenUrl = std::format("http://{}:{}/token", host, port);
     response_data.clear();
     curl_easy_setopt(curl, CURLOPT_URL, tokenUrl.c_str());
 
@@ -497,15 +488,13 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (res != CURLE_OK)
     {
         onError(std::string("Token fetch failed: ") + curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code != 200)
     {
-        onError("Token fetch HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
+        onError(std::format("Token fetch HTTP error: {}", http_code));
         return;
     }
 
@@ -521,7 +510,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         {
             onError(std::string("Token error: ") + json_object_get_string(error_obj));
             json_object_put(parsed_json);
-            curl_easy_cleanup(curl);
             return;
         }
 
@@ -540,7 +528,7 @@ void DiscoveryManager::fetchCompanionCredentials(
         json_object_put(parsed_json);
     }
 
-    std::string duidUrl = "http://" + host + ":" + std::to_string(port) + "/duid";
+    std::string duidUrl = std::format("http://{}:{}/duid", host, port);
     response_data.clear();
     curl_easy_setopt(curl, CURLOPT_URL, duidUrl.c_str());
 
@@ -549,15 +537,13 @@ void DiscoveryManager::fetchCompanionCredentials(
     if (res != CURLE_OK)
     {
         onError(std::string("DUID fetch failed: ") + curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code != 200)
     {
-        onError("DUID fetch HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
+        onError(std::format("DUID fetch HTTP error: {}", http_code));
         return;
     }
 
@@ -571,7 +557,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         {
             onError(std::string("DUID error: ") + json_object_get_string(error_obj));
             json_object_put(parsed_json);
-            curl_easy_cleanup(curl);
             return;
         }
 
@@ -581,8 +566,6 @@ void DiscoveryManager::fetchCompanionCredentials(
         }
         json_object_put(parsed_json);
     }
-
-    curl_easy_cleanup(curl);
 
     onSuccess(onlineId, accountId, accessToken, refreshToken, expiresAt, duid);
 }
@@ -604,7 +587,7 @@ void DiscoveryManager::refreshPsnToken(
         return;
     }
 
-    CURL* curl = curl_easy_init();
+    CurlHandle curl;
     if (!curl)
     {
         onError("Failed to initialize CURL");
@@ -612,13 +595,9 @@ void DiscoveryManager::refreshPsnToken(
     }
 
     std::string credentials = std::string(PSN_CLIENT_ID) + ":" + PSN_CLIENT_SECRET;
-    char* b64Credentials = nullptr;
-    size_t b64Len = 0;
-
     size_t credLen = credentials.length();
-    b64Len = ((4 * credLen / 3) + 3) & ~3;
-    b64Credentials = new char[b64Len + 1];
-    memset(b64Credentials, 0, b64Len + 1);
+    size_t b64Len = ((4 * credLen / 3) + 3) & ~3;
+    std::string b64Credentials(b64Len, '\0');
 
     static const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     size_t i = 0, j = 0;
@@ -639,9 +618,9 @@ void DiscoveryManager::refreshPsnToken(
         }
         b64Credentials[j++] = '=';
     }
+    b64Credentials.resize(j);
 
-    std::string authHeader = "Authorization: Basic " + std::string(b64Credentials);
-    delete[] b64Credentials;
+    std::string authHeader = "Authorization: Basic " + b64Credentials;
 
     std::string postData = "grant_type=refresh_token"
         "&refresh_token=" + refreshToken +
@@ -650,12 +629,12 @@ void DiscoveryManager::refreshPsnToken(
 
     std::string response_data;
 
-    struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, authHeader.c_str());
-    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
+    CurlSlist headers;
+    headers.append(authHeader.c_str());
+    headers.append("Content-Type: application/x-www-form-urlencoded");
 
     curl_easy_setopt(curl, CURLOPT_URL, PSN_TOKEN_URL);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, static_cast<curl_slist*>(headers));
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
@@ -665,12 +644,9 @@ void DiscoveryManager::refreshPsnToken(
 
     CURLcode res = curl_easy_perform(curl);
 
-    curl_slist_free_all(headers);
-
     if (res != CURLE_OK)
     {
         onError(curl_easy_strerror(res));
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -680,8 +656,7 @@ void DiscoveryManager::refreshPsnToken(
     if (http_code != 200)
     {
         brls::Logger::error("PSN token refresh failed with HTTP {}: {}", http_code, response_data);
-        onError("HTTP error: " + std::to_string(http_code));
-        curl_easy_cleanup(curl);
+        onError(std::format("HTTP error: {}", http_code));
         return;
     }
 
@@ -689,7 +664,6 @@ void DiscoveryManager::refreshPsnToken(
     if (!parsed_json)
     {
         onError("Failed to parse JSON response");
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -707,7 +681,6 @@ void DiscoveryManager::refreshPsnToken(
         }
         onError(errorMsg);
         json_object_put(parsed_json);
-        curl_easy_cleanup(curl);
         return;
     }
 
@@ -731,7 +704,6 @@ void DiscoveryManager::refreshPsnToken(
     }
 
     json_object_put(parsed_json);
-    curl_easy_cleanup(curl);
 
     if (newAccessToken.empty() || newRefreshToken.empty())
     {
@@ -884,12 +856,12 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
     std::string deviceName = device->device_name;
     bool remotePlayEnabled = device->remoteplay_enabled;
 
-    char uidHex[65] = {0};
+    std::string deviceUid;
+    deviceUid.reserve(64);
     for (size_t j = 0; j < 32; j++)
     {
-        snprintf(uidHex + (j * 2), 3, "%02x", device->device_uid[j]);
+        std::format_to(std::back_inserter(deviceUid), "{:02x}", device->device_uid[j]);
     }
-    std::string deviceUid = uidHex;
 
     brls::Logger::info("Remote device: name='{}', uid='{}', type={}, remoteplay={}",
         deviceName, deviceUid,
@@ -909,7 +881,7 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         auto it = hostsMap->find(deviceName);
         if (it != hostsMap->end() && it->second->hasRpKey() && !it->second->isRemote())
         {
-            localHost = it->second;
+            localHost = it->second.get();
             if (localHost->getRemoteDuid().empty())
             {
                 localHost->setRemoteDuid(deviceUid);
@@ -941,6 +913,8 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         }
 
         host->state = CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN;
+
+        settings->writeFile();
 
         brls::Logger::info("Calling onHostDiscovered for '{}'", host->getHostName());
         if (onHostDiscovered)

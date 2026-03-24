@@ -1,5 +1,6 @@
 #include "core/wireguard_manager.hpp"
 #include "core/settings_manager.hpp"
+#include <format>
 #include <wg_lwip_relay.hpp>
 #include <borealis.hpp>
 #include <fstream>
@@ -205,7 +206,7 @@ bool WireGuardManager::connect() {
 
     int err = wg_connect(tunnel);
     if (err != WG_OK) {
-        lastError = "Handshake failed: " + std::to_string(err);
+        lastError = std::format("Handshake failed: {}", err);
         brls::Logger::error("WG: wg_connect failed: {}", err);
         wg_close(tunnel);
         tunnel = nullptr;
@@ -215,7 +216,7 @@ bool WireGuardManager::connect() {
     brls::Logger::info("WG: wg_connect succeeded, calling wg_start");
     err = wg_start(tunnel);
     if (err != WG_OK) {
-        lastError = "Failed to start tunnel: " + std::to_string(err);
+        lastError = std::format("Failed to start tunnel: {}", err);
         brls::Logger::error("WG: wg_start failed: {}", err);
         wg_close(tunnel);
         tunnel = nullptr;

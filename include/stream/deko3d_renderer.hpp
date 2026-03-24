@@ -3,7 +3,7 @@
 
 #ifdef BOREALIS_USE_DEKO3D
 
-#include "core/io/video_renderer.hpp"
+#include "stream/video_renderer.hpp"
 
 #include <deko3d.hpp>
 #include <memory>

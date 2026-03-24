@@ -2,7 +2,7 @@
 #define AKIRA_IO_VIDEO_RENDERER_HPP
 
 #include <chiaki/log.h>
-#include "core/io/stream_stats.hpp"
+#include "stream/stream_stats.hpp"
 
 extern "C"
 {

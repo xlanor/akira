@@ -2,6 +2,7 @@
 #include "views/benchmark_view.hpp"
 #include "views/controller_remap_view.hpp"
 #include "core/discovery_manager.hpp"
+#include <format>
 
 #include <ctime>
 #include <iomanip>
@@ -225,13 +226,13 @@ void SettingsTab::initLocalBitrateSlider() {
             int minBitrate = settings->getMinBitrateForResolution(resolution);
             int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
             settings->setLocalVideoBitrate(bitrate);
-            localBitrateSlider->detail->setText(std::to_string(bitrate) + " kbps");
+            localBitrateSlider->detail->setText(std::format("{} kbps", bitrate));
             settings->writeFile();
             brls::Logger::info("Local bitrate set to {}", bitrate);
         }
     );
 
-    localBitrateSlider->detail->setText(std::to_string(currentBitrate) + " kbps");
+    localBitrateSlider->detail->setText(std::format("{} kbps", currentBitrate));
 }
 
 void SettingsTab::updateLocalBitrateSlider() {
@@ -244,7 +245,7 @@ void SettingsTab::updateLocalBitrateSlider() {
 
     float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
     localBitrateSlider->slider->setProgress(normalizedValue);
-    localBitrateSlider->detail->setText(std::to_string(defaultBitrate) + " kbps");
+    localBitrateSlider->detail->setText(std::format("{} kbps", defaultBitrate));
 }
 
 void SettingsTab::initRemoteBitrateSlider() {
@@ -275,13 +276,13 @@ void SettingsTab::initRemoteBitrateSlider() {
             int minBitrate = settings->getMinBitrateForResolution(resolution);
             int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
             settings->setRemoteVideoBitrate(bitrate);
-            remoteBitrateSlider->detail->setText(std::to_string(bitrate) + " kbps");
+            remoteBitrateSlider->detail->setText(std::format("{} kbps", bitrate));
             settings->writeFile();
             brls::Logger::info("Remote bitrate set to {}", bitrate);
         }
     );
 
-    remoteBitrateSlider->detail->setText(std::to_string(currentBitrate) + " kbps");
+    remoteBitrateSlider->detail->setText(std::format("{} kbps", currentBitrate));
 }
 
 void SettingsTab::updateRemoteBitrateSlider() {
@@ -294,7 +295,7 @@ void SettingsTab::updateRemoteBitrateSlider() {
 
     float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
     remoteBitrateSlider->slider->setProgress(normalizedValue);
-    remoteBitrateSlider->detail->setText(std::to_string(defaultBitrate) + " kbps");
+    remoteBitrateSlider->detail->setText(std::format("{} kbps", defaultBitrate));
 }
 
 void SettingsTab::initVpnResolutionSelector() {
@@ -374,13 +375,13 @@ void SettingsTab::initVpnBitrateSlider() {
             const int VPN_MAX_BITRATE = 15000;
             int bitrate = VPN_MIN_BITRATE + static_cast<int>(value * (VPN_MAX_BITRATE - VPN_MIN_BITRATE));
             settings->setVpnVideoBitrate(bitrate);
-            vpnBitrateSlider->detail->setText(std::to_string(bitrate) + " kbps");
+            vpnBitrateSlider->detail->setText(std::format("{} kbps", bitrate));
             settings->writeFile();
             brls::Logger::info("VPN bitrate set to {}", bitrate);
         }
     );
 
-    vpnBitrateSlider->detail->setText(std::to_string(currentBitrate) + " kbps");
+    vpnBitrateSlider->detail->setText(std::format("{} kbps", currentBitrate));
 }
 
 void SettingsTab::updateVpnBitrateSlider() {
@@ -392,7 +393,7 @@ void SettingsTab::updateVpnBitrateSlider() {
 
     float normalizedValue = static_cast<float>(VPN_DEFAULT_BITRATE - VPN_MIN_BITRATE) / (VPN_MAX_BITRATE - VPN_MIN_BITRATE);
     vpnBitrateSlider->slider->setProgress(normalizedValue);
-    vpnBitrateSlider->detail->setText(std::to_string(VPN_DEFAULT_BITRATE) + " kbps");
+    vpnBitrateSlider->detail->setText(std::format("{} kbps", VPN_DEFAULT_BITRATE));
 }
 
 void SettingsTab::initHapticSelector() {
@@ -559,7 +560,7 @@ void SettingsTab::initCompanionSection() {
         "e.g., 192.168.1.100"
     );
 
-    std::string currentPort = std::to_string(settings->getCompanionPort());
+    std::string currentPort = std::format("{}", settings->getCompanionPort());
     companionPortInput->init(
         "Companion Port",
         currentPort,
@@ -852,11 +853,11 @@ void SettingsTab::initPacketLossMaxSlider() {
         [this](float value) {
             int percent = static_cast<int>(value * 100.0f);
             settings->setPacketLossMax(value);
-            packetLossMaxSlider->detail->setText(std::to_string(percent) + "%");
+            packetLossMaxSlider->detail->setText(std::format("{}%", percent));
             settings->writeFile();
         }
     );
-    packetLossMaxSlider->detail->setText(std::to_string(currentPercent) + "%");
+    packetLossMaxSlider->detail->setText(std::format("{}%", currentPercent));
     packetLossMaxSlider->slider->setStep(0.05f);
 }
 

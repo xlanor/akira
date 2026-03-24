@@ -3,6 +3,9 @@
 #include "core/host.hpp"
 
 #include <borealis.hpp>
+#include <format>
+#include <ranges>
+#include <utility>
 #include <chiaki/base64.h>
 #include <chiaki/controller.h>
 #include <toml++/toml.hpp>
@@ -132,7 +135,7 @@ uint32_t configKeyToChiakiButton(const std::string& key) {
 
 } // anonymous namespace
 
-SettingsManager* SettingsManager::instance = nullptr;
+
 
 SettingsManager::SettingsManager() {
     buttonMapping = getDefaultButtonMapping();
@@ -146,7 +149,8 @@ void SettingsManager::setLogger(ChiakiLog* logger) {
 }
 
 SettingsManager* SettingsManager::getInstance() {
-    if (instance == nullptr) {
+    static SettingsManager* instance = nullptr;
+    if (!instance) {
         instance = new SettingsManager();
         instance->ensureConfigDir();
         instance->parseFile();
@@ -167,7 +171,7 @@ size_t SettingsManager::getB64EncodeSize(size_t inputSize) {
     return ((4 * inputSize / 3) + 3) & ~3;
 }
 
-std::map<std::string, Host*>* SettingsManager::getHostsMap() {
+std::map<std::string, std::unique_ptr<Host>>* SettingsManager::getHostsMap() {
     return &hosts;
 }
 
@@ -175,14 +179,14 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
     bool created = false;
 
     if (hosts.find(hostName) == hosts.end()) {
-        hosts[hostName] = new Host(hostName);
+        hosts[hostName] = std::make_unique<Host>(hostName);
         if (log) {
             hosts[hostName]->setLogger(log);
         }
         created = true;
     }
 
-    Host* host = hosts.at(hostName);
+    Host* host = hosts.at(hostName).get();
 
     if (created) {
         setPsnOnlineId(host, globalPsnOnlineId);
@@ -193,21 +197,17 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
 }
 
 void SettingsManager::removeHost(const std::string& hostName) {
-    auto it = hosts.find(hostName);
-    if (it != hosts.end()) {
-        delete it->second;
-        hosts.erase(it);
-    }
+    hosts.erase(hostName);
 }
 
 void SettingsManager::renameHost(const std::string& oldName, const std::string& newName) {
     auto it = hosts.find(oldName);
     if (it == hosts.end()) return;
 
-    Host* host = it->second;
+    auto host = std::move(it->second);
     hosts.erase(it);
     host->hostName = newName;
-    hosts[newName] = host;
+    hosts[newName] = std::move(host);
 }
 
 Host* SettingsManager::findHostByDuid(const std::string& duid) {
@@ -216,7 +216,7 @@ Host* SettingsManager::findHostByDuid(const std::string& duid) {
     }
     for (auto& [name, host] : hosts) {
         if (host && host->getRemoteDuid() == duid) {
-            return host;
+            return host.get();
         }
     }
     return nullptr;
@@ -246,14 +246,11 @@ void SettingsManager::removeLegacyConfig() {
     };
 
     std::string content;
-    FILE* f = fopen(TOML_CONFIG_FILE, "r");
-    if (!f) return;
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    content.resize(size);
-    fread(&content[0], 1, size, f);
-    fclose(f);
+    {
+        std::ifstream f(TOML_CONFIG_FILE);
+        if (!f) return;
+        content.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    }
 
     bool needsRewrite = false;
     for (const auto& key : legacyKeys) {
@@ -415,7 +412,7 @@ void SettingsManager::parseTomlFile() {
 
             if (cleanName != hostName) {
                 if (hosts.find(cleanName) != hosts.end()) {
-                    Host* existing = hosts[cleanName];
+                    Host* existing = hosts[cleanName].get();
                     if (existing->hostType == HostType::Manual && migratedType != HostType::Manual) {
                         brls::Logger::info("Skipping {} - Manual host {} already exists", hostName, cleanName);
                         continue;
@@ -539,7 +536,7 @@ void SettingsManager::parseLegacyFile() {
                     migratedType = HostType::Auto;
                 }
                 if (cleanName != value && hosts.find(cleanName) != hosts.end()) {
-                    Host* existing = hosts[cleanName];
+                    Host* existing = hosts[cleanName].get();
                     if (existing->hostType == HostType::Manual && migratedType != HostType::Manual) {
                         brls::Logger::info("Skipping {} - Manual host {} already exists", value, cleanName);
                         currentHost = nullptr;
@@ -640,7 +637,7 @@ int SettingsManager::writeFile() {
     config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
     config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
     if (globalHaptic != HapticPreset::Disabled)
-        config.insert("haptic", static_cast<int>(globalHaptic));
+        config.insert("haptic", std::to_underlying(globalHaptic));
     if (!globalPsnOnlineId.empty())
         config.insert("psn_online_id", globalPsnOnlineId);
     if (!globalPsnAccountId.empty())
@@ -681,7 +678,7 @@ int SettingsManager::writeFile() {
     if (debugDiscoveryLog)
         config.insert("debug_discovery_log", debugDiscoveryLog);
     if (globalGyroSource != GyroSource::Auto)
-        config.insert("gyro_source", static_cast<int>(globalGyroSource));
+        config.insert("gyro_source", std::to_underlying(globalGyroSource));
 
     {
         ButtonMapping defaults = getDefaultButtonMapping();
@@ -712,7 +709,7 @@ int SettingsManager::writeFile() {
         toml::table hostTable;
         hostTable.insert("host_addr", host->getHostAddr());
         hostTable.insert("target", static_cast<int>(host->getChiakiTarget()));
-        hostTable.insert("host_type", static_cast<int>(host->hostType));
+        hostTable.insert("host_type", std::to_underlying(host->hostType));
 
         if (!host->psnOnlineId.empty())
             hostTable.insert("psn_online_id", host->psnOnlineId);
@@ -722,8 +719,8 @@ int SettingsManager::writeFile() {
             hostTable.insert("console_pin", host->consolePIN);
 
         if (host->rpKeyData || host->registered) {
-            hostTable.insert("rp_key", getHostRpKey(host));
-            hostTable.insert("rp_regist_key", getHostRpRegistKey(host));
+            hostTable.insert("rp_key", getHostRpKey(host.get()));
+            hostTable.insert("rp_regist_key", getHostRpRegistKey(host.get()));
             hostTable.insert("rp_key_type", host->rpKeyType);
         }
 
@@ -853,13 +850,7 @@ bool SettingsManager::isValidFQDN(const std::string& addr) {
         return false;
     }
     // TLDs must contain at least one letter - reject pure numeric strings like "192.168.50.266"
-    bool hasAlpha = false;
-    for (char c : addr) {
-        if (std::isalpha(static_cast<unsigned char>(c))) {
-            hasAlpha = true;
-            break;
-        }
-    }
+    bool hasAlpha = std::ranges::any_of(addr, [](unsigned char c) { return std::isalpha(c); });
     if (!hasAlpha) {
         return false;
     }
@@ -1421,11 +1412,9 @@ std::string SettingsManager::getLogFilePath() {
 
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
-    char filename[64];
-    snprintf(filename, sizeof(filename), "%02d%02d%02d_%02d%02d%02d.log",
-             t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
+    return std::format("{}/{:02}{:02}{:02}_{:02}{:02}{:02}.log",
+             LOG_DIR, t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
              t->tm_hour, t->tm_min, t->tm_sec);
-    return std::string(LOG_DIR) + "/" + filename;
 }
 
 std::string SettingsManager::getConnectionLogFilePath(const std::string& connType) {
@@ -1455,10 +1444,7 @@ std::string SettingsManager::getConnectionLogFilePath(const std::string& connTyp
 
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
-    char filename[128];
-    snprintf(filename, sizeof(filename), "%02d%02d%02d_%02d%02d%02d_%s.log",
-             t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
-             t->tm_hour, t->tm_min, t->tm_sec,
-             connType.c_str());
-    return std::string(LOG_DIR) + "/" + filename;
+    return std::format("{}/{:02}{:02}{:02}_{:02}{:02}{:02}_{}.log",
+             LOG_DIR, t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
+             t->tm_hour, t->tm_min, t->tm_sec, connType);
 }

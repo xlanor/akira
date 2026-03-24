@@ -50,7 +50,6 @@ private:
     static void* remoteDiscoveryThreadFunc(void* user);
     void runRemoteDiscoveryLoop();
 
-    static DiscoveryManager* instance;
     DiscoveryManager();
 
 public:

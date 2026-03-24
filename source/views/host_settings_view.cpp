@@ -1,5 +1,6 @@
 #include "views/host_settings_view.hpp"
 #include "core/discovery_manager.hpp"
+#include <ranges>
 
 // Custom button style with colored background, no border
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
@@ -218,11 +219,9 @@ void HostSettingsView::onSaveClicked()
             brls::Application::notify("Console PIN must be 4 digits");
             return;
         }
-        for (char c : consolePIN) {
-            if (!std::isdigit(c)) {
-                brls::Application::notify("Console PIN must be digits only");
-                return;
-            }
+        if (!std::ranges::all_of(consolePIN, ::isdigit)) {
+            brls::Application::notify("Console PIN must be digits only");
+            return;
         }
     }
 

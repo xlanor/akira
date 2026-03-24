@@ -55,7 +55,7 @@ docker-image: submodules
 	fi
 
 build: docker-image
-	$(eval ORIGINAL_REVISION := $(shell grep 'set(VERSION_REVISION' "$(CURDIR)/CMakeLists.txt" | sed 's/.*"\(.*\)".*/\1/'))
+	$(eval ORIGINAL_REVISION := $(shell grep 'set.VERSION_REVISION' "$(CURDIR)/CMakeLists.txt" | tr -dc '0-9'))
 	$(eval DEV_TIMESTAMP := $(shell date +%d%m%y-%H%M%S))
 	$(eval DEV_REVISION := $(ORIGINAL_REVISION)-dev-$(DEV_TIMESTAMP))
 	@printf "$(GREEN)[*]$(NC) Setting dev version: $(DEV_REVISION)\n"

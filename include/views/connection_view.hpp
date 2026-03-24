@@ -9,7 +9,7 @@
 #include <atomic>
 
 #include "core/host.hpp"
-#include "core/io.hpp"
+#include "stream/session.hpp"
 
 class ConnectionView : public brls::Box, public std::enable_shared_from_this<ConnectionView> {
 public:
@@ -28,7 +28,7 @@ public:
 
 private:
     Host* host = nullptr;
-    IO* io = nullptr;
+    Session* session = nullptr;
 
     std::deque<std::string> logLines;
     std::mutex logMutex;
@@ -45,8 +45,12 @@ private:
 
     bool transitionPending = false;
 
+    FILE* m_connectionLogFile = nullptr;
+    FILE* m_prevLogOutput = nullptr;
+
     void startConnection();
     void switchToConnectionLog();
+    void restoreMainLog();
     void addLogLine(const std::string& line, brls::LogLevel level);
     void renderLogs(NVGcontext* vg, float x, float y, float width, float height);
     void onConnectionComplete();

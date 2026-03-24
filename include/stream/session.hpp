@@ -1,6 +1,7 @@
-#ifndef AKIRA_IO_HPP
-#define AKIRA_IO_HPP
+#ifndef AKIRA_SESSION_HPP
+#define AKIRA_SESSION_HPP
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -11,25 +12,24 @@
 #include <switch.h>
 #include <chrono>
 
-#include "exception.hpp"
-#include "core/io/stream_stats.hpp"
+#include "core/exception.hpp"
+#include "stream/stream_stats.hpp"
 
-// Forward declarations - full headers included in io.cpp only
+// Forward declarations - full headers included in session.cpp only
 class AudioManager;
 class HapticManager;
 class InputManager;
 class VideoDecoder;
 class IVideoRenderer;
 
-class IO
+class Session
 {
 protected:
-    IO();
-    static IO* instance;
+    Session();
 
 private:
     ChiakiLog* log;
-    bool quit = false;
+    std::atomic<bool> quit = false;
 
     std::unique_ptr<AudioManager> m_audio_manager;
     std::unique_ptr<HapticManager> m_haptic_manager;
@@ -49,20 +49,19 @@ private:
 
     ChiakiSession* m_session = nullptr;
     std::chrono::steady_clock::time_point m_stream_start_time;
-    size_t m_network_frames_lost = 0;
-    size_t m_frames_recovered = 0;
+    std::atomic<size_t> m_network_frames_lost = 0;
+    std::atomic<size_t> m_frames_recovered = 0;
 
 public:
-    // Singleton configuration
-    IO(const IO&) = delete;
-    void operator=(const IO&) = delete;
-    static IO* GetInstance();
+    Session(const Session&) = delete;
+    void operator=(const Session&) = delete;
+    static Session* GetInstance();
 
     int getHapticBase() const;
     void setHapticBase(int base);
     void setRumbleStrength(float strength);
 
-    ~IO();
+    ~Session();
 
     void SetMesaConfig();
     bool VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user);
@@ -97,4 +96,4 @@ public:
     void resetStreamStats();
 };
 
-#endif // AKIRA_IO_HPP
+#endif // AKIRA_SESSION_HPP

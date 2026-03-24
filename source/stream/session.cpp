@@ -1,44 +1,39 @@
-#include "core/io.hpp"
+#include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include <borealis.hpp>
 
-#include "core/io/audio_manager.hpp"
-#include "core/io/haptic_manager.hpp"
-#include "core/io/input_manager.hpp"
-#include "core/io/video_decoder.hpp"
-#include "core/io/deko3d_renderer.hpp"
+#include "stream/audio_manager.hpp"
+#include "stream/haptic_manager.hpp"
+#include "stream/input_manager.hpp"
+#include "stream/video_decoder.hpp"
+#include "stream/deko3d_renderer.hpp"
 
 #include <chiaki/packetstats.h>
 
-IO* IO::instance = nullptr;
-
-IO* IO::GetInstance()
+Session* Session::GetInstance()
 {
-    if (instance == nullptr)
-    {
-        instance = new IO;
-    }
+    static Session* instance = new Session();
     return instance;
 }
 
-int IO::getHapticBase() const
+int Session::getHapticBase() const
 {
     return m_haptic_manager ? m_haptic_manager->hapticBase : 400;
 }
 
-void IO::setHapticBase(int base)
+void Session::setHapticBase(int base)
 {
     if (m_haptic_manager)
         m_haptic_manager->hapticBase = base;
 }
 
-void IO::setRumbleStrength(float strength)
+void Session::setRumbleStrength(float strength)
 {
     if (m_haptic_manager)
         m_haptic_manager->setRumbleStrength(strength);
 }
 
-void IO::SetLogger(ChiakiLog* log)
+void Session::SetLogger(ChiakiLog* log)
 {
     this->log = log;
     if (m_audio_manager) m_audio_manager->setLogger(log);
@@ -47,7 +42,7 @@ void IO::SetLogger(ChiakiLog* log)
     if (m_video_decoder) m_video_decoder->setLogger(log);
 }
 
-IO::IO()
+Session::Session()
 {
     this->log = nullptr;
 
@@ -57,16 +52,16 @@ IO::IO()
     m_video_decoder = std::make_unique<VideoDecoder>();
 }
 
-IO::~IO()
+Session::~Session()
 {
     FreeVideo();
 }
 
-void IO::SetMesaConfig()
+void Session::SetMesaConfig()
 {
 }
 
-bool IO::VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user)
+bool Session::VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void* user)
 {
     if (this->quit || !m_video_decoder)
         return false;
@@ -79,7 +74,7 @@ bool IO::VideoCB(uint8_t* buf, size_t buf_size, int32_t frames_lost, bool frame_
     return m_video_decoder->decode(buf, buf_size);
 }
 
-void IO::InitAudioCB(unsigned int channels, unsigned int rate)
+void Session::InitAudioCB(unsigned int channels, unsigned int rate)
 {
     if (m_audio_manager)
     {
@@ -87,7 +82,7 @@ void IO::InitAudioCB(unsigned int channels, unsigned int rate)
     }
 }
 
-void IO::AudioCB(int16_t* buf, size_t samples_count)
+void Session::AudioCB(int16_t* buf, size_t samples_count)
 {
     if (m_audio_manager)
     {
@@ -100,7 +95,7 @@ void IO::AudioCB(int16_t* buf, size_t samples_count)
     }
 }
 
-bool IO::InitVideo(int video_width, int video_height)
+bool Session::InitVideo(int video_width, int video_height)
 {
     brls::Logger::info("load InitVideo");
     this->quit = false;
@@ -122,7 +117,7 @@ bool IO::InitVideo(int video_width, int video_height)
     return true;
 }
 
-bool IO::FreeVideo()
+bool Session::FreeVideo()
 {
     this->quit = true;
     m_first_frame_received = false;
@@ -141,7 +136,7 @@ bool IO::FreeVideo()
     return true;
 }
 
-void IO::SetRumble(uint8_t left, uint8_t right)
+void Session::SetRumble(uint8_t left, uint8_t right)
 {
     if (m_haptic_manager)
     {
@@ -149,7 +144,7 @@ void IO::SetRumble(uint8_t left, uint8_t right)
     }
 }
 
-void IO::HapticCB(uint8_t* buf, size_t buf_size)
+void Session::HapticCB(uint8_t* buf, size_t buf_size)
 {
     if (m_haptic_manager)
     {
@@ -157,7 +152,7 @@ void IO::HapticCB(uint8_t* buf, size_t buf_size)
     }
 }
 
-void IO::CleanUpHaptic()
+void Session::CleanUpHaptic()
 {
     if (m_haptic_manager)
     {
@@ -165,7 +160,7 @@ void IO::CleanUpHaptic()
     }
 }
 
-bool IO::InitAVCodec(bool is_PS5, int video_width, int video_height)
+bool Session::InitAVCodec(bool is_PS5, int video_width, int video_height)
 {
     if (!m_video_decoder)
     {
@@ -175,19 +170,19 @@ bool IO::InitAVCodec(bool is_PS5, int video_width, int video_height)
     return m_video_decoder->initCodec(is_PS5, video_width, video_height);
 }
 
-bool IO::InitController()
+bool Session::InitController()
 {
     return m_input_manager && m_input_manager->init();
 }
 
-bool IO::FreeController()
+bool Session::FreeController()
 {
     if (m_input_manager)
         m_input_manager->cleanup();
     return true;
 }
 
-void IO::UpdateControllerState(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
+void Session::UpdateControllerState(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
 {
     if (m_input_manager)
     {
@@ -195,7 +190,7 @@ void IO::UpdateControllerState(ChiakiControllerState* state, std::map<uint32_t, 
     }
 }
 
-bool IO::MainLoop()
+bool Session::MainLoop()
 {
     if (m_video_renderer && m_video_renderer->isInitialized() && m_video_decoder)
     {
@@ -226,7 +221,7 @@ bool IO::MainLoop()
     return !this->quit;
 }
 
-StreamStats IO::getStreamStats()
+StreamStats Session::getStreamStats()
 {
     StreamStats stats;
 
@@ -276,7 +271,7 @@ StreamStats IO::getStreamStats()
     return stats;
 }
 
-void IO::setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc)
+void Session::setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc)
 {
     m_requested_width = width;
     m_requested_height = height;
@@ -285,23 +280,23 @@ void IO::setRequestedProfile(int width, int height, int fps, int bitrate, bool h
     m_requested_hevc = hevc;
 }
 
-void IO::setVideoPaused(bool paused)
+void Session::setVideoPaused(bool paused)
 {
     if (m_video_renderer)
         m_video_renderer->setPaused(paused);
 }
 
-void IO::setSession(ChiakiSession* session)
+void Session::setSession(ChiakiSession* session)
 {
     m_session = session;
 }
 
-void IO::startStreamTimer()
+void Session::startStreamTimer()
 {
     m_stream_start_time = std::chrono::steady_clock::now();
 }
 
-void IO::resetStreamStats()
+void Session::resetStreamStats()
 {
     m_network_frames_lost = 0;
     m_frames_recovered = 0;

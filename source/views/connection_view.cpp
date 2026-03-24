@@ -1,5 +1,6 @@
 #include "views/connection_view.hpp"
 #include "views/stream_view.hpp"
+#include <format>
 #include "core/discovery_manager.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
@@ -10,7 +11,7 @@
 ConnectionView::ConnectionView(Host* host)
     : host(host)
 {
-    this->io = IO::GetInstance();
+    this->session = Session::GetInstance();
     this->inflateFromXMLRes("xml/views/connection_view.xml");
 
     auto* titleLabel = (brls::Label*)this->getView("connection/title");
@@ -66,6 +67,7 @@ ConnectionView::~ConnectionView()
         chiaki_thread_join(&connectionThread, nullptr);
     }
 
+    restoreMainLog();
     SharedViewHolder::release(this);
 }
 
@@ -84,11 +86,8 @@ void ConnectionView::addLogLine(const std::string& line, brls::LogLevel level)
     std::time_t tt = std::chrono::system_clock::to_time_t(now);
     std::tm time_tm = *std::localtime(&tt);
 
-    char timeStr[32];
-    snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d.%03d",
-             time_tm.tm_hour, time_tm.tm_min, time_tm.tm_sec, (int)ms);
-
-    std::string fullLine = std::string(timeStr) + " " + line;
+    std::string fullLine = std::format("{:02}:{:02}:{:02}.{:03} {}",
+             time_tm.tm_hour, time_tm.tm_min, time_tm.tm_sec, static_cast<int>(ms), line);
 
     logLines.push_back(fullLine);
 
@@ -108,8 +107,20 @@ void ConnectionView::switchToConnectionLog()
 
     FILE* newLogFile = fopen(logPath.c_str(), "w");
     if (newLogFile) {
+        m_prevLogOutput = brls::Logger::getLogOutput();
+        m_connectionLogFile = newLogFile;
         brls::Logger::setLogOutput(newLogFile);
         brls::Logger::info("Switched to connection log: {}", logPath);
+    }
+}
+
+void ConnectionView::restoreMainLog()
+{
+    if (m_connectionLogFile) {
+        brls::Logger::setLogOutput(m_prevLogOutput);
+        fclose(m_connectionLogFile);
+        m_connectionLogFile = nullptr;
+        m_prevLogOutput = nullptr;
     }
 }
 
@@ -166,17 +177,16 @@ void ConnectionView::startConnection()
     connectionSuccess = false;
     threadStarted = false;
 
-    // Create thread args with weak_ptr for safe access
-    auto* args = new ConnectionThreadArgs{weak_from_this(), host};
+    auto args = std::make_unique<ConnectionThreadArgs>(ConnectionThreadArgs{weak_from_this(), host});
 
-    ChiakiErrorCode err = chiaki_thread_create(&connectionThread, connectionThreadFunc, args);
+    ChiakiErrorCode err = chiaki_thread_create(&connectionThread, connectionThreadFunc, args.get());
     if (err != CHIAKI_ERR_SUCCESS) {
-        delete args;
         connectionRunning = false;
         connectionFinished = true;
         connectionError = "Failed to create connection thread";
         brls::Logger::error("{}", connectionError);
     } else {
+        args.release();
         threadStarted = true;
     }
 }

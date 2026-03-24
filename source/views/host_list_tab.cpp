@@ -4,7 +4,7 @@
 #include "views/enter_pin_view.hpp"
 #include "views/host_settings_view.hpp"
 #include "core/host.hpp"
-#include "core/io.hpp"
+#include "stream/session.hpp"
 #include "util/shared_view_holder.hpp"
 
 #include <ctime>
@@ -413,7 +413,7 @@ private:
             for (auto& [name, h] : *hostsMap) {
                 if (h && h->hasRpKey() && !h->isRemote()) {
                     hostNames.push_back(name);
-                    hostPtrs.push_back(h);
+                    hostPtrs.push_back(h.get());
                 }
             }
 
@@ -656,8 +656,8 @@ void HostListTab::syncHostList() {
                 brls::Logger::error("Null host in hosts map for key: {}", name);
                 continue;
             }
-            auto* item = new HostItemView(host);
-            hostItems[host] = item;
+            auto* item = new HostItemView(host.get());
+            hostItems[host.get()] = item;
             hostContainer->addView(item);
         }
     }

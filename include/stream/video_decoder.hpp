@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <chiaki/log.h>
-#include "core/io/frame_queue.hpp"
+#include "stream/frame_queue.hpp"
 
 extern "C"
 {
