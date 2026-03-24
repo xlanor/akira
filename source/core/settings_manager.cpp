@@ -137,8 +137,6 @@ uint32_t configKeyToChiakiButton(const std::string& key) {
 
 SettingsManager::SettingsManager() {
     buttonMapping = getDefaultButtonMapping();
-    ensureConfigDir();
-    parseFile();
 }
 
 void SettingsManager::setLogger(ChiakiLog* logger) {
@@ -150,6 +148,12 @@ void SettingsManager::setLogger(ChiakiLog* logger) {
 
 SettingsManager* SettingsManager::getInstance() {
     static SettingsManager instance;
+    static bool initialized = false;
+    if (!initialized) {
+        initialized = true;
+        instance.ensureConfigDir();
+        instance.parseFile();
+    }
     return &instance;
 }
 
