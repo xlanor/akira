@@ -179,17 +179,16 @@ void ConnectionView::startConnection()
     connectionSuccess = false;
     threadStarted = false;
 
-    // Create thread args with weak_ptr for safe access
-    auto* args = new ConnectionThreadArgs{weak_from_this(), host};
+    auto args = std::make_unique<ConnectionThreadArgs>(ConnectionThreadArgs{weak_from_this(), host});
 
-    ChiakiErrorCode err = chiaki_thread_create(&connectionThread, connectionThreadFunc, args);
+    ChiakiErrorCode err = chiaki_thread_create(&connectionThread, connectionThreadFunc, args.get());
     if (err != CHIAKI_ERR_SUCCESS) {
-        delete args;
         connectionRunning = false;
         connectionFinished = true;
         connectionError = "Failed to create connection thread";
         brls::Logger::error("{}", connectionError);
     } else {
+        args.release();
         threadStarted = true;
     }
 }

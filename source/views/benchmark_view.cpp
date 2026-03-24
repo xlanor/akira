@@ -3,6 +3,7 @@
 #include "crypto/libnx/gmac.h"
 #include <chiaki/thread.h>
 
+#include <memory>
 #include <vector>
 #include <chrono>
 #include <cstdio>
@@ -48,15 +49,15 @@ void BenchmarkView::startBenchmark()
     benchmarkFinished = false;
     threadStarted = false;
 
-    auto* args = new BenchmarkThreadArgs{this};
+    auto args = std::make_unique<BenchmarkThreadArgs>(BenchmarkThreadArgs{this});
 
-    ChiakiErrorCode err = chiaki_thread_create(&benchmarkThread, benchmarkThreadFunc, args);
+    ChiakiErrorCode err = chiaki_thread_create(&benchmarkThread, benchmarkThreadFunc, args.get());
     if (err != CHIAKI_ERR_SUCCESS) {
-        delete args;
         benchmarkRunning = false;
         benchmarkFinished = true;
         addLogLine("ERROR: Failed to create benchmark thread");
     } else {
+        args.release();
         threadStarted = true;
     }
 }
