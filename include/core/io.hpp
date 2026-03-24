@@ -26,7 +26,6 @@ class IO
 {
 protected:
     IO();
-    static IO* instance;
 
 private:
     ChiakiLog* log;

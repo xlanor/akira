@@ -10,15 +10,10 @@
 
 #include <chiaki/packetstats.h>
 
-IO* IO::instance = nullptr;
-
 IO* IO::GetInstance()
 {
-    if (instance == nullptr)
-    {
-        instance = new IO;
-    }
-    return instance;
+    static IO instance;
+    return &instance;
 }
 
 int IO::getHapticBase() const

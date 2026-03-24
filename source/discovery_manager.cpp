@@ -45,15 +45,10 @@ static size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, std::
     return size * nmemb;
 }
 
-DiscoveryManager* DiscoveryManager::instance = nullptr;
-
 DiscoveryManager* DiscoveryManager::getInstance()
 {
-    if (!instance)
-    {
-        instance = new DiscoveryManager();
-    }
-    return instance;
+    static DiscoveryManager instance;
+    return &instance;
 }
 
 DiscoveryManager::DiscoveryManager()

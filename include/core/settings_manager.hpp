@@ -30,7 +30,6 @@ using ButtonMapping = std::map<uint32_t, std::vector<uint64_t>>;
 class SettingsManager {
 protected:
     SettingsManager();
-    static SettingsManager* instance;
 
 private:
     static constexpr const char* CONFIG_DIR = "sdmc:/switch/akira";
