@@ -246,9 +246,12 @@ void SettingsManager::removeLegacyConfig() {
         "power_user_mode",
     };
 
-    std::ifstream f(TOML_CONFIG_FILE);
-    if (!f) return;
-    std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    std::string content;
+    {
+        std::ifstream f(TOML_CONFIG_FILE);
+        if (!f) return;
+        content.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    }
 
     bool needsRewrite = false;
     for (const auto& key : legacyKeys) {

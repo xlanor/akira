@@ -25,6 +25,7 @@
 #include "views/connection_view.hpp"
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
+#include "core/discovery_manager.hpp"
 #include "core/thread_affinity.h"
 
 static std::string getLocalIpAddress() {
@@ -266,6 +267,8 @@ int main(int argc, char* argv[])
     }
 
     brls::Logger::info("Application exiting");
+
+    DiscoveryManager::getInstance()->setServiceEnabled(false);
 
     SDL_Quit();
     curl_global_cleanup();
