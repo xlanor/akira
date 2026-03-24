@@ -3,6 +3,7 @@
 #include "crypto/libnx/gmac.h"
 #include <chiaki/thread.h>
 
+#include <format>
 #include <memory>
 #include <vector>
 #include <chrono>
@@ -116,7 +117,7 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
     const size_t sizes[] = {64, 256, 1024, 4096};
     const int numSizes = 4;
 
-    view->addLogLine("Iterations per test: " + std::to_string(iterations));
+    view->addLogLine(std::format("Iterations per test: {}", iterations));
     view->addLogLine("");
 
     uint8_t key[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
@@ -129,10 +130,10 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         uint8_t tag[16];
 
         view->addLogLine("----------------------------------------");
-        view->addLogLine("Testing " + std::to_string(size) + " byte blocks...");
+        view->addLogLine(std::format("Testing {} byte blocks...", size));
         view->addLogLine("");
 
-        view->addLogLine("  [TABLE] Running " + std::to_string(iterations) + " iterations...");
+        view->addLogLine(std::format("  [TABLE] Running {} iterations...", iterations));
         chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
         ChiakiGmacContext tableCtx;
         chiaki_gmac_context_init(&tableCtx);
@@ -154,7 +155,7 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         view->addLogLine(tableBuf);
 
 #ifdef CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL
-        view->addLogLine("  [PMULL] Running " + std::to_string(iterations) + " iterations...");
+        view->addLogLine(std::format("  [PMULL] Running {} iterations...", iterations));
         chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
         ChiakiGmacContext pmullCtx;
         chiaki_gmac_context_init(&pmullCtx);

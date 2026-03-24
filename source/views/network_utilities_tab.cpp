@@ -1,5 +1,6 @@
 #include "views/network_utilities_tab.hpp"
 #include "core/wireguard_manager.hpp"
+#include <format>
 #include <vector>
 
 NetworkUtilitiesTab::NetworkUtilitiesTab() {
@@ -204,7 +205,7 @@ void NetworkUtilitiesTab::displayResult(const StunResult& result) {
     }
 
     if (result.externalPort > 0) {
-        addResultRow("External Port", std::to_string(result.externalPort));
+        addResultRow("External Port", std::format("{}", result.externalPort));
     }
 
     addCompatibilityTable();

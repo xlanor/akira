@@ -1,4 +1,5 @@
 #include "views/enter_pin_view.hpp"
+#include <format>
 
 EnterPinView::EnterPinView(Host* host, PinViewType type, bool isError)
     : host(host)
@@ -61,7 +62,7 @@ void EnterPinView::showPinDialog()
 {
     int maxLen = getMaxPinLength();
     std::string title = getTitle();
-    std::string hint = std::to_string(maxLen) + " digits without spaces";
+    std::string hint = std::format("{} digits without spaces", maxLen);
 
     ASYNC_RETAIN
     bool success = brls::Application::getImeManager()->openForNumber(

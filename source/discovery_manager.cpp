@@ -3,6 +3,7 @@
 
 #include <borealis.hpp>
 #include <ctime>
+#include <format>
 
 #include <cstring>
 #include <cstdlib>
@@ -435,7 +436,7 @@ void DiscoveryManager::fetchCompanionCredentials(
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
 
-    std::string accountUrl = "http://" + host + ":" + std::to_string(port) + "/account";
+    std::string accountUrl = std::format("http://{}:{}/account", host, port);
     curl_easy_setopt(curl, CURLOPT_URL, accountUrl.c_str());
 
     res = curl_easy_perform(curl);
@@ -449,7 +450,7 @@ void DiscoveryManager::fetchCompanionCredentials(
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code != 200)
     {
-        onError("Account fetch HTTP error: " + std::to_string(http_code));
+        onError(std::format("Account fetch HTTP error: {}", http_code));
         return;
     }
 
@@ -478,7 +479,7 @@ void DiscoveryManager::fetchCompanionCredentials(
         json_object_put(parsed_json);
     }
 
-    std::string tokenUrl = "http://" + host + ":" + std::to_string(port) + "/token";
+    std::string tokenUrl = std::format("http://{}:{}/token", host, port);
     response_data.clear();
     curl_easy_setopt(curl, CURLOPT_URL, tokenUrl.c_str());
 
@@ -493,7 +494,7 @@ void DiscoveryManager::fetchCompanionCredentials(
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code != 200)
     {
-        onError("Token fetch HTTP error: " + std::to_string(http_code));
+        onError(std::format("Token fetch HTTP error: {}", http_code));
         return;
     }
 
@@ -527,7 +528,7 @@ void DiscoveryManager::fetchCompanionCredentials(
         json_object_put(parsed_json);
     }
 
-    std::string duidUrl = "http://" + host + ":" + std::to_string(port) + "/duid";
+    std::string duidUrl = std::format("http://{}:{}/duid", host, port);
     response_data.clear();
     curl_easy_setopt(curl, CURLOPT_URL, duidUrl.c_str());
 
@@ -542,7 +543,7 @@ void DiscoveryManager::fetchCompanionCredentials(
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code != 200)
     {
-        onError("DUID fetch HTTP error: " + std::to_string(http_code));
+        onError(std::format("DUID fetch HTTP error: {}", http_code));
         return;
     }
 
@@ -655,7 +656,7 @@ void DiscoveryManager::refreshPsnToken(
     if (http_code != 200)
     {
         brls::Logger::error("PSN token refresh failed with HTTP {}: {}", http_code, response_data);
-        onError("HTTP error: " + std::to_string(http_code));
+        onError(std::format("HTTP error: {}", http_code));
         return;
     }
 

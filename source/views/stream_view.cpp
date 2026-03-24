@@ -1,6 +1,7 @@
 #include "views/stream_view.hpp"
 #include "views/stream_menu.hpp"
 #include "views/enter_pin_view.hpp"
+#include <format>
 #include "core/exception.hpp"
 #include "core/io/input_manager.hpp"
 #include "core/discovery_manager.hpp"
@@ -360,7 +361,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             reasonStr = "PSN registration failed";
             break;
         default:
-            reasonStr = "Unknown error (code: " + std::to_string(static_cast<int>(event->reason)) + ")";
+            reasonStr = std::format("Unknown error (code: {})", static_cast<int>(event->reason));
             break;
     }
 
@@ -610,7 +611,7 @@ void StreamView::retryWithWake()
     int delaySeconds = 5 + (wakeRetryCount - 1) * 3;
     brls::Logger::info("Wake retry attempt {}/{}, waiting {} seconds...",
                        wakeRetryCount, MAX_WAKE_RETRIES, delaySeconds);
-    brls::Application::notify("Waking console (attempt " + std::to_string(wakeRetryCount) + "/" + std::to_string(MAX_WAKE_RETRIES) + ")...");
+    brls::Application::notify(std::format("Waking console (attempt {}/{})...", wakeRetryCount, MAX_WAKE_RETRIES));
 
     std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
 
@@ -634,7 +635,7 @@ void StreamView::retryWithWake()
         if (wakeRetryCount >= MAX_WAKE_RETRIES) {
             SharedViewHolder::release(this);
             std::string errorMsg = e.what();
-            auto* dialog = new brls::Dialog("Connection Failed after " + std::to_string(MAX_WAKE_RETRIES) + " attempts\n\n" + errorMsg);
+            auto* dialog = new brls::Dialog(std::format("Connection Failed after {} attempts\n\n{}", MAX_WAKE_RETRIES, errorMsg));
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
