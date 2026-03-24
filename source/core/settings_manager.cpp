@@ -3,6 +3,7 @@
 #include "core/host.hpp"
 
 #include <borealis.hpp>
+#include <format>
 #include <chiaki/base64.h>
 #include <chiaki/controller.h>
 #include <toml++/toml.hpp>
@@ -1409,11 +1410,9 @@ std::string SettingsManager::getLogFilePath() {
 
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
-    char filename[64];
-    snprintf(filename, sizeof(filename), "%02d%02d%02d_%02d%02d%02d.log",
-             t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
+    return std::format("{}/{:02}{:02}{:02}_{:02}{:02}{:02}.log",
+             LOG_DIR, t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
              t->tm_hour, t->tm_min, t->tm_sec);
-    return std::string(LOG_DIR) + "/" + filename;
 }
 
 std::string SettingsManager::getConnectionLogFilePath(const std::string& connType) {
@@ -1443,10 +1442,7 @@ std::string SettingsManager::getConnectionLogFilePath(const std::string& connTyp
 
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
-    char filename[128];
-    snprintf(filename, sizeof(filename), "%02d%02d%02d_%02d%02d%02d_%s.log",
-             t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
-             t->tm_hour, t->tm_min, t->tm_sec,
-             connType.c_str());
-    return std::string(LOG_DIR) + "/" + filename;
+    return std::format("{}/{:02}{:02}{:02}_{:02}{:02}{:02}_{}.log",
+             LOG_DIR, t->tm_mday, t->tm_mon + 1, t->tm_year % 100,
+             t->tm_hour, t->tm_min, t->tm_sec, connType);
 }

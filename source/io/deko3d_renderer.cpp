@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <format>
 
 extern "C"
 {
@@ -649,26 +650,25 @@ void Deko3dRenderer::renderStatsOverlay()
     auto& wg = WireGuardManager::instance();
     std::string vpnStatus = wg.isConnected() ? wg.getTunnelIP() : "Off";
 
-    char statsText[512];
-    snprintf(statsText, sizeof(statsText),
+    std::string statsText = std::format(
         "=== Requested ===\n"
-        "%dx%d @ %dfps\n"
-        "Target: %d kbps\n"
-        "Codec: %s\n"
+        "{}x{} @ {}fps\n"
+        "Target: {} kbps\n"
+        "Codec: {}\n"
         "\n"
         "=== Rendered ===\n"
-        "%dx%d @ %.0ffps\n"
-        "Decoder: %s (%s)\n"
-        "Dropped: %zu  Faked: %zu\n"
-        "Queue: %zu\n"
+        "{}x{} @ {:.0f}fps\n"
+        "Decoder: {} ({})\n"
+        "Dropped: {}  Faked: {}\n"
+        "Queue: {}\n"
         "\n"
         "=== Network ===\n"
-        "Packet Loss (Live): %.1f%%\n"
-        "Reported: %.1f Mbps\n"
-        "Frame Loss: %zu (Rec: %zu)\n"
-        "Duration: %lum%02lus\n"
-        "GHASH: %s\n"
-        "VPN: %s",
+        "Packet Loss (Live): {:.1f}%\n"
+        "Reported: {:.1f} Mbps\n"
+        "Frame Loss: {} (Rec: {})\n"
+        "Duration: {}m{:02}s\n"
+        "GHASH: {}\n"
+        "VPN: {}",
         m_stats.requested_width,
         m_stats.requested_height,
         m_stats.requested_fps,
@@ -689,7 +689,7 @@ void Deko3dRenderer::renderStatsOverlay()
         mins,
         secs,
         ghashMode,
-        vpnStatus.c_str()
+        vpnStatus
     );
 
     // Calculate overlay dimensions
@@ -703,7 +703,7 @@ void Deko3dRenderer::renderStatsOverlay()
     int numLines = 1;
     int maxLineLen = 0;
     int currentLineLen = 0;
-    for (const char* p = statsText; *p; p++)
+    for (const char* p = statsText.c_str(); *p; p++)
     {
         if (*p == '\n')
         {
@@ -725,7 +725,7 @@ void Deko3dRenderer::renderStatsOverlay()
 
     // Build vertex buffer
     std::vector<TextVertex> vertices;
-    vertices.reserve(6 + 6 * strlen(statsText));  // Background quad + text quads
+    vertices.reserve(6 + 6 * statsText.size());  // Background quad + text quads
 
     // Background color (semi-transparent black)
     float bgR = 0.0f, bgG = 0.0f, bgB = 0.0f, bgA = 0.7f;
@@ -759,7 +759,7 @@ void Deko3dRenderer::renderStatsOverlay()
     float cursorX = MARGIN + PADDING;
     float cursorY = MARGIN + PADDING;
 
-    for (const char* p = statsText; *p; p++)
+    for (const char* p = statsText.c_str(); *p; p++)
     {
         if (*p == '\n')
         {

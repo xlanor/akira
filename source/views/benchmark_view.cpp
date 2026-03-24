@@ -149,10 +149,8 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         double tableOps = (iterations * 1000.0) / tableMs;
         double tableMBs = (iterations * size * 1000.0) / (tableMs * 1024.0 * 1024.0);
 
-        char tableBuf[128];
-        snprintf(tableBuf, sizeof(tableBuf), "  [TABLE] %.0f ops/s | %.2f MB/s | %.1f ms total",
-                 tableOps, tableMBs, tableMs);
-        view->addLogLine(tableBuf);
+        view->addLogLine(std::format("  [TABLE] {:.0f} ops/s | {:.2f} MB/s | {:.1f} ms total",
+                 tableOps, tableMBs, tableMs));
 
 #ifdef CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL
         view->addLogLine(std::format("  [PMULL] Running {} iterations...", iterations));
@@ -171,19 +169,15 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         double pmullOps = (iterations * 1000.0) / pmullMs;
         double pmullMBs = (iterations * size * 1000.0) / (pmullMs * 1024.0 * 1024.0);
 
-        char pmullBuf[128];
-        snprintf(pmullBuf, sizeof(pmullBuf), "  [PMULL] %.0f ops/s | %.2f MB/s | %.1f ms total",
-                 pmullOps, pmullMBs, pmullMs);
-        view->addLogLine(pmullBuf);
+        view->addLogLine(std::format("  [PMULL] {:.0f} ops/s | {:.2f} MB/s | {:.1f} ms total",
+                 pmullOps, pmullMBs, pmullMs));
 
         double speedup = tableMs / pmullMs;
-        char speedupBuf[64];
         if (speedup >= 1.0) {
-            snprintf(speedupBuf, sizeof(speedupBuf), "  >> PMULL is %.2fx faster", speedup);
+            view->addLogLine(std::format("  >> PMULL is {:.2f}x faster", speedup));
         } else {
-            snprintf(speedupBuf, sizeof(speedupBuf), "  >> TABLE is %.2fx faster", 1.0 / speedup);
+            view->addLogLine(std::format("  >> TABLE is {:.2f}x faster", 1.0 / speedup));
         }
-        view->addLogLine(speedupBuf);
 #else
         view->addLogLine("  [PMULL] Not compiled (CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL not set)");
 #endif

@@ -1,5 +1,6 @@
 #include "views/connection_view.hpp"
 #include "views/stream_view.hpp"
+#include <format>
 #include "core/discovery_manager.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
@@ -85,11 +86,8 @@ void ConnectionView::addLogLine(const std::string& line, brls::LogLevel level)
     std::time_t tt = std::chrono::system_clock::to_time_t(now);
     std::tm time_tm = *std::localtime(&tt);
 
-    char timeStr[32];
-    snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d.%03d",
-             time_tm.tm_hour, time_tm.tm_min, time_tm.tm_sec, (int)ms);
-
-    std::string fullLine = std::string(timeStr) + " " + line;
+    std::string fullLine = std::format("{:02}:{:02}:{:02}.{:03} {}",
+             time_tm.tm_hour, time_tm.tm_min, time_tm.tm_sec, static_cast<int>(ms), line);
 
     logLines.push_back(fullLine);
 

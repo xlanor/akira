@@ -856,12 +856,12 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
     std::string deviceName = device->device_name;
     bool remotePlayEnabled = device->remoteplay_enabled;
 
-    char uidHex[65] = {0};
+    std::string deviceUid;
+    deviceUid.reserve(64);
     for (size_t j = 0; j < 32; j++)
     {
-        snprintf(uidHex + (j * 2), 3, "%02x", device->device_uid[j]);
+        std::format_to(std::back_inserter(deviceUid), "{:02x}", device->device_uid[j]);
     }
-    std::string deviceUid = uidHex;
 
     brls::Logger::info("Remote device: name='{}', uid='{}', type={}, remoteplay={}",
         deviceName, deviceUid,

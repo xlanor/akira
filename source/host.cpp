@@ -6,6 +6,7 @@
 
 #include <borealis.hpp>
 #include <cstring>
+#include <format>
 #include <thread>
 #include <chrono>
 
@@ -166,24 +167,19 @@ int Host::wakeup()
         const char* version = isPS5() ? "00030010" : "00020020";
         uint16_t port = isPS5() ? 9302 : 987;
 
-        char buf[512];
-        int len = snprintf(buf, sizeof(buf),
+        auto buf = std::format(
             "WAKEUP * HTTP/1.1\n"
             "client-type:vr\n"
             "auth-type:R\n"
             "model:w\n"
             "app-type:r\n"
-            "user-credential:%llu\n"
-            "device-discovery-protocol-version:%s\n",
-            (unsigned long long)credential, version);
+            "user-credential:{}\n"
+            "device-discovery-protocol-version:{}\n",
+            credential, version);
 
-        if (len > 0 && (size_t)len < sizeof(buf))
-        {
-            int result = wg.sendUdpPacket(hostAddr, port, buf, len + 1);
-            brls::Logger::info("Host::wakeup: sendUdpPacket returned {}", result);
-            return result >= 0 ? 0 : 1;
-        }
-        return 1;
+        int result = wg.sendUdpPacket(hostAddr, port, buf.data(), buf.size() + 1);
+        brls::Logger::info("Host::wakeup: sendUdpPacket returned {}", result);
+        return result >= 0 ? 0 : 1;
     }
 
     ChiakiErrorCode ret = chiaki_discovery_wakeup(log, NULL, hostAddr.c_str(), credential, isPS5());

@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <curl/curl.h>
 #include <borealis.hpp>
+#include <format>
 #include "util/curl_wrappers.hpp"
 #include "util/net_wrappers.hpp"
 
@@ -21,10 +22,9 @@ static FILE* s_prevLogOutput = nullptr;
 static void natLogStart() {
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
-    char path[256];
-    snprintf(path, sizeof(path), "sdmc:/switch/akira/logs/%02d%02d%02d_%02d%02d%02d_nat.log",
+    auto path = std::format("sdmc:/switch/akira/logs/{:02}{:02}{:02}_{:02}{:02}{:02}_nat.log",
         t->tm_mday, t->tm_mon + 1, t->tm_year % 100, t->tm_hour, t->tm_min, t->tm_sec);
-    s_natLogFile = fopen(path, "w");
+    s_natLogFile = fopen(path.c_str(), "w");
     if (s_natLogFile) {
         s_prevLogOutput = brls::Logger::getLogOutput();
         brls::Logger::setLogOutput(s_natLogFile);
@@ -193,11 +193,10 @@ FilteringType StunClient::testFilteringWithServer(const std::string& server) {
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
-    char portStr[6];
-    snprintf(portStr, sizeof(portStr), "%d", port);
+    auto portStr = std::to_string(port);
 
     AddrInfoGuard serverInfo;
-    if (getaddrinfo(host.c_str(), portStr, &hints, serverInfo.ptr()) != 0) {
+    if (getaddrinfo(host.c_str(), portStr.c_str(), &hints, serverInfo.ptr()) != 0) {
         return FilteringType::Unknown;
     }
 
@@ -270,7 +269,7 @@ FilteringType StunClient::testFilteringWithServer(const std::string& server) {
     changeRequest[27] = 0x06;
 
     AddrInfoGuard origInfo;
-    if (getaddrinfo(host.c_str(), portStr, &hints, origInfo.ptr()) != 0) {
+    if (getaddrinfo(host.c_str(), portStr.c_str(), &hints, origInfo.ptr()) != 0) {
         return FilteringType::Unknown;
     }
 
@@ -308,7 +307,7 @@ FilteringType StunClient::testFilteringWithServer(const std::string& server) {
     }
 
     AddrInfoGuard origInfo2;
-    if (getaddrinfo(host.c_str(), portStr, &hints, origInfo2.ptr()) != 0) {
+    if (getaddrinfo(host.c_str(), portStr.c_str(), &hints, origInfo2.ptr()) != 0) {
         return FilteringType::Unknown;
     }
 
@@ -456,10 +455,9 @@ StunClient::MappedAddress StunClient::sendBindingRequest(const char* stunServer,
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
-    char portStr[6];
-    snprintf(portStr, sizeof(portStr), "%d", stunPort);
+    auto portStr2 = std::to_string(stunPort);
 
-    if (getaddrinfo(stunServer, portStr, &hints, &serverInfo) != 0) {
+    if (getaddrinfo(stunServer, portStr2.c_str(), &hints, &serverInfo) != 0) {
         brls::Logger::info("  sendBindingRequest: DNS failed for {}:{}", stunServer, stunPort);
         return result;
     }
