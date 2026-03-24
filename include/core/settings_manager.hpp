@@ -2,6 +2,7 @@
 #define AKIRA_SETTINGS_MANAGER_HPP
 
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -37,7 +38,7 @@ private:
     static constexpr const char* LEGACY_CONFIG_FILE = "sdmc:/switch/akira/akira.conf";
 
     ChiakiLog* log = nullptr;
-    std::map<std::string, Host*> hosts;
+    std::map<std::string, std::unique_ptr<Host>> hosts;
 
     // Global settings (defaults)
     ChiakiVideoResolutionPreset localVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
@@ -100,7 +101,7 @@ public:
     int writeFile();
     void ensureConfigDir();
 
-    std::map<std::string, Host*>* getHostsMap();
+    std::map<std::string, std::unique_ptr<Host>>* getHostsMap();
     Host* getOrCreateHost(const std::string& hostName);
     Host* findHostByDuid(const std::string& duid);
     void removeHost(const std::string& hostName);

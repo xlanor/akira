@@ -165,7 +165,7 @@ size_t SettingsManager::getB64EncodeSize(size_t inputSize) {
     return ((4 * inputSize / 3) + 3) & ~3;
 }
 
-std::map<std::string, Host*>* SettingsManager::getHostsMap() {
+std::map<std::string, std::unique_ptr<Host>>* SettingsManager::getHostsMap() {
     return &hosts;
 }
 
@@ -173,14 +173,14 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
     bool created = false;
 
     if (hosts.find(hostName) == hosts.end()) {
-        hosts[hostName] = new Host(hostName);
+        hosts[hostName] = std::make_unique<Host>(hostName);
         if (log) {
             hosts[hostName]->setLogger(log);
         }
         created = true;
     }
 
-    Host* host = hosts.at(hostName);
+    Host* host = hosts.at(hostName).get();
 
     if (created) {
         setPsnOnlineId(host, globalPsnOnlineId);
@@ -191,21 +191,17 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
 }
 
 void SettingsManager::removeHost(const std::string& hostName) {
-    auto it = hosts.find(hostName);
-    if (it != hosts.end()) {
-        delete it->second;
-        hosts.erase(it);
-    }
+    hosts.erase(hostName);
 }
 
 void SettingsManager::renameHost(const std::string& oldName, const std::string& newName) {
     auto it = hosts.find(oldName);
     if (it == hosts.end()) return;
 
-    Host* host = it->second;
+    auto host = std::move(it->second);
     hosts.erase(it);
     host->hostName = newName;
-    hosts[newName] = host;
+    hosts[newName] = std::move(host);
 }
 
 Host* SettingsManager::findHostByDuid(const std::string& duid) {
@@ -214,7 +210,7 @@ Host* SettingsManager::findHostByDuid(const std::string& duid) {
     }
     for (auto& [name, host] : hosts) {
         if (host && host->getRemoteDuid() == duid) {
-            return host;
+            return host.get();
         }
     }
     return nullptr;
@@ -407,7 +403,7 @@ void SettingsManager::parseTomlFile() {
 
             if (cleanName != hostName) {
                 if (hosts.find(cleanName) != hosts.end()) {
-                    Host* existing = hosts[cleanName];
+                    Host* existing = hosts[cleanName].get();
                     if (existing->hostType == HostType::Manual && migratedType != HostType::Manual) {
                         brls::Logger::info("Skipping {} - Manual host {} already exists", hostName, cleanName);
                         continue;
@@ -531,7 +527,7 @@ void SettingsManager::parseLegacyFile() {
                     migratedType = HostType::Auto;
                 }
                 if (cleanName != value && hosts.find(cleanName) != hosts.end()) {
-                    Host* existing = hosts[cleanName];
+                    Host* existing = hosts[cleanName].get();
                     if (existing->hostType == HostType::Manual && migratedType != HostType::Manual) {
                         brls::Logger::info("Skipping {} - Manual host {} already exists", value, cleanName);
                         currentHost = nullptr;
@@ -714,8 +710,8 @@ int SettingsManager::writeFile() {
             hostTable.insert("console_pin", host->consolePIN);
 
         if (host->rpKeyData || host->registered) {
-            hostTable.insert("rp_key", getHostRpKey(host));
-            hostTable.insert("rp_regist_key", getHostRpRegistKey(host));
+            hostTable.insert("rp_key", getHostRpKey(host.get()));
+            hostTable.insert("rp_regist_key", getHostRpRegistKey(host.get()));
             hostTable.insert("rp_key_type", host->rpKeyType);
         }
 

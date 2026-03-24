@@ -307,7 +307,7 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
 
         Host* host;
         if (it != hostsMap->end()) {
-            host = it->second;
+            host = it->second.get();
         } else {
             host = settings->getOrCreateHost(data->hostName);
             host->setHostType(HostType::Auto);
@@ -880,7 +880,7 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         auto it = hostsMap->find(deviceName);
         if (it != hostsMap->end() && it->second->hasRpKey() && !it->second->isRemote())
         {
-            localHost = it->second;
+            localHost = it->second.get();
             if (localHost->getRemoteDuid().empty())
             {
                 localHost->setRemoteDuid(deviceUid);
