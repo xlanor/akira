@@ -186,6 +186,34 @@
                 marginTop="5"
                 marginBottom="10"/>
 
+            <brls:SliderCell
+                id="settings/portGuessingCount"
+                title="Port Guess Count"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Number of ports to advertise to the console (max 75)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:SliderCell
+                id="settings/portGuessingSocks"
+                title="Probe Socket Count"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Number of local sockets to open for NAT probing (max 250)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
             <brls:Button
                 id="settings/runBenchmark"
                 text="Run GHASH Benchmark"

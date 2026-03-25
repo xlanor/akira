@@ -59,8 +59,8 @@ private:
     ChiakiVideoFPSPreset vpnVideoFPS = CHIAKI_VIDEO_FPS_PRESET_30;
     bool holepunchRetry = false;
     bool portGuessing = true;
-    int portGuessingCount = 12;
-    int portGuessingSocks = 12;
+    int portGuessingCount = 75;
+    int portGuessingSocks = 120;
     bool powerUserMenuUnlocked = false;
     bool unlockBitrateMax = false;
     GyroSource globalGyroSource = GyroSource::Auto;

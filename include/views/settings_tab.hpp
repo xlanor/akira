@@ -57,6 +57,8 @@ private:
     BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
     BRLS_BIND(brls::BooleanCell, unlockBitrateMaxToggle, "settings/unlockBitrateMax");
     BRLS_BIND(brls::BooleanCell, portGuessingToggle, "settings/portGuessing");
+    BRLS_BIND(brls::SliderCell, portGuessingCountSlider, "settings/portGuessingCount");
+    BRLS_BIND(brls::SliderCell, portGuessingSocksSlider, "settings/portGuessingSocks");
     BRLS_BIND(brls::Button, runBenchmarkBtn, "settings/runBenchmark");
 
     SettingsManager* settings = nullptr;
@@ -96,6 +98,8 @@ private:
     void initPsnAccountSection();
     void initCompanionSection();
     void initPortGuessingToggle();
+    void initPortGuessingCountSlider();
+    void initPortGuessingSocksSlider();
     void initPowerUserSection();
     void updatePowerUserVisibility();
     void runGhashBenchmark();

@@ -663,9 +663,9 @@ int SettingsManager::writeFile() {
     if (holepunchRetry)
         config.insert("holepunch_retry", holepunchRetry);
     config.insert("port_guessing", portGuessing);
-    if (portGuessingCount != 12)
+    if (portGuessingCount != 75)
         config.insert("port_guessing_count", portGuessingCount);
-    if (portGuessingSocks != 12)
+    if (portGuessingSocks != 120)
         config.insert("port_guessing_socks", portGuessingSocks);
     if (powerUserMenuUnlocked)
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
