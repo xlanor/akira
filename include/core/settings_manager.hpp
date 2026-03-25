@@ -58,6 +58,9 @@ private:
     ChiakiVideoResolutionPreset vpnVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     ChiakiVideoFPSPreset vpnVideoFPS = CHIAKI_VIDEO_FPS_PRESET_30;
     bool holepunchRetry = false;
+    bool portGuessing = true;
+    int portGuessingCount = 12;
+    int portGuessingSocks = 12;
     bool powerUserMenuUnlocked = false;
     bool unlockBitrateMax = false;
     GyroSource globalGyroSource = GyroSource::Auto;
@@ -200,6 +203,13 @@ public:
 
     bool getHolepunchRetry() const;
     void setHolepunchRetry(bool retry);
+
+    bool getPortGuessing() const;
+    void setPortGuessing(bool enabled);
+    int getPortGuessingCount() const;
+    void setPortGuessingCount(int count);
+    int getPortGuessingSocks() const;
+    void setPortGuessingSocks(int count);
 
     bool getPowerUserMenuUnlocked() const;
     void setPowerUserMenuUnlocked(bool unlocked);

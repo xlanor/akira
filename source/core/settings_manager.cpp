@@ -306,6 +306,12 @@ void SettingsManager::parseTomlFile() {
             globalDuid = *val;
         if (auto val = config["holepunch_retry"].value<bool>())
             holepunchRetry = *val;
+        if (auto val = config["port_guessing"].value<bool>())
+            portGuessing = *val;
+        if (auto val = config["port_guessing_count"].value<int64_t>())
+            portGuessingCount = static_cast<int>(*val);
+        if (auto val = config["port_guessing_socks"].value<int64_t>())
+            portGuessingSocks = static_cast<int>(*val);
         if (auto val = config["power_user_menu_unlocked"].value<bool>())
             powerUserMenuUnlocked = *val;
         else if (auto val = config["power_user_mode"].value<bool>())
@@ -656,6 +662,11 @@ int SettingsManager::writeFile() {
         config.insert("companion_port", companionPort);
     if (holepunchRetry)
         config.insert("holepunch_retry", holepunchRetry);
+    config.insert("port_guessing", portGuessing);
+    if (portGuessingCount != 12)
+        config.insert("port_guessing_count", portGuessingCount);
+    if (portGuessingSocks != 12)
+        config.insert("port_guessing_socks", portGuessingSocks);
     if (powerUserMenuUnlocked)
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
     if (unlockBitrateMax)
@@ -1227,6 +1238,32 @@ bool SettingsManager::getHolepunchRetry() const {
 
 void SettingsManager::setHolepunchRetry(bool retry) {
     holepunchRetry = retry;
+}
+
+bool SettingsManager::getPortGuessing() const {
+    return portGuessing;
+}
+
+void SettingsManager::setPortGuessing(bool enabled) {
+    portGuessing = enabled;
+}
+
+int SettingsManager::getPortGuessingCount() const {
+    return portGuessingCount;
+}
+
+void SettingsManager::setPortGuessingCount(int count) {
+    if (count > 0)
+        portGuessingCount = count;
+}
+
+int SettingsManager::getPortGuessingSocks() const {
+    return portGuessingSocks;
+}
+
+void SettingsManager::setPortGuessingSocks(int count) {
+    if (count > 0)
+        portGuessingSocks = count;
 }
 
 bool SettingsManager::getPowerUserMenuUnlocked() const {

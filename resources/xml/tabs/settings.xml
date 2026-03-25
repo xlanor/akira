@@ -172,6 +172,20 @@
                 marginBottom="15"/>
 
 
+            <brls:BooleanCell
+                id="settings/portGuessing"
+                title="Port Guessing"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Guess nearby ports for NAT traversal. Helps on mobile hotspots and port-rewriting NATs."
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
             <brls:Button
                 id="settings/runBenchmark"
                 text="Run GHASH Benchmark"

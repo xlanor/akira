@@ -58,6 +58,7 @@ SettingsTab::SettingsTab() {
     initPsnAccountSection();
     initCompanionSection();
     initPowerUserSection();
+    initPortGuessingToggle();
     initRequestIdrOnFecFailureToggle();
     initPacketLossMaxSlider();
     initEnableFileLoggingToggle();
@@ -769,6 +770,20 @@ void SettingsTab::updateCredentialsDisplay() {
     } else {
         credDuidCell->setDetailText(censorString(duid));
     }
+}
+
+void SettingsTab::initPortGuessingToggle() {
+    bool currentValue = settings->getPortGuessing();
+
+    portGuessingToggle->init(
+        "Port Guessing",
+        currentValue,
+        [this](bool isOn) {
+            settings->setPortGuessing(isOn);
+            settings->writeFile();
+            brls::Logger::info("Port Guessing set to {}", isOn ? "true" : "false");
+        }
+    );
 }
 
 void SettingsTab::initPowerUserSection() {
