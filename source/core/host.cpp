@@ -630,6 +630,13 @@ ChiakiErrorCode Host::initHolepunchSession()
         return CHIAKI_ERR_MEMORY;
     }
 
+    if (settings->getPortGuessing())
+    {
+        chiaki_holepunch_session_set_port_guessing(holepunchSession, true, settings->getPortGuessingCount());
+        chiaki_holepunch_session_set_port_guessing_socks(holepunchSession, settings->getPortGuessingSocks());
+        brls::Logger::info("Port guessing enabled: {} guesses, {} sockets", settings->getPortGuessingCount(), settings->getPortGuessingSocks());
+    }
+
     brls::Logger::info("Holepunch session initialized for {}", hostName);
     return CHIAKI_ERR_SUCCESS;
 }

@@ -58,6 +58,9 @@ SettingsTab::SettingsTab() {
     initPsnAccountSection();
     initCompanionSection();
     initPowerUserSection();
+    initPortGuessingToggle();
+    initPortGuessingCountSlider();
+    initPortGuessingSocksSlider();
     initRequestIdrOnFecFailureToggle();
     initPacketLossMaxSlider();
     initEnableFileLoggingToggle();
@@ -769,6 +772,68 @@ void SettingsTab::updateCredentialsDisplay() {
     } else {
         credDuidCell->setDetailText(censorString(duid));
     }
+}
+
+void SettingsTab::initPortGuessingToggle() {
+    bool currentValue = settings->getPortGuessing();
+
+    portGuessingToggle->init(
+        "Port Guessing",
+        currentValue,
+        [this](bool isOn) {
+            settings->setPortGuessing(isOn);
+            settings->writeFile();
+            brls::Logger::info("Port Guessing set to {}", isOn ? "true" : "false");
+        }
+    );
+}
+
+void SettingsTab::initPortGuessingCountSlider() {
+    int current = settings->getPortGuessingCount();
+    constexpr int minVal = 1;
+    constexpr int maxVal = 75;
+    float normalized = static_cast<float>(current - minVal) / (maxVal - minVal);
+    normalized = std::max(0.0f, std::min(1.0f, normalized));
+
+    portGuessingCountSlider->detail->setWidth(60);
+    portGuessingCountSlider->detail->setShrink(0);
+    portGuessingCountSlider->init(
+        "Port Guess Count",
+        normalized,
+        [this](float value) {
+            int count = static_cast<int>(1 + value * 74);
+            count = std::max(1, std::min(75, count));
+            settings->setPortGuessingCount(count);
+            portGuessingCountSlider->detail->setText(std::format("{}", count));
+            settings->writeFile();
+        }
+    );
+    portGuessingCountSlider->detail->setText(std::format("{}", current));
+    portGuessingCountSlider->slider->setStep(1.0f / 74.0f);
+}
+
+void SettingsTab::initPortGuessingSocksSlider() {
+    int current = settings->getPortGuessingSocks();
+    constexpr int minVal = 1;
+    constexpr int maxVal = 250;
+    float normalized = static_cast<float>(current - minVal) / (maxVal - minVal);
+    normalized = std::max(0.0f, std::min(1.0f, normalized));
+
+    portGuessingSocksSlider->detail->setWidth(60);
+    portGuessingSocksSlider->detail->setShrink(0);
+    portGuessingSocksSlider->init(
+        "Probe Socket Count",
+        normalized,
+        [this](float value) {
+            int count = static_cast<int>(1 + value * 249);
+            count = std::max(1, std::min(250, count));
+            settings->setPortGuessingSocks(count);
+            portGuessingSocksSlider->detail->setText(std::format("{}", count));
+            settings->writeFile();
+        }
+    );
+    portGuessingSocksSlider->detail->setText(std::format("{}", current));
+    portGuessingSocksSlider->slider->setStep(1.0f / 249.0f);
 }
 
 void SettingsTab::initPowerUserSection() {

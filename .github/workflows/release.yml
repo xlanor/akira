@@ -132,11 +132,18 @@ jobs:
           pattern: akira-companion-*
           merge-multiple: true
 
+      - name: Package NRO for SD card
+        run: |
+          mkdir -p switch
+          cp akira.nro switch/akira.nro
+          zip -r akira-${{ needs.build.outputs.version }}.zip switch/
+
       - name: Create Release
         uses: softprops/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae # v2
         with:
           tag_name: ${{ github.ref_name }}
           files: |
+            akira-${{ needs.build.outputs.version }}.zip
             akira.nro
             akira.elf
             akira-companion-*

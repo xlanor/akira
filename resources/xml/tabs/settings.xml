@@ -172,6 +172,48 @@
                 marginBottom="15"/>
 
 
+            <brls:BooleanCell
+                id="settings/portGuessing"
+                title="Port Guessing"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Guess nearby ports for NAT traversal. Helps on mobile hotspots and port-rewriting NATs."
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:SliderCell
+                id="settings/portGuessingCount"
+                title="Port Guess Count"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Number of ports to advertise to the console (max 75)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:SliderCell
+                id="settings/portGuessingSocks"
+                title="Probe Socket Count"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="Number of local sockets to open for NAT probing (max 250)"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
             <brls:Button
                 id="settings/runBenchmark"
                 text="Run GHASH Benchmark"
@@ -574,7 +616,7 @@
 
         <brls:Label
             id="settings/version"
-            text="Akira v0.4.7"
+            text="Akira v0.4.8"
             fontSize="14"
             textColor="#666666"
             marginTop="20"
