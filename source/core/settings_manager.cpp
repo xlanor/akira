@@ -318,6 +318,8 @@ void SettingsManager::parseTomlFile() {
             powerUserMenuUnlocked = *val;
         if (auto val = config["unlock_bitrate_max"].value<bool>())
             unlockBitrateMax = *val;
+        if (auto val = config["auto_reconnect"].value<bool>())
+            autoReconnect = *val;
         if (auto val = config["sleep_on_exit"].value<bool>())
             sleepOnExit = *val;
         if (auto val = config["request_idr_on_fec_failure"].value<bool>())
@@ -671,6 +673,8 @@ int SettingsManager::writeFile() {
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
     if (unlockBitrateMax)
         config.insert("unlock_bitrate_max", unlockBitrateMax);
+    if (!autoReconnect)
+        config.insert("auto_reconnect", autoReconnect);
     if (sleepOnExit)
         config.insert("sleep_on_exit", sleepOnExit);
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
@@ -1280,6 +1284,14 @@ bool SettingsManager::getUnlockBitrateMax() const {
 
 void SettingsManager::setUnlockBitrateMax(bool enabled) {
     unlockBitrateMax = enabled;
+}
+
+bool SettingsManager::getAutoReconnect() const {
+    return autoReconnect;
+}
+
+void SettingsManager::setAutoReconnect(bool enabled) {
+    autoReconnect = enabled;
 }
 
 int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const {

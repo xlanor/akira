@@ -1,4 +1,8 @@
 # Akira
+
+![HOS-Supported](https://img.shields.io/badge/HOS_Version-21.2.0-green) ![Atmosphere](https://img.shields.io/badge/Atmosphere-1.10.2-cyan) ![libnx](https://img.shields.io/badge/HOS_Version-4.12.0-magenta)
+
+
 Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises a forked variant of [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
 
 This is still considered unstable/beta, bugs are expected. However I am personally happy with the stream quality at the current state and am playing on it daily.

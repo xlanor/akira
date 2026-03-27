@@ -42,9 +42,13 @@ private:
     static constexpr int MAX_WAKE_RETRIES = 4;
 
     bool menuOpen = false;
+    bool intentionalDisconnect = false;
+    bool reconnecting = false;
+    uint32_t sessionGeneration = 0;
     std::chrono::steady_clock::time_point minusHoldStart;
     bool minusWasHeld = false;
     brls::Event<>::Subscription exitSubscription;
+    brls::Event<bool>::Subscription focusSubscription;
 
     std::deque<std::string> logLines;
     std::mutex logMutex;
@@ -61,6 +65,9 @@ private:
     void showDisconnectMenu();
     void disconnectWithSleep(bool sleep);
     void retryWithWake();
+
+    void onFocusChanged(bool focused);
+    void attemptReconnect();
 };
 
 #endif // AKIRA_STREAM_VIEW_HPP

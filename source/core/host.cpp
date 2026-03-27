@@ -474,6 +474,20 @@ void Host::stopSession()
     chiaki_session_stop(&session);
 }
 
+bool Host::isSessionSocketHealthy() const
+{
+    if (!sessionInit)
+        return false;
+    chiaki_socket_t sock = session.stream_connection.takion.sock;
+    if (CHIAKI_SOCKET_IS_INVALID(sock))
+        return false;
+    int err = 0;
+    socklen_t len = sizeof(err);
+    if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &len) < 0)
+        return false;
+    return err == 0;
+}
+
 void Host::gotoBed()
 {
     if (sessionInit) {
