@@ -292,6 +292,13 @@ void SettingsManager::parseTomlFile() {
             remoteVideoFPS = stringToFps(std::to_string(*val));
         if (auto val = config["haptic"].value<int64_t>())
             globalHaptic = static_cast<HapticPreset>(*val);
+
+        if (auto rumbleTable = config["rumble"].as_table()) {
+            if (auto val = (*rumbleTable)["freq_low"].value<double>())
+                rumbleFreqLow = std::max(40.0f, std::min(320.0f, static_cast<float>(*val)));
+            if (auto val = (*rumbleTable)["freq_high"].value<double>())
+                rumbleFreqHigh = std::max(40.0f, std::min(320.0f, static_cast<float>(*val)));
+        }
         if (auto val = config["psn_online_id"].value<std::string>())
             globalPsnOnlineId = *val;
         if (auto val = config["psn_account_id"].value<std::string>())
@@ -396,7 +403,7 @@ void SettingsManager::parseTomlFile() {
 
             std::string hostName(key.str());
 
-            if (hostName == "button_mapping") continue;
+            if (hostName == "button_mapping" || hostName == "rumble") continue;
 
             auto* table = value.as_table();
 
@@ -694,6 +701,13 @@ int SettingsManager::writeFile() {
         config.insert("debug_discovery_log", debugDiscoveryLog);
     if (globalGyroSource != GyroSource::Auto)
         config.insert("gyro_source", std::to_underlying(globalGyroSource));
+
+    if (rumbleFreqLow != 160.0f || rumbleFreqHigh != 200.0f) {
+        toml::table rumbleTable;
+        rumbleTable.insert("freq_low", static_cast<double>(rumbleFreqLow));
+        rumbleTable.insert("freq_high", static_cast<double>(rumbleFreqHigh));
+        config.insert("rumble", rumbleTable);
+    }
 
     {
         ButtonMapping defaults = getDefaultButtonMapping();
@@ -1058,6 +1072,11 @@ void SettingsManager::setHaptic(Host* host, const std::string& value) {
     else if (value == "2") preset = HapticPreset::Strong;
     setHaptic(host, preset);
 }
+
+float SettingsManager::getRumbleFreqLow() const { return rumbleFreqLow; }
+void SettingsManager::setRumbleFreqLow(float value) { rumbleFreqLow = std::max(40.0f, std::min(320.0f, value)); }
+float SettingsManager::getRumbleFreqHigh() const { return rumbleFreqHigh; }
+void SettingsManager::setRumbleFreqHigh(float value) { rumbleFreqHigh = std::max(40.0f, std::min(320.0f, value)); }
 
 ChiakiTarget SettingsManager::getChiakiTarget(Host* host) {
     if (host) return host->getChiakiTarget();

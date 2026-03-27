@@ -407,6 +407,7 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
         brls::Logger::info("Host::initSession: enable_dualsense=false (haptic disabled)");
         streamSession->setRumbleStrength(0.0f);
     }
+    streamSession->setRumbleFreqs(settings->getRumbleFreqLow(), settings->getRumbleFreqHigh());
 
     connectInfo.ps5 = isPS5();
 

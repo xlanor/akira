@@ -177,7 +177,27 @@ void HostSettingsView::initHapticSelector()
         "Haptic Feedback",
         options,
         currentIndex,
-        [](int selected) {},
+        [](int selected) {
+            auto* settings = SettingsManager::getInstance();
+            float freqLow = settings->getRumbleFreqLow();
+            float freqHigh = settings->getRumbleFreqHigh();
+            float strength = 0.0f;
+            if (selected == 2) strength = 0.5f;
+            else if (selected == 3) strength = 1.0f;
+
+            auto* inputMgr = brls::Application::getPlatform()->getInputManager();
+            if (strength > 0.0f)
+            {
+                inputMgr->sendRumbleRaw(0, freqLow * strength, freqHigh * strength, strength, strength);
+                brls::delay(300, [inputMgr]() {
+                    inputMgr->sendRumbleRaw(0, 0.0f, 0.0f, 0.0f, 0.0f);
+                });
+            }
+            else
+            {
+                inputMgr->sendRumbleRaw(0, 0.0f, 0.0f, 0.0f, 0.0f);
+            }
+        },
         [this](int selected) {
             selectedHaptic = selected - 1;
             brls::Logger::info("Haptic selection changed to {}", selectedHaptic);

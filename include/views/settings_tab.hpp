@@ -23,6 +23,8 @@ private:
     BRLS_BIND(brls::SelectorCell, vpnFpsSelector, "settings/vpnFps");
     BRLS_BIND(brls::SliderCell, vpnBitrateSlider, "settings/vpnBitrate");
     BRLS_BIND(brls::SelectorCell, hapticSelector, "settings/haptic");
+    BRLS_BIND(brls::SliderCell, rumbleFreqLowSlider, "settings/rumbleFreqLow");
+    BRLS_BIND(brls::SliderCell, rumbleFreqHighSlider, "settings/rumbleFreqHigh");
     BRLS_BIND(brls::SelectorCell, gyroSourceSelector, "settings/gyroSource");
     BRLS_BIND(brls::BooleanCell, sleepOnExitToggle, "settings/sleepOnExit");
     BRLS_BIND(brls::DetailCell, buttonMappingCell, "settings/buttonMapping");
@@ -83,6 +85,8 @@ private:
     void initVpnBitrateSlider();
     void updateVpnBitrateSlider();
     void initHapticSelector();
+    void initRumbleFreqLowSlider();
+    void initRumbleFreqHighSlider();
     void initGyroSourceSelector();
     void initSleepOnExitToggle();
     void initButtonMappingCell();

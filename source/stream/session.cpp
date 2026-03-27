@@ -33,6 +33,15 @@ void Session::setRumbleStrength(float strength)
         m_haptic_manager->setRumbleStrength(strength);
 }
 
+void Session::setRumbleFreqs(float freqLow, float freqHigh)
+{
+    if (m_haptic_manager)
+    {
+        m_haptic_manager->setRumbleFreqLow(freqLow);
+        m_haptic_manager->setRumbleFreqHigh(freqHigh);
+    }
+}
+
 void Session::SetLogger(ChiakiLog* log)
 {
     this->log = log;

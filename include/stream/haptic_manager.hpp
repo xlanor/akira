@@ -23,8 +23,9 @@ public:
 
     int hapticBase = 400;
 
-    // Set rumble strength multiplier (0.0 = disabled, 0.5 = weak, 1.0 = strong)
     void setRumbleStrength(float strength) { m_rumble_strength = strength; }
+    void setRumbleFreqLow(float freq) { m_freq_low = freq; }
+    void setRumbleFreqHigh(float freq) { m_freq_high = freq; }
 
     bool isLocked() const { return m_haptic_lock; }
 
@@ -34,8 +35,9 @@ private:
 
     ChiakiLog* m_log = nullptr;
 
-    // Rumble strength multiplier (0.0 = disabled, 0.5 = weak, 1.0 = strong)
     float m_rumble_strength = 1.0f;
+    float m_freq_low = 160.0f;
+    float m_freq_high = 200.0f;
 
     // Haptic state
     bool m_haptic_lock = false;

@@ -264,6 +264,17 @@
                 marginLeft="15"
                 marginRight="15"/>
 
+            <brls:SliderCell
+                id="settings/rumbleFreqLow"
+                title="Rumble Low Frequency"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SliderCell
+                id="settings/rumbleFreqHigh"
+                title="Rumble High Frequency"
+                marginLeft="15"
+                marginRight="15"/>
 
             <brls:SelectorCell
                 id="settings/gyroSource"
