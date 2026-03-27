@@ -71,6 +71,12 @@ void StreamView::setupCallbacks()
         }
     });
 
+    focusSubscription = brls::Application::getWindowFocusChangedEvent()->subscribe([weak](bool focused) {
+        if (auto self = weak.lock()) {
+            self->onFocusChanged(focused);
+        }
+    });
+
     // Subscribe to logs for display while waiting for first frame
     logSubscription = brls::Logger::getLogEvent()->subscribe(
         [weak](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
@@ -87,6 +93,7 @@ void StreamView::setupCallbacks()
 StreamView::~StreamView()
 {
     brls::Application::getExitEvent()->unsubscribe(exitSubscription);
+    brls::Application::getWindowFocusChangedEvent()->unsubscribe(focusSubscription);
     brls::Logger::getLogEvent()->unsubscribe(logSubscription);
 
     stopStream();
@@ -293,6 +300,7 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
     if (!session->MainLoop())
     {
         brls::Logger::info("Quit requested via controller");
+        intentionalDisconnect = true;
         stopStream();
         brls::Application::popActivity();
         return;
@@ -367,11 +375,17 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
 
     ChiakiQuitReason reason = event->reason;
 
+    uint32_t gen = sessionGeneration;
     auto weak = weak_from_this();
-    brls::sync([weak, reasonStr, reason]() {
+    brls::sync([weak, reasonStr, reason, gen]() {
         auto self = weak.lock();
         if (!self) {
             brls::Logger::info("onQuit: StreamView already destroyed, skipping");
+            return;
+        }
+
+        if (gen != self->sessionGeneration) {
+            brls::Logger::info("onQuit: stale session (gen {} vs {}), skipping", gen, self->sessionGeneration);
             return;
         }
 
@@ -543,6 +557,7 @@ void StreamView::showDisconnectMenu()
 
 void StreamView::disconnectWithSleep(bool sleep)
 {
+    intentionalDisconnect = true;
     menuOpen = false;
     brls::Application::blockInputs(true);
 
@@ -643,4 +658,60 @@ void StreamView::retryWithWake()
             dialog->open();
         }
     }
+}
+
+void StreamView::onFocusChanged(bool focused)
+{
+    if (!focused)
+        return;
+
+    if (intentionalDisconnect || !settings->getAutoReconnect() || !sessionStarted)
+        return;
+
+    bool socketHealthy = host->isSessionSocketHealthy();
+    brls::Logger::info("StreamView::onFocusChanged(InFocus): streamActive={}, socketHealthy={}",
+                       streamActive, socketHealthy);
+
+    if (!streamActive || !socketHealthy) {
+        brls::Logger::info("Stream dead on focus regain, prompting user");
+        stopStream();
+        brls::Application::forceUnblockInputs();
+
+        auto weak = weak_from_this();
+        auto* dialog = new brls::Dialog("Stream disconnected. Reconnect?");
+        dialog->addButton("No", [weak]() {
+            if (auto self = weak.lock()) {
+                SharedViewHolder::release(self.get());
+            }
+            brls::Application::popActivity();
+        });
+        dialog->addButton("Yes", [weak]() {
+            if (auto self = weak.lock()) {
+                self->attemptReconnect();
+            }
+        });
+        dialog->open();
+    }
+}
+
+void StreamView::attemptReconnect()
+{
+    if (reconnecting) {
+        brls::Logger::info("Already reconnecting, skipping");
+        return;
+    }
+
+    reconnecting = true;
+
+    brls::Logger::info("Auto-reconnect: tearing down old session");
+    stopStream();
+
+    sessionGeneration++;
+    wakeRetryCount = 0;
+    wakeAttempted = false;
+
+    brls::Application::notify("Reconnecting...");
+    startStream();
+
+    reconnecting = false;
 }

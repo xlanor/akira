@@ -59,6 +59,7 @@ private:
     BRLS_BIND(brls::BooleanCell, portGuessingToggle, "settings/portGuessing");
     BRLS_BIND(brls::SliderCell, portGuessingCountSlider, "settings/portGuessingCount");
     BRLS_BIND(brls::SliderCell, portGuessingSocksSlider, "settings/portGuessingSocks");
+    BRLS_BIND(brls::BooleanCell, autoReconnectToggle, "settings/autoReconnect");
     BRLS_BIND(brls::Button, runBenchmarkBtn, "settings/runBenchmark");
 
     SettingsManager* settings = nullptr;

@@ -176,6 +176,7 @@ public:
     int initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSession holepunch);
     void startSession();
     void stopSession();
+    bool isSessionSocketHealthy() const;
     void gotoBed();
     int finiSession();
     void sendFeedbackState();

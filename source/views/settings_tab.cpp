@@ -875,6 +875,16 @@ void SettingsTab::initPowerUserSection() {
         }
     );
 
+    autoReconnectToggle->init(
+        "Auto Reconnect",
+        settings->getAutoReconnect(),
+        [this](bool isOn) {
+            settings->setAutoReconnect(isOn);
+            settings->writeFile();
+            brls::Logger::info("Auto Reconnect set to {}", isOn ? "true" : "false");
+        }
+    );
+
     updatePowerUserVisibility();
 }
 

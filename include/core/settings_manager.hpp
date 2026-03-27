@@ -63,6 +63,7 @@ private:
     int portGuessingSocks = 120;
     bool powerUserMenuUnlocked = false;
     bool unlockBitrateMax = false;
+    bool autoReconnect = true;
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
@@ -215,6 +216,8 @@ public:
     void setPowerUserMenuUnlocked(bool unlocked);
     bool getUnlockBitrateMax() const;
     void setUnlockBitrateMax(bool enabled);
+    bool getAutoReconnect() const;
+    void setAutoReconnect(bool enabled);
     int getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const;
 
 
