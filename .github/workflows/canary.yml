@@ -1,9 +1,17 @@
-name: Weekly Build
+name: Canary Build
 
 on:
-  schedule:
-    - cron: '0 3 * * 0' # Every Sunday at 3:00 AM UTC
-  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'source/**'
+      - 'include/**'
+      - 'library/**'
+      - 'CMakeLists.txt'
+      - 'Makefile'
+      - 'scripts/**'
+      - 'resources/**'
+      - 'apps/**'
 
 permissions: read-all
 
@@ -12,19 +20,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
 
-      - name: Stamp weekly version
+      - name: Stamp canary version
         run: |
-          DATE=$(date -u +'%y%m%d')
           SHORT_SHA=${GITHUB_SHA::7}
           MAJOR=$(grep 'set(VERSION_MAJOR' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
           MINOR=$(grep 'set(VERSION_MINOR' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
-          sed -i "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"weekly-${DATE}-${SHORT_SHA}\")/" CMakeLists.txt
-          sed -i "s/text=\"Akira v[^\"]*\"/text=\"Akira v${MAJOR}.${MINOR}-weekly-${DATE}-${SHORT_SHA}\"/" resources/xml/tabs/settings.xml
+          sed -i "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"canary-${SHORT_SHA}\")/" CMakeLists.txt
+          sed -i "s/text=\"Akira v[^\"]*\"/text=\"Akira v${MAJOR}.${MINOR}-canary-${SHORT_SHA}\"/" resources/xml/tabs/settings.xml
 
       - name: Log in to Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -52,13 +63,13 @@ jobs:
       - name: Upload NRO artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: akira-nro
+          name: akira-nro-canary-${{ steps.sha.outputs.short }}
           path: build/akira.nro
 
       - name: Upload ELF artifact (debug symbols)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: akira-elf
+          name: akira-elf-canary-${{ steps.sha.outputs.short }}
           path: build/akira.elf
 
   build-companion:
@@ -101,7 +112,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ matrix.artifact }}
+          name: ${{ matrix.artifact }}-canary
           path: apps/akira-companion/${{ matrix.artifact }}
 
   release:
@@ -111,37 +122,19 @@ jobs:
       contents: write
 
     steps:
-      - name: Set date tag
-        id: tag
-        run: echo "date=$(date -u +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
-
       - name: Download all artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           merge-multiple: true
 
-      - name: Create weekly release
+      - name: Update canary release
         uses: softprops/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae # v2
         with:
-          tag_name: nightly-${{ steps.tag.outputs.date }}
-          name: "Weekly Build ${{ steps.tag.outputs.date }}"
+          tag_name: canary
+          name: "Canary Build"
           files: |
             akira.nro
             akira.elf
             akira-companion-*
           prerelease: true
-          body: "Automated weekly build from `master` — ${{ steps.tag.outputs.date }} (${{ github.sha }})"
-
-      - name: Prune old weekly releases (keep latest 10)
-        run: |
-          gh release list --json tagName --jq '.[].tagName' |
-            grep '^nightly-' |
-            sort -r |
-            tail -n +11 |
-            while read -r tag; do
-              echo "Deleting release $tag"
-              gh release delete "$tag" --yes --cleanup-tag
-            done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+          body: "Latest canary build from `master` — ${{ github.sha }}"

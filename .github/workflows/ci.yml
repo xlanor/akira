@@ -20,6 +20,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Stamp PR version
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          PR_NUM=${{ github.event.pull_request.number }}
+          MAJOR=$(grep 'set(VERSION_MAJOR' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          MINOR=$(grep 'set(VERSION_MINOR' CMakeLists.txt | sed 's/.*"\(.*\)".*/\1/')
+          sed -i "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"pr${PR_NUM}-${SHORT_SHA}\")/" CMakeLists.txt
+          sed -i "s/text=\"Akira v[^\"]*\"/text=\"Akira v${MAJOR}.${MINOR}-pr${PR_NUM}-${SHORT_SHA}\"/" resources/xml/tabs/settings.xml
+
       - name: Log in to Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
