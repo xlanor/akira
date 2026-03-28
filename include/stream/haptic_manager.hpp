@@ -26,6 +26,8 @@ public:
     void setRumbleStrength(float strength) { m_rumble_strength = strength; }
     void setRumbleFreqLow(float freq) { m_freq_low = freq; }
     void setRumbleFreqHigh(float freq) { m_freq_high = freq; }
+    void setEnvelopeDecay(float decay) { m_envelope_decay = decay; }
+    void setEnvelopeAttack(float attack) { m_envelope_attack = attack; }
 
     bool isLocked() const { return m_haptic_lock; }
 
@@ -36,10 +38,12 @@ private:
     ChiakiLog* m_log = nullptr;
 
     float m_rumble_strength = 1.0f;
-    float m_freq_low = 160.0f;
-    float m_freq_high = 200.0f;
+    float m_freq_low = 140.0f;
+    float m_freq_high = 185.0f;
+    float m_envelope = 0.0f;
+    float m_envelope_decay = 0.85f;
+    float m_envelope_attack = 0.60f;
 
-    // Haptic state
     bool m_haptic_lock = false;
     int m_haptic_val = 0;
     std::chrono::system_clock::time_point m_haptic_lock_time;

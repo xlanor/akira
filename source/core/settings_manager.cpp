@@ -298,6 +298,10 @@ void SettingsManager::parseTomlFile() {
                 rumbleFreqLow = std::max(40.0f, std::min(320.0f, static_cast<float>(*val)));
             if (auto val = (*rumbleTable)["freq_high"].value<double>())
                 rumbleFreqHigh = std::max(40.0f, std::min(320.0f, static_cast<float>(*val)));
+            if (auto val = (*rumbleTable)["envelope_decay"].value<double>())
+                rumbleEnvelopeDecay = std::max(0.50f, std::min(0.95f, static_cast<float>(*val)));
+            if (auto val = (*rumbleTable)["envelope_attack"].value<double>())
+                rumbleEnvelopeAttack = std::max(0.20f, std::min(1.00f, static_cast<float>(*val)));
         }
         if (auto val = config["psn_online_id"].value<std::string>())
             globalPsnOnlineId = *val;
@@ -651,8 +655,7 @@ int SettingsManager::writeFile() {
     config.insert("vpn_video_bitrate", vpnVideoBitrate);
     config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
     config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
-    if (globalHaptic != HapticPreset::Disabled)
-        config.insert("haptic", std::to_underlying(globalHaptic));
+    config.insert("haptic", std::to_underlying(globalHaptic));
     if (!globalPsnOnlineId.empty())
         config.insert("psn_online_id", globalPsnOnlineId);
     if (!globalPsnAccountId.empty())
@@ -667,15 +670,12 @@ int SettingsManager::writeFile() {
         config.insert("global_duid", globalDuid);
     if (!companionHost.empty())
         config.insert("companion_host", companionHost);
-    if (companionPort != 8080)
-        config.insert("companion_port", companionPort);
+    config.insert("companion_port", companionPort);
     if (holepunchRetry)
         config.insert("holepunch_retry", holepunchRetry);
     config.insert("port_guessing", portGuessing);
-    if (portGuessingCount != 75)
-        config.insert("port_guessing_count", portGuessingCount);
-    if (portGuessingSocks != 120)
-        config.insert("port_guessing_socks", portGuessingSocks);
+    config.insert("port_guessing_count", portGuessingCount);
+    config.insert("port_guessing_socks", portGuessingSocks);
     if (powerUserMenuUnlocked)
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
     if (unlockBitrateMax)
@@ -699,13 +699,14 @@ int SettingsManager::writeFile() {
         config.insert("debug_chiaki_log", debugChiakiLog);
     if (debugDiscoveryLog)
         config.insert("debug_discovery_log", debugDiscoveryLog);
-    if (globalGyroSource != GyroSource::Auto)
-        config.insert("gyro_source", std::to_underlying(globalGyroSource));
+    config.insert("gyro_source", std::to_underlying(globalGyroSource));
 
-    if (rumbleFreqLow != 160.0f || rumbleFreqHigh != 200.0f) {
+    {
         toml::table rumbleTable;
         rumbleTable.insert("freq_low", static_cast<double>(rumbleFreqLow));
         rumbleTable.insert("freq_high", static_cast<double>(rumbleFreqHigh));
+        rumbleTable.insert("envelope_decay", static_cast<double>(rumbleEnvelopeDecay));
+        rumbleTable.insert("envelope_attack", static_cast<double>(rumbleEnvelopeAttack));
         config.insert("rumble", rumbleTable);
     }
 
@@ -1077,6 +1078,10 @@ float SettingsManager::getRumbleFreqLow() const { return rumbleFreqLow; }
 void SettingsManager::setRumbleFreqLow(float value) { rumbleFreqLow = std::max(40.0f, std::min(320.0f, value)); }
 float SettingsManager::getRumbleFreqHigh() const { return rumbleFreqHigh; }
 void SettingsManager::setRumbleFreqHigh(float value) { rumbleFreqHigh = std::max(40.0f, std::min(320.0f, value)); }
+float SettingsManager::getRumbleEnvelopeDecay() const { return rumbleEnvelopeDecay; }
+void SettingsManager::setRumbleEnvelopeDecay(float value) { rumbleEnvelopeDecay = std::max(0.50f, std::min(0.95f, value)); }
+float SettingsManager::getRumbleEnvelopeAttack() const { return rumbleEnvelopeAttack; }
+void SettingsManager::setRumbleEnvelopeAttack(float value) { rumbleEnvelopeAttack = std::max(0.20f, std::min(1.00f, value)); }
 
 ChiakiTarget SettingsManager::getChiakiTarget(Host* host) {
     if (host) return host->getChiakiTarget();

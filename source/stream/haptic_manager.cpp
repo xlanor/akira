@@ -66,8 +66,13 @@ void HapticManager::setHapticRumble(uint8_t left, uint8_t right)
     if (amplitude > 1.0f) amplitude = 1.0f;
     amplitude *= m_rumble_strength;
 
+    if (amplitude >= m_envelope)
+        m_envelope = m_envelope * (1.0f - m_envelope_attack) + amplitude * m_envelope_attack;
+    else
+        m_envelope = m_envelope * m_envelope_decay + amplitude * (1.0f - m_envelope_decay);
+
     auto* inputMgr = brls::Application::getPlatform()->getInputManager();
-    inputMgr->sendRumbleRaw(0, m_freq_low, m_freq_high, amplitude, amplitude);
+    inputMgr->sendRumbleRaw(0, m_freq_low, m_freq_high, m_envelope, m_envelope);
 }
 
 void HapticManager::cleanupHaptic()
@@ -81,15 +86,19 @@ void HapticManager::cleanupHaptic()
     }
     else if (ms > 30)
     {
-        setHapticRumble(0, 0);
+        m_envelope = 0.0f;
+        m_haptic_val = 0;
         m_haptic_lock = false;
+        auto* inputMgr = brls::Application::getPlatform()->getInputManager();
+        inputMgr->sendRumbleRaw(0, 0.0f, 0.0f, 0.0f, 0.0f);
     }
 }
 
 void HapticManager::cleanup()
 {
-    // Stop any active vibration
-    setHapticRumble(0, 0);
+    m_envelope = 0.0f;
     m_haptic_lock = false;
     m_haptic_val = 0;
+    auto* inputMgr = brls::Application::getPlatform()->getInputManager();
+    inputMgr->sendRumbleRaw(0, 0.0f, 0.0f, 0.0f, 0.0f);
 }

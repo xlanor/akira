@@ -52,8 +52,10 @@ private:
     int64_t globalPsnTokenExpiresAt = 0;
     std::string globalDuid;
     HapticPreset globalHaptic = HapticPreset::Disabled;
-    float rumbleFreqLow = 160.0f;
-    float rumbleFreqHigh = 200.0f;
+    float rumbleFreqLow = 140.0f;
+    float rumbleFreqHigh = 185.0f;
+    float rumbleEnvelopeDecay = 0.85f;
+    float rumbleEnvelopeAttack = 0.60f;
     int localVideoBitrate = 10000;
     int remoteVideoBitrate = 10000;
     int vpnVideoBitrate = 5000;
@@ -187,6 +189,10 @@ public:
     void setRumbleFreqLow(float value);
     float getRumbleFreqHigh() const;
     void setRumbleFreqHigh(float value);
+    float getRumbleEnvelopeDecay() const;
+    void setRumbleEnvelopeDecay(float value);
+    float getRumbleEnvelopeAttack() const;
+    void setRumbleEnvelopeAttack(float value);
 
     ChiakiTarget getChiakiTarget(Host* host);
     bool setChiakiTarget(Host* host, ChiakiTarget target);

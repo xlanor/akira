@@ -52,6 +52,8 @@ SettingsTab::SettingsTab() {
     initHapticSelector();
     initRumbleFreqLowSlider();
     initRumbleFreqHighSlider();
+    initRumbleEnvelopeAttackSlider();
+    initRumbleEnvelopeDecaySlider();
     initGyroSourceSelector();
     initSleepOnExitToggle();
     initButtonMappingCell();
@@ -502,6 +504,60 @@ void SettingsTab::initRumbleFreqHighSlider() {
     );
 
     rumbleFreqHighSlider->detail->setText(std::format("{} Hz", static_cast<int>(currentFreq)));
+}
+
+void SettingsTab::initRumbleEnvelopeAttackSlider() {
+    constexpr float MIN_ATTACK = 0.20f;
+    constexpr float MAX_ATTACK = 1.00f;
+
+    float currentAttack = settings->getRumbleEnvelopeAttack();
+    float normalized = (currentAttack - MIN_ATTACK) / (MAX_ATTACK - MIN_ATTACK);
+    normalized = std::max(0.0f, std::min(1.0f, normalized));
+
+    rumbleEnvelopeAttackSlider->detail->setWidth(100);
+    rumbleEnvelopeAttackSlider->detail->setShrink(0);
+    rumbleEnvelopeAttackSlider->init(
+        "Rumble Attack",
+        normalized,
+        [this](float value) {
+            constexpr float MIN_ATTACK = 0.20f;
+            constexpr float MAX_ATTACK = 1.00f;
+            float attack = MIN_ATTACK + value * (MAX_ATTACK - MIN_ATTACK);
+            attack = static_cast<float>(static_cast<int>(attack * 100.0f)) / 100.0f;
+            settings->setRumbleEnvelopeAttack(attack);
+            rumbleEnvelopeAttackSlider->detail->setText(std::format("{}%", static_cast<int>(attack * 100.0f)));
+            settings->writeFile();
+        }
+    );
+
+    rumbleEnvelopeAttackSlider->detail->setText(std::format("{}%", static_cast<int>(currentAttack * 100.0f)));
+}
+
+void SettingsTab::initRumbleEnvelopeDecaySlider() {
+    constexpr float MIN_DECAY = 0.50f;
+    constexpr float MAX_DECAY = 0.95f;
+
+    float currentDecay = settings->getRumbleEnvelopeDecay();
+    float normalized = (currentDecay - MIN_DECAY) / (MAX_DECAY - MIN_DECAY);
+    normalized = std::max(0.0f, std::min(1.0f, normalized));
+
+    rumbleEnvelopeDecaySlider->detail->setWidth(100);
+    rumbleEnvelopeDecaySlider->detail->setShrink(0);
+    rumbleEnvelopeDecaySlider->init(
+        "Rumble Sustain",
+        normalized,
+        [this](float value) {
+            constexpr float MIN_DECAY = 0.50f;
+            constexpr float MAX_DECAY = 0.95f;
+            float decay = MIN_DECAY + value * (MAX_DECAY - MIN_DECAY);
+            decay = static_cast<float>(static_cast<int>(decay * 100.0f)) / 100.0f;
+            settings->setRumbleEnvelopeDecay(decay);
+            rumbleEnvelopeDecaySlider->detail->setText(std::format("{}%", static_cast<int>(decay * 100.0f)));
+            settings->writeFile();
+        }
+    );
+
+    rumbleEnvelopeDecaySlider->detail->setText(std::format("{}%", static_cast<int>(currentDecay * 100.0f)));
 }
 
 void SettingsTab::initGyroSourceSelector() {

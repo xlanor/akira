@@ -408,6 +408,8 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
         streamSession->setRumbleStrength(0.0f);
     }
     streamSession->setRumbleFreqs(settings->getRumbleFreqLow(), settings->getRumbleFreqHigh());
+    streamSession->setEnvelopeDecay(settings->getRumbleEnvelopeDecay());
+    streamSession->setEnvelopeAttack(settings->getRumbleEnvelopeAttack());
 
     connectInfo.ps5 = isPS5();
 

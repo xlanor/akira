@@ -276,6 +276,18 @@
                 marginLeft="15"
                 marginRight="15"/>
 
+            <brls:SliderCell
+                id="settings/rumbleEnvelopeAttack"
+                title="Rumble Attack"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SliderCell
+                id="settings/rumbleEnvelopeDecay"
+                title="Rumble Sustain"
+                marginLeft="15"
+                marginRight="15"/>
+
             <brls:SelectorCell
                 id="settings/gyroSource"
                 title="Gyro Source"
