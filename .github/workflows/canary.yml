@@ -127,12 +127,19 @@ jobs:
         with:
           merge-multiple: true
 
+      - name: Package NRO for SD card
+        run: |
+          mkdir -p switch
+          cp akira.nro switch/akira.nro
+          zip -r akira-canary.zip switch/
+
       - name: Update canary release
         uses: softprops/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae # v2
         with:
           tag_name: canary
           name: "Canary Build"
           files: |
+            akira-canary.zip
             akira.nro
             akira.elf
             akira-companion-*
