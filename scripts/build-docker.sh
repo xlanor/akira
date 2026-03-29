@@ -98,6 +98,7 @@ build_akira() {
     dkp-pacman -Q >> ${BUILD_DIR}/resources/build_info.txt
 
     rm -rf build
+    make -C ${BUILD_DIR}/library/switch-wireguard clean 2>/dev/null || true
 
     CMAKE_EXTRA_ARGS=""
     if [ "$MUTE_CHIAKI" = "true" ]; then

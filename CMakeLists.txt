@@ -165,13 +165,12 @@ add_subdirectory(library/tomlplusplus EXCLUDE_FROM_ALL)
 set(WIREGUARD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/library/switch-wireguard)
 set(WIREGUARD_LIB ${WIREGUARD_DIR}/libwireguard.a)
 
-add_custom_command(
-    OUTPUT ${WIREGUARD_LIB}
+add_custom_target(wireguard_build
     COMMAND make -C ${WIREGUARD_DIR}
     WORKING_DIRECTORY ${WIREGUARD_DIR}
     COMMENT "Building libwireguard.a"
+    BYPRODUCTS ${WIREGUARD_LIB}
 )
-add_custom_target(wireguard_build DEPENDS ${WIREGUARD_LIB})
 
 ###########################################
 # lwIP library (for WireGuard relay)

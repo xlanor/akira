@@ -7,7 +7,9 @@
 #include <borealis.hpp>
 #include <SDL2/SDL.h>
 #include <arpa/inet.h>
+#include <array>
 #include <fstream>
+#include <string_view>
 
 #include <chiaki/common.h>
 #include <chiaki/log.h>
@@ -26,6 +28,28 @@
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
+
+extern "C" {
+#include <libavutil/log.h>
+}
+
+static void ffmpeg_log_callback(void*, int level, const char* fmt, va_list vl) {
+    if (level > av_log_get_level())
+        return;
+    std::array<char, 512> buf{};
+    vsnprintf(buf.data(), buf.size(), fmt, vl);
+    std::string_view msg(buf.data());
+    if (msg.ends_with('\n'))
+        msg.remove_suffix(1);
+    if (msg.empty())
+        return;
+    if (level <= AV_LOG_ERROR)
+        brls::Logger::error("ffmpeg: {}", msg);
+    else if (level <= AV_LOG_WARNING)
+        brls::Logger::warning("ffmpeg: {}", msg);
+    else
+        brls::Logger::info("ffmpeg: {}", msg);
+}
 
 static std::string getLocalIpAddress() {
     u32 ip = 0;
@@ -170,6 +194,8 @@ int main(int argc, char* argv[])
             brls::Application::enableDebuggingView(true);
         }
     }
+
+    av_log_set_callback(ffmpeg_log_callback);
 
     brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_EN_US;
 
