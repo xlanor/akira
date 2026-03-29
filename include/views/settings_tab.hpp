@@ -40,6 +40,7 @@ private:
     BRLS_BIND(brls::BooleanCell, debugRenderLogToggle, "settings/debugRenderLog");
     BRLS_BIND(brls::BooleanCell, debugChiakiLogToggle, "settings/debugChiakiLog");
     BRLS_BIND(brls::BooleanCell, debugDiscoveryLogToggle, "settings/debugDiscoveryLog");
+    BRLS_BIND(brls::BooleanCell, debugFfmpegLogToggle, "settings/debugFfmpegLog");
     BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
     BRLS_BIND(brls::Button, lookupBtn, "settings/lookupBtn");
     BRLS_BIND(brls::InputCell, psnAccountIdInput, "settings/psnAccountId");
@@ -104,6 +105,7 @@ private:
     void initDebugRenderLogToggle();
     void initDebugChiakiLogToggle();
     void initDebugDiscoveryLogToggle();
+    void initDebugFfmpegLogToggle();
     void initPsnAccountSection();
     void initCompanionSection();
     void initPortGuessingToggle();

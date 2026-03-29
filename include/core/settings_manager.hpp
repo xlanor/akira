@@ -81,6 +81,7 @@ private:
     bool debugRenderLog = false;
     bool debugChiakiLog = false;
     bool debugDiscoveryLog = false;
+    bool debugFfmpegLog = false;
 
     // Runtime state (not persisted)
     bool streamingActive = false;
@@ -260,6 +261,8 @@ public:
     void setDebugChiakiLog(bool enabled);
     bool getDebugDiscoveryLog() const;
     void setDebugDiscoveryLog(bool enabled);
+    bool getDebugFfmpegLog() const;
+    void setDebugFfmpegLog(bool enabled);
 
     const ButtonMapping& getButtonMapping() const;
     void setButtonMapping(const ButtonMapping& mapping);

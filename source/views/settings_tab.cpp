@@ -73,6 +73,7 @@ SettingsTab::SettingsTab() {
     initDebugRenderLogToggle();
     initDebugChiakiLogToggle();
     initDebugDiscoveryLogToggle();
+    initDebugFfmpegLogToggle();
 
     runBenchmarkBtn->registerClickAction([this](brls::View*) {
         runGhashBenchmark();
@@ -1151,6 +1152,19 @@ void SettingsTab::initDebugDiscoveryLogToggle() {
         currentValue,
         [this](bool isOn) {
             settings->setDebugDiscoveryLog(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDebugFfmpegLogToggle() {
+    bool currentValue = settings->getDebugFfmpegLog();
+
+    debugFfmpegLogToggle->init(
+        "FFmpeg Log",
+        currentValue,
+        [this](bool isOn) {
+            settings->setDebugFfmpegLog(isOn);
             settings->writeFile();
         }
     );

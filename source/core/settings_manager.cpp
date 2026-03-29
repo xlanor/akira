@@ -351,6 +351,8 @@ void SettingsManager::parseTomlFile() {
             debugChiakiLog = *val;
         if (auto val = config["debug_discovery_log"].value<bool>())
             debugDiscoveryLog = *val;
+        if (auto val = config["debug_ffmpeg_log"].value<bool>())
+            debugFfmpegLog = *val;
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -699,6 +701,8 @@ int SettingsManager::writeFile() {
         config.insert("debug_chiaki_log", debugChiakiLog);
     if (debugDiscoveryLog)
         config.insert("debug_discovery_log", debugDiscoveryLog);
+    if (debugFfmpegLog)
+        config.insert("debug_ffmpeg_log", debugFfmpegLog);
     config.insert("gyro_source", std::to_underlying(globalGyroSource));
 
     {
@@ -1417,6 +1421,14 @@ bool SettingsManager::getDebugDiscoveryLog() const {
 
 void SettingsManager::setDebugDiscoveryLog(bool enabled) {
     debugDiscoveryLog = enabled;
+}
+
+bool SettingsManager::getDebugFfmpegLog() const {
+    return debugFfmpegLog;
+}
+
+void SettingsManager::setDebugFfmpegLog(bool enabled) {
+    debugFfmpegLog = enabled;
 }
 
 bool SettingsManager::isStreamingActive() const {

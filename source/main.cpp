@@ -34,6 +34,8 @@ extern "C" {
 }
 
 static void ffmpeg_log_callback(void*, int level, const char* fmt, va_list vl) {
+    if (!SettingsManager::getInstance()->getDebugFfmpegLog())
+        return;
     if (level > av_log_get_level())
         return;
     std::array<char, 512> buf{};
