@@ -43,6 +43,7 @@ public:
 
     int getVideoWidth() const { return m_video_width; }
     int getVideoHeight() const { return m_video_height; }
+    void updateResolution(int width, int height) { m_video_width = width; m_video_height = height; }
     bool isHEVC() const { return m_is_hevc; }
     bool isHardwareAccelerated() const { return m_hw_accel_enabled; }
 

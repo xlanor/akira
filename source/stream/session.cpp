@@ -181,6 +181,21 @@ void Session::CleanUpHaptic()
     }
 }
 
+void Session::updateActualResolution(int width, int height)
+{
+    if (width != m_requested_width || height != m_requested_height)
+    {
+        brls::Logger::info("Stream resolution changed: requested {}x{}, actual {}x{} (server downgraded)",
+            m_requested_width, m_requested_height, width, height);
+    }
+
+    if (m_video_decoder)
+        m_video_decoder->updateResolution(width, height);
+
+    if (m_video_renderer)
+        m_video_renderer->updateResolution(width, height);
+}
+
 bool Session::InitAVCodec(bool is_PS5, int video_width, int video_height)
 {
     if (!m_video_decoder)
@@ -224,6 +239,7 @@ bool Session::MainLoop()
                     if (!m_first_frame_received)
                     {
                         m_first_frame_received = true;
+                        updateActualResolution(frame->width, frame->height);
                         SettingsManager::getInstance()->setStreamingActive(true);
                         brls::Logger::info("First video frame received!");
                     }

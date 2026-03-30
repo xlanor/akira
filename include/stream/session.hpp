@@ -91,6 +91,7 @@ public:
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);
 
     bool hasReceivedFirstFrame() const { return m_first_frame_received; }
+    void updateActualResolution(int width, int height);
 
     InputManager* getInputManager() { return m_input_manager.get(); }
 

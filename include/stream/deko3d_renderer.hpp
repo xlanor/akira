@@ -36,6 +36,7 @@ public:
     void setShowStatsOverlay(bool show) override { m_show_stats = show; }
     void setStreamStats(const StreamStats& stats) override { m_stats = stats; }
     void setPaused(bool paused) { m_paused = paused; }
+    void updateResolution(int width, int height) { m_frame_width = width; m_frame_height = height; }
 
 private:
     bool m_paused = false;
