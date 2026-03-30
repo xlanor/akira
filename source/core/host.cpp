@@ -519,6 +519,21 @@ void Host::sendFeedbackState()
     {
         onReadController(&controllerState, &fingerIdTouchId);
     }
+    static uint32_t prevButtons = 0;
+    if (controllerState.buttons != prevButtons)
+    {
+        brls::Logger::info("Controller buttons changed: 0x{:x} -> 0x{:x}", prevButtons, controllerState.buttons);
+        prevButtons = controllerState.buttons;
+    }
+    static int8_t prevTouchId0 = -1, prevTouchId1 = -1;
+    if (controllerState.touches[0].id != prevTouchId0 || controllerState.touches[1].id != prevTouchId1)
+    {
+        brls::Logger::info("Controller touches: [0] id={} pos=({},{}), [1] id={} pos=({},{})",
+            controllerState.touches[0].id, controllerState.touches[0].x, controllerState.touches[0].y,
+            controllerState.touches[1].id, controllerState.touches[1].x, controllerState.touches[1].y);
+        prevTouchId0 = controllerState.touches[0].id;
+        prevTouchId1 = controllerState.touches[1].id;
+    }
     chiaki_session_set_controller_state(&session, &controllerState);
 }
 

@@ -60,6 +60,9 @@ private:
 
     SyntheticSwipe m_swipes[4];
 
+    int m_prev_touch_count = 0;
+    uint32_t m_touch_debug_counter = 0;
+
     // Accelerometer zero offset for gyro reset
     float m_accel_zero_x = 0.0f;
     float m_accel_zero_y = 0.0f;

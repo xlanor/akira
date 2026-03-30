@@ -38,6 +38,8 @@ public:
     void setPaused(bool paused) { m_paused = paused; }
     void updateResolution(int width, int height) { m_frame_width = width; m_frame_height = height; }
 
+    void triggerBorderFlash() { m_border_flash_frames = BORDER_FLASH_DURATION; }
+
 private:
     bool m_paused = false;
     std::optional<CMemPool> m_pool_code;
@@ -46,7 +48,11 @@ private:
     // Begin debug menu
     void initTextRendering();
     void renderStatsOverlay();
+    void renderBorderFlash();
     void cleanupTextRendering();
+
+    int m_border_flash_frames = 0;
+    static constexpr int BORDER_FLASH_DURATION = 20;
 
     CShader m_text_vertex_shader;
     CShader m_text_fragment_shader;

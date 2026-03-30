@@ -331,6 +331,14 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
 
     // Render stats overlay on top of video (if enabled)
     renderStatsOverlay();
+
+    // Render border flash for touchpad click feedback
+    if (m_border_flash_frames > 0)
+    {
+        if (!m_show_stats)
+            m_queue.waitIdle();
+        renderBorderFlash();
+    }
 }
 
 void Deko3dRenderer::registerCallback()
@@ -862,6 +870,100 @@ void Deko3dRenderer::renderStatsOverlay()
     m_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
 
     // Submit
+    DkCmdList list = m_cmdbuf.finishList();
+    if (list)
+    {
+        m_queue.submitCommands(list);
+        m_queue.flush();
+    }
+}
+
+void Deko3dRenderer::renderBorderFlash()
+{
+    if (m_border_flash_frames <= 0 || !m_text_initialized)
+        return;
+
+    m_border_flash_frames--;
+
+    float fade = (float)m_border_flash_frames / (float)BORDER_FLASH_DURATION;
+    float edgeAlpha = fade * 0.25f;
+    float innerAlpha = 0.0f;
+
+    unsigned screenW = brls::Application::windowWidth;
+    unsigned screenH = brls::Application::windowHeight;
+
+    constexpr float T = 64.0f;
+    float r = 0.6f, g = 0.85f, b = 1.0f;
+
+    std::vector<TextVertex> vertices;
+    vertices.reserve(48);
+
+    auto addGradientQuad = [&](float x1, float y1, float x2, float y2,
+                               float x3, float y3, float x4, float y4,
+                               float a1, float a2) {
+        float nx1, ny1, nx2, ny2, nx3, ny3, nx4, ny4;
+        pixelToNDC(x1, y1, screenW, screenH, nx1, ny1);
+        pixelToNDC(x2, y2, screenW, screenH, nx2, ny2);
+        pixelToNDC(x3, y3, screenW, screenH, nx3, ny3);
+        pixelToNDC(x4, y4, screenW, screenH, nx4, ny4);
+
+        vertices.push_back({{ nx1, ny1, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a1 }});
+        vertices.push_back({{ nx2, ny2, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a1 }});
+        vertices.push_back({{ nx3, ny3, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a2 }});
+
+        vertices.push_back({{ nx2, ny2, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a1 }});
+        vertices.push_back({{ nx4, ny4, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a2 }});
+        vertices.push_back({{ nx3, ny3, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a2 }});
+    };
+
+    float sw = (float)screenW, sh = (float)screenH;
+
+    // Top: edge at y=0, fades to y=T
+    addGradientQuad(0, 0,    sw, 0,     0, T,    sw, T,    edgeAlpha, innerAlpha);
+    // Bottom: edge at y=sh, fades to y=sh-T
+    addGradientQuad(0, sh-T, sw, sh-T,  0, sh,   sw, sh,   innerAlpha, edgeAlpha);
+    // Left: edge at x=0, fades to x=T
+    addGradientQuad(0, 0,    0, sh,     T, 0,    T, sh,    edgeAlpha, innerAlpha);
+    // Right: edge at x=sw, fades to x=sw-T
+    addGradientQuad(sw-T, 0, sw-T, sh,  sw, 0,   sw, sh,   innerAlpha, edgeAlpha);
+
+    memcpy(m_text_vertex_buffer.getCpuAddr(), vertices.data(), vertices.size() * sizeof(TextVertex));
+
+    dk::Image* framebuffer = m_vctx->getFramebuffer();
+    if (!framebuffer)
+        return;
+
+    m_cmdbuf.clear();
+
+    dk::ImageView colorTarget{*framebuffer};
+    m_cmdbuf.bindRenderTargets(&colorTarget);
+    m_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
+    m_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
+
+    m_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
+    m_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
+        .setDepthTestEnable(false)
+        .setDepthWriteEnable(false)
+        .setStencilTestEnable(false));
+    m_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
+    m_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
+    m_cmdbuf.bindBlendStates(0, dk::BlendState{}
+        .setColorBlendOp(DkBlendOp_Add)
+        .setSrcColorBlendFactor(DkBlendFactor_SrcAlpha)
+        .setDstColorBlendFactor(DkBlendFactor_InvSrcAlpha)
+        .setAlphaBlendOp(DkBlendOp_Add)
+        .setSrcAlphaBlendFactor(DkBlendFactor_One)
+        .setDstAlphaBlendFactor(DkBlendFactor_InvSrcAlpha));
+
+    m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
+    m_image_descriptor_set->bindForImages(m_cmdbuf);
+    m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
+    m_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
+    m_cmdbuf.bindVtxAttribState(TextVertexAttribState);
+    m_cmdbuf.bindVtxBufferState(TextVertexBufferState);
+
+    m_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
+
     DkCmdList list = m_cmdbuf.finishList();
     if (list)
     {

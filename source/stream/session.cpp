@@ -323,6 +323,12 @@ void Session::setVideoPaused(bool paused)
         m_video_renderer->setPaused(paused);
 }
 
+void Session::triggerBorderFlash()
+{
+    if (m_video_renderer)
+        m_video_renderer->triggerBorderFlash();
+}
+
 void Session::setSession(ChiakiSession* session)
 {
     m_session = session;

@@ -31,6 +31,7 @@ public:
     virtual void setStreamStats(const StreamStats& stats) { m_stats = stats; }
     virtual void setPaused(bool paused) { (void)paused; }
     virtual void updateResolution(int width, int height) { (void)width; (void)height; }
+    virtual void triggerBorderFlash() {}
 
 protected:
     bool m_show_stats = false;

@@ -1,4 +1,5 @@
 #include "stream/input_manager.hpp"
+#include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/swipe_direction.hpp"
 #include <borealis.hpp>
@@ -171,10 +172,24 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
 {
     HidTouchScreenState sw_state = {0};
 
-    bool ret = false;
-    hidGetTouchScreenStates(&sw_state, 1);
+    size_t got = hidGetTouchScreenStates(&sw_state, 1);
+    if (got == 0)
+    {
+        if (m_touch_debug_counter % 300 == 0 && !finger_id_touch_id->empty())
+            brls::Logger::warning("Touch: hidGetTouchScreenStates returned 0, preserving {} active touches", finger_id_touch_id->size());
+        m_touch_debug_counter++;
+        return !finger_id_touch_id->empty();
+    }
 
-    // Un-touch all old touches
+    if (sw_state.count > 0 && m_prev_touch_count == 0)
+        brls::Logger::info("Touch: started, {} point(s), finger_id={}, pos=({},{})",
+            sw_state.count, sw_state.touches[0].finger_id, sw_state.touches[0].x, sw_state.touches[0].y);
+    else if (sw_state.count == 0 && m_prev_touch_count > 0)
+        brls::Logger::info("Touch: released, had {} tracked finger(s)", finger_id_touch_id->size());
+    m_prev_touch_count = sw_state.count;
+
+    bool ret = false;
+
     for (auto it = finger_id_touch_id->begin(); it != finger_id_touch_id->end();)
     {
         auto cur = it;
@@ -192,6 +207,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         {
             if (cur->second >= 0)
             {
+                brls::Logger::debug("Touch: stop touch_id={} for finger_id={}", cur->second, cur->first);
                 chiaki_controller_state_stop_touch(chiaki_state, (uint8_t)cur->second);
             }
             finger_id_touch_id->erase(cur);
@@ -206,18 +222,28 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         uint16_t x = sw_state.touches[i].x * (trackpadMaxX / (float)SWITCH_TOUCHSCREEN_MAX_X);
         uint16_t y = sw_state.touches[i].y * (trackpadMaxY / (float)SWITCH_TOUCHSCREEN_MAX_Y);
 
-        // Use nintendo switch border's 5% to trigger the touchpad button
-        if (x <= (trackpadMaxX * 0.05f) || x >= (trackpadMaxX * 0.95f) ||
-            y <= (trackpadMaxY * 0.05f) || y >= (trackpadMaxY * 0.95f))
+        uint32_t rawX = sw_state.touches[i].x;
+        uint32_t rawY = sw_state.touches[i].y;
+        bool isBorder = rawX <= 64 || rawX >= (SWITCH_TOUCHSCREEN_MAX_X - 64) ||
+                        rawY <= 64 || rawY >= (SWITCH_TOUCHSCREEN_MAX_Y - 64);
+        if (isBorder)
         {
             chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
+            Session::GetInstance()->triggerBorderFlash();
+            brls::Logger::info("Touch: border tap -> touchpad button only, raw=({},{})", rawX, rawY);
+            continue;
         }
 
         auto it = finger_id_touch_id->find(sw_state.touches[i].finger_id);
         if (it == finger_id_touch_id->end())
         {
-            (*finger_id_touch_id)[sw_state.touches[i].finger_id] =
-                chiaki_controller_state_start_touch(chiaki_state, x, y);
+            int8_t touch_id = chiaki_controller_state_start_touch(chiaki_state, x, y);
+            (*finger_id_touch_id)[sw_state.touches[i].finger_id] = touch_id;
+            brls::Logger::info("Touch: new finger_id={} -> touch_id={}, raw=({},{}) mapped=({},{})",
+                sw_state.touches[i].finger_id, touch_id,
+                sw_state.touches[i].x, sw_state.touches[i].y, x, y);
+            if (touch_id < 0)
+                brls::Logger::warning("Touch: no free touch slots (max {})", CHIAKI_CONTROLLER_TOUCHES_MAX);
         }
         else if (it->second >= 0)
         {

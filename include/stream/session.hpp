@@ -88,6 +88,7 @@ public:
     bool getShowStatsOverlay() const { return m_show_stats_overlay; }
     void setShowStatsOverlay(bool show) { m_show_stats_overlay = show; }
     void setVideoPaused(bool paused);
+    void triggerBorderFlash();
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);
 
     bool hasReceivedFirstFrame() const { return m_first_frame_received; }
