@@ -89,6 +89,8 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
         SWIPE_TOUCHPAD_LEFT, SWIPE_TOUCHPAD_RIGHT
     };
     for (int i = 0; i < 4; i++) {
+        if (!SettingsManager::getInstance()->isButtonEnabled(swipeConstants[i]))
+            continue;
         if (m_swipes[i].phase == SyntheticSwipe::Phase::ACTIVE) {
             auto it = mapping.find(swipeConstants[i]);
             if (it != mapping.end()) {
@@ -107,6 +109,8 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
     for (const auto& [chiakiBtn, combo] : mapping) {
         if (combo.empty()) continue;
         if (chiakiBtn & 0xFF000000) continue;
+        if (!SettingsManager::getInstance()->isButtonEnabled(chiakiBtn))
+            continue;
 
         if (combo.size() == 1 && (consumedButtons & combo[0]))
             continue;
@@ -368,6 +372,17 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
 
     for (int i = 0; i < 4; i++) {
         SyntheticSwipe& swipe = m_swipes[i];
+
+        if (!SettingsManager::getInstance()->isButtonEnabled(swipeConstants[i])) {
+            swipe.buttonWasPressed = false;
+            if (swipe.phase == SyntheticSwipe::Phase::ACTIVE) {
+                chiaki_controller_state_stop_touch(state, (uint8_t)swipe.touchId);
+                swipe.phase = SyntheticSwipe::Phase::IDLE;
+                swipe.touchId = -1;
+            }
+            continue;
+        }
+
         auto it = mapping.find(swipeConstants[i]);
         if (it == mapping.end() || it->second.empty()) {
             swipe.buttonWasPressed = false;

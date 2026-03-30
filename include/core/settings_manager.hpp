@@ -92,6 +92,12 @@ private:
 
     ButtonMapping buttonMapping;
 
+    bool touchpadEnabled = true;
+    bool swipeUpEnabled = true;
+    bool swipeDownEnabled = true;
+    bool swipeLeftEnabled = true;
+    bool swipeRightEnabled = true;
+
     void parseTomlFile();
     void parseLegacyFile();
     void removeLegacyConfig();
@@ -267,6 +273,18 @@ public:
     const ButtonMapping& getButtonMapping() const;
     void setButtonMapping(const ButtonMapping& mapping);
     ButtonMapping getDefaultButtonMapping() const;
+
+    bool getTouchpadEnabled() const;
+    void setTouchpadEnabled(bool enabled);
+    bool getSwipeUpEnabled() const;
+    void setSwipeUpEnabled(bool enabled);
+    bool getSwipeDownEnabled() const;
+    void setSwipeDownEnabled(bool enabled);
+    bool getSwipeLeftEnabled() const;
+    void setSwipeLeftEnabled(bool enabled);
+    bool getSwipeRightEnabled() const;
+    void setSwipeRightEnabled(bool enabled);
+    bool isButtonEnabled(uint32_t chiakiButton) const;
 
     // Runtime state (not persisted)
     bool isStreamingActive() const;

@@ -401,6 +401,17 @@ void SettingsManager::parseTomlFile() {
                     buttonMapping[chiakiBtn] = combo;
                 }
             }
+            if (auto val = (*mappingTable)["touchpad_enabled"].value<bool>())
+                touchpadEnabled = *val;
+            if (auto val = (*mappingTable)["swipe_up_enabled"].value<bool>())
+                swipeUpEnabled = *val;
+            if (auto val = (*mappingTable)["swipe_down_enabled"].value<bool>())
+                swipeDownEnabled = *val;
+            if (auto val = (*mappingTable)["swipe_left_enabled"].value<bool>())
+                swipeLeftEnabled = *val;
+            if (auto val = (*mappingTable)["swipe_right_enabled"].value<bool>())
+                swipeRightEnabled = *val;
+
             brls::Logger::info("Loaded button mapping from config");
         }
 
@@ -715,10 +726,11 @@ int SettingsManager::writeFile() {
     }
 
     {
+        toml::table mappingTable;
+
         ButtonMapping defaults = getDefaultButtonMapping();
         bool hasCustomMappings = (buttonMapping != defaults);
         if (hasCustomMappings) {
-            toml::table mappingTable;
             for (const auto& [chiakiBtn, combo] : buttonMapping) {
                 std::string key = chiakiButtonToConfigKey(chiakiBtn);
                 if (key.empty()) continue;
@@ -732,8 +744,15 @@ int SettingsManager::writeFile() {
                 }
                 mappingTable.insert(key, arr);
             }
-            config.insert("button_mapping", mappingTable);
         }
+
+        mappingTable.insert("touchpad_enabled", touchpadEnabled);
+        mappingTable.insert("swipe_up_enabled", swipeUpEnabled);
+        mappingTable.insert("swipe_down_enabled", swipeDownEnabled);
+        mappingTable.insert("swipe_left_enabled", swipeLeftEnabled);
+        mappingTable.insert("swipe_right_enabled", swipeRightEnabled);
+
+        config.insert("button_mapping", mappingTable);
     }
 
     for (const auto& [name, host] : hosts) {
@@ -1437,6 +1456,32 @@ bool SettingsManager::isStreamingActive() const {
 
 void SettingsManager::setStreamingActive(bool active) {
     streamingActive = active;
+}
+
+bool SettingsManager::getTouchpadEnabled() const { return touchpadEnabled; }
+void SettingsManager::setTouchpadEnabled(bool enabled) { touchpadEnabled = enabled; }
+
+bool SettingsManager::getSwipeUpEnabled() const { return swipeUpEnabled; }
+void SettingsManager::setSwipeUpEnabled(bool enabled) { swipeUpEnabled = enabled; }
+
+bool SettingsManager::getSwipeDownEnabled() const { return swipeDownEnabled; }
+void SettingsManager::setSwipeDownEnabled(bool enabled) { swipeDownEnabled = enabled; }
+
+bool SettingsManager::getSwipeLeftEnabled() const { return swipeLeftEnabled; }
+void SettingsManager::setSwipeLeftEnabled(bool enabled) { swipeLeftEnabled = enabled; }
+
+bool SettingsManager::getSwipeRightEnabled() const { return swipeRightEnabled; }
+void SettingsManager::setSwipeRightEnabled(bool enabled) { swipeRightEnabled = enabled; }
+
+bool SettingsManager::isButtonEnabled(uint32_t chiakiButton) const {
+    switch (chiakiButton) {
+        case CHIAKI_CONTROLLER_BUTTON_TOUCHPAD: return touchpadEnabled;
+        case SWIPE_TOUCHPAD_UP: return swipeUpEnabled;
+        case SWIPE_TOUCHPAD_DOWN: return swipeDownEnabled;
+        case SWIPE_TOUCHPAD_LEFT: return swipeLeftEnabled;
+        case SWIPE_TOUCHPAD_RIGHT: return swipeRightEnabled;
+        default: return true;
+    }
 }
 
 const ButtonMapping& SettingsManager::getButtonMapping() const {

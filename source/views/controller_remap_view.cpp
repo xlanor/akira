@@ -135,6 +135,31 @@ void ControllerRemapView::buildUI()
         cell->addGestureRecognizer(new brls::TapGestureRecognizer(cell));
         listContainer->addView(cell);
         detailCells.push_back(cell);
+
+        if (isToggleableButton(target)) {
+            auto* toggle = new brls::BooleanCell();
+            toggle->init(
+                remappableButtons[i].displayName + " Enabled",
+                settings->isButtonEnabled(target),
+                [this, target](bool isOn) {
+                    switch (target) {
+                        case CHIAKI_CONTROLLER_BUTTON_TOUCHPAD:
+                            settings->setTouchpadEnabled(isOn); break;
+                        case SWIPE_TOUCHPAD_UP:
+                            settings->setSwipeUpEnabled(isOn); break;
+                        case SWIPE_TOUCHPAD_DOWN:
+                            settings->setSwipeDownEnabled(isOn); break;
+                        case SWIPE_TOUCHPAD_LEFT:
+                            settings->setSwipeLeftEnabled(isOn); break;
+                        case SWIPE_TOUCHPAD_RIGHT:
+                            settings->setSwipeRightEnabled(isOn); break;
+                    }
+                    settings->writeFile();
+                }
+            );
+            listContainer->addView(toggle);
+            enableToggles[target] = toggle;
+        }
     }
 
     resetAllBtn = new brls::Button();
@@ -495,7 +520,27 @@ void ControllerRemapView::resetAllToDefaults()
 {
     currentMapping = settings->getDefaultButtonMapping();
     saveMappings();
+
+    settings->setTouchpadEnabled(true);
+    settings->setSwipeUpEnabled(true);
+    settings->setSwipeDownEnabled(true);
+    settings->setSwipeLeftEnabled(true);
+    settings->setSwipeRightEnabled(true);
+    settings->writeFile();
+
+    for (auto& [btn, toggle] : enableToggles)
+        toggle->setOn(true, true);
+
     updateAllCellDisplays();
+}
+
+bool ControllerRemapView::isToggleableButton(uint32_t chiakiButton)
+{
+    return chiakiButton == CHIAKI_CONTROLLER_BUTTON_TOUCHPAD
+        || chiakiButton == SWIPE_TOUCHPAD_UP
+        || chiakiButton == SWIPE_TOUCHPAD_DOWN
+        || chiakiButton == SWIPE_TOUCHPAD_LEFT
+        || chiakiButton == SWIPE_TOUCHPAD_RIGHT;
 }
 
 void ControllerRemapView::resetSingleToDefault(uint32_t chiakiButton)

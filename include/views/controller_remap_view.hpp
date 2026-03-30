@@ -2,6 +2,7 @@
 #define AKIRA_CONTROLLER_REMAP_VIEW_HPP
 
 #include <borealis.hpp>
+#include <borealis/views/cells/cell_bool.hpp>
 #include <vector>
 #include <map>
 #include <set>
@@ -54,6 +55,7 @@ private:
     std::vector<RemappableButton> remappableButtons;
     std::vector<brls::DetailCell*> detailCells;
     std::vector<brls::Box*> switchIconBoxes;
+    std::map<uint32_t, brls::BooleanCell*> enableToggles;
     std::map<uint32_t, std::vector<uint64_t>> currentMapping;
 
     uint32_t captureTarget = 0;
@@ -98,6 +100,7 @@ private:
     bool isDefaultMapping(uint32_t chiakiButton) const;
     bool hasConflict(uint32_t chiakiButton) const;
     std::vector<uint64_t> getDefaultForButton(uint32_t chiakiButton) const;
+    static bool isToggleableButton(uint32_t chiakiButton);
 };
 
 #endif // AKIRA_CONTROLLER_REMAP_VIEW_HPP
