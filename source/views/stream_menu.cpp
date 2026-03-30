@@ -39,6 +39,13 @@ StreamMenu::StreamMenu()
         return true;
     });
 
+    this->buttonMappingButton->registerClickAction([this](brls::View*) {
+        brls::Logger::info("StreamMenu: button mapping clicked");
+        if (this->onButtonMapping)
+            this->onButtonMapping();
+        return true;
+    });
+
     this->disconnectButton->registerClickAction([this](brls::View*) {
         brls::Logger::info("StreamMenu: disconnect button clicked");
         if (this->onDisconnect)
@@ -88,6 +95,11 @@ void StreamMenu::setOnDismiss(std::function<void()> callback)
 void StreamMenu::setOnGyroReset(std::function<void()> callback)
 {
     this->onGyroReset = callback;
+}
+
+void StreamMenu::setOnButtonMapping(std::function<void()> callback)
+{
+    this->onButtonMapping = callback;
 }
 
 void StreamMenu::setStatsEnabled(bool enabled)

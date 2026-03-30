@@ -75,6 +75,8 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
     u64 consumedButtons = 0;
     for (const auto& [chiakiBtn, combo] : mapping) {
         if (combo.size() <= 1) continue;
+        if (!SettingsManager::getInstance()->isButtonEnabled(chiakiBtn))
+            continue;
         bool allHeld = true;
         for (uint64_t hidBtn : combo) {
             if (!(buttons & hidBtn)) { allHeld = false; break; }

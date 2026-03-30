@@ -1,6 +1,7 @@
 #include "views/stream_view.hpp"
 #include "views/stream_menu.hpp"
 #include "views/enter_pin_view.hpp"
+#include "views/controller_remap_view.hpp"
 #include <format>
 #include "core/exception.hpp"
 #include "stream/input_manager.hpp"
@@ -534,6 +535,13 @@ void StreamView::showDisconnectMenu()
             self->menuOpen = false;
             brls::Application::blockInputs(true);
         }
+    });
+
+    menu->setOnButtonMapping([]() {
+        auto* remapView = new ControllerRemapView();
+        remapView->setTranslucent(true);
+        remapView->setStreamMode(true);
+        brls::Application::pushActivity(new brls::Activity(remapView), brls::TransitionAnimation::NONE);
     });
 
     menu->setOnDisconnect([weak](bool sleep) {

@@ -55,6 +55,23 @@
             color="@theme/brls/sidebar/separator"/>
 
         <brls:Button
+            id="stream_menu/button_mapping"
+            width="auto"
+            height="72"
+            focusable="true"
+            justifyContent="center"
+            alignItems="center"
+            highlightCornerRadius="6"
+            style="borderless"
+            textColor="@theme/brls/accent"
+            text="Button Mapping"/>
+
+        <brls:Rectangle
+            width="auto"
+            height="1"
+            color="@theme/brls/sidebar/separator"/>
+
+        <brls:Button
             id="stream_menu/disconnect"
             width="auto"
             height="72"

@@ -534,6 +534,17 @@ void ControllerRemapView::resetAllToDefaults()
     updateAllCellDisplays();
 }
 
+void ControllerRemapView::setStreamMode(bool enabled)
+{
+    auto* img = (brls::Image*)this->getView("remap/controllerImage");
+    if (img && enabled) {
+        img->setVisibility(brls::Visibility::GONE);
+        img->getParent()->setWidth(0);
+        this->setPaddingLeft(200);
+        this->setPaddingRight(200);
+    }
+}
+
 bool ControllerRemapView::isToggleableButton(uint32_t chiakiButton)
 {
     return chiakiButton == CHIAKI_CONTROLLER_BUTTON_TOUCHPAD

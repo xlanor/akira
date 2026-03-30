@@ -29,7 +29,12 @@ public:
 
     static brls::View* create();
 
+    bool isTranslucent() override { return translucent; }
+    void setTranslucent(bool t) { translucent = t; }
+    void setStreamMode(bool enabled);
+
 private:
+    bool translucent = false;
     enum class State {
         BROWSING,
         CAPTURING
