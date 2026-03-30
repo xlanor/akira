@@ -226,7 +226,11 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         uint32_t rawY = sw_state.touches[i].y;
         bool isBorder = rawX <= 64 || rawX >= (SWITCH_TOUCHSCREEN_MAX_X - 64) ||
                         rawY <= 64 || rawY >= (SWITCH_TOUCHSCREEN_MAX_Y - 64);
-        if (isBorder)
+
+        auto it = finger_id_touch_id->find(sw_state.touches[i].finger_id);
+        bool isTracked = it != finger_id_touch_id->end();
+
+        if (isBorder && !isTracked)
         {
             chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
             Session::GetInstance()->triggerBorderFlash();
@@ -234,8 +238,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
             continue;
         }
 
-        auto it = finger_id_touch_id->find(sw_state.touches[i].finger_id);
-        if (it == finger_id_touch_id->end())
+        if (!isTracked)
         {
             int8_t touch_id = chiaki_controller_state_start_touch(chiaki_state, x, y);
             (*finger_id_touch_id)[sw_state.touches[i].finger_id] = touch_id;
@@ -248,6 +251,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         else if (it->second >= 0)
         {
             chiaki_controller_state_set_touch_pos(chiaki_state, (uint8_t)it->second, x, y);
+            brls::Logger::debug("Touch: move touch_id={} mapped=({},{})", it->second, x, y);
         }
         ret = true;
     }
@@ -398,12 +402,15 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
     HidAnalogStickState leftStick = padGetStickPos(&m_pad, 0);
     HidAnalogStickState rightStick = padGetStickPos(&m_pad, 1);
 
+    static const char* swipeNames[4] = { "UP", "DOWN", "LEFT", "RIGHT" };
+
     for (int i = 0; i < 4; i++) {
         SyntheticSwipe& swipe = m_swipes[i];
 
         if (!SettingsManager::getInstance()->isButtonEnabled(swipeConstants[i])) {
             swipe.buttonWasPressed = false;
             if (swipe.phase == SyntheticSwipe::Phase::ACTIVE) {
+                brls::Logger::info("Swipe {}: disabled mid-swipe, stopping touch_id={}", swipeNames[i], swipe.touchId);
                 chiaki_controller_state_stop_touch(state, (uint8_t)swipe.touchId);
                 swipe.phase = SyntheticSwipe::Phase::IDLE;
                 swipe.touchId = -1;
@@ -440,6 +447,10 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
             }
         }
 
+        if (comboHeld && !stickDirectionValid)
+            brls::Logger::debug("Swipe {}: combo held but stick direction invalid (L={},{} R={},{})",
+                swipeNames[i], leftStick.x, leftStick.y, rightStick.x, rightStick.y);
+
         if (swipe.phase == SyntheticSwipe::Phase::IDLE) {
             if (comboHeld && stickDirectionValid && !swipe.buttonWasPressed) {
                 swipe.curX = configs[i].startX;
@@ -450,12 +461,18 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
                 if (swipe.touchId >= 0) {
                     swipe.phase = SyntheticSwipe::Phase::ACTIVE;
                     swipe.frameCounter = 0;
+                    brls::Logger::info("Swipe {}: started touch_id={}, start=({},{}) step=({},{})",
+                        swipeNames[i], swipe.touchId, swipe.curX, swipe.curY, swipe.dx, swipe.dy);
+                } else {
+                    brls::Logger::warning("Swipe {}: no free touch slots", swipeNames[i]);
                 }
             }
             swipe.buttonWasPressed = comboHeld && stickDirectionValid;
         } else {
             swipe.frameCounter++;
             if (swipe.frameCounter >= SyntheticSwipe::SWIPE_FRAMES) {
+                brls::Logger::info("Swipe {}: completed, final pos=({},{}), touch_id={}",
+                    swipeNames[i], swipe.curX, swipe.curY, swipe.touchId);
                 chiaki_controller_state_stop_touch(state, (uint8_t)swipe.touchId);
                 swipe.phase = SyntheticSwipe::Phase::IDLE;
                 swipe.touchId = -1;

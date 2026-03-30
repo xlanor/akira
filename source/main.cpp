@@ -5,6 +5,7 @@
 
 #include <switch.h>
 #include <borealis.hpp>
+#include <borealis/core/thread_pool.hpp>
 #include <SDL2/SDL.h>
 #include <arpa/inet.h>
 #include <array>
@@ -250,6 +251,14 @@ int main(int argc, char* argv[])
             brls::Logger::info("File logging enabled: {}", logPath);
         }
     }
+
+    brls::Logger::setAsyncLogging(true);
+    brls::Application::getRunLoopEvent()->subscribe([]() {
+        brls::ThreadPool::global()->async([]() {
+            brls::Logger::flushAsyncLogs();
+        });
+    });
+    brls::Logger::info("Async logging enabled via thread pool");
 
     chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
     brls::Logger::info("GHASH mode: PMULL");

@@ -1087,6 +1087,20 @@ void SettingsTab::initEnableFileLoggingToggle() {
         currentValue,
         [this](bool isOn) {
             settings->setEnableFileLogging(isOn);
+            if (!isOn) {
+                settings->setDebugLwipLog(false);
+                settings->setDebugWireguardLog(false);
+                settings->setDebugRenderLog(false);
+                settings->setDebugChiakiLog(false);
+                settings->setDebugDiscoveryLog(false);
+                settings->setDebugFfmpegLog(false);
+                debugLwipLogToggle->setOn(false, false);
+                debugWireguardLogToggle->setOn(false, false);
+                debugRenderLogToggle->setOn(false, false);
+                debugChiakiLogToggle->setOn(false, false);
+                debugDiscoveryLogToggle->setOn(false, false);
+                debugFfmpegLogToggle->setOn(false, false);
+            }
             settings->writeFile();
         }
     );
