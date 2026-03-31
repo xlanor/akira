@@ -63,7 +63,7 @@ bool WireGuardManager::parseConfigFile(const std::string& path, WgConfig& cfg) {
 
     std::string line;
     std::string section;
-    std::string privateKey, publicKey, endpoint, address;
+    std::string privateKey, publicKey, endpoint, address, presharedKey;
     uint16_t port = 51820;
     uint16_t keepalive = 25;
 
@@ -107,6 +107,9 @@ bool WireGuardManager::parseConfigFile(const std::string& path, WgConfig& cfg) {
             if (commaPos != std::string::npos)
                 address = address.substr(0, commaPos);
             brls::Logger::info("WG: parsed address: {}", address);
+        } else if (line.find("PresharedKey") != std::string::npos) {
+            presharedKey = parseValue(line);
+            brls::Logger::info("WG: found PresharedKey");
         } else if (line.find("PersistentKeepalive") != std::string::npos) {
             std::string kaStr = parseValue(line);
             brls::Logger::info("WG: found PersistentKeepalive: {}", kaStr);
@@ -160,7 +163,17 @@ bool WireGuardManager::parseConfigFile(const std::string& path, WgConfig& cfg) {
     strncpy(cfg.endpoint_host, endpoint.c_str(), sizeof(cfg.endpoint_host) - 1);
     cfg.endpoint_port = port;
     cfg.keepalive_interval = keepalive;
-    cfg.has_preshared_key = 0;
+    if (!presharedKey.empty()) {
+        if (wg_key_from_base64(cfg.preshared_key, presharedKey.c_str()) != 0) {
+            lastError = "Invalid PresharedKey format";
+            brls::Logger::error("WG: {}", lastError);
+            return false;
+        }
+        cfg.has_preshared_key = 1;
+        brls::Logger::info("WG: PresharedKey configured");
+    } else {
+        cfg.has_preshared_key = 0;
+    }
 
     tunnelIP = address;
     brls::Logger::info("WG: parseConfigFile completed successfully");
