@@ -675,7 +675,8 @@ ChiakiErrorCode Host::initHolepunchSession()
 
     if (settings->getPortGuessing())
     {
-        chiaki_holepunch_session_set_port_guessing(holepunchSession, true, settings->getPortGuessingCount());
+        chiaki_holepunch_session_force_port_guessing(holepunchSession, true);
+        chiaki_holepunch_session_set_port_guessing_ports(holepunchSession, settings->getPortGuessingCount());
         chiaki_holepunch_session_set_port_guessing_socks(holepunchSession, settings->getPortGuessingSocks());
         brls::Logger::info("Port guessing enabled: {} guesses, {} sockets", settings->getPortGuessingCount(), settings->getPortGuessingSocks());
     }
