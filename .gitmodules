@@ -47,3 +47,6 @@
 	path = library/uam
 	url = https://github.com/RSDuck/uam.git
 	branch = library-target
+[submodule "references/FidelityFX-FSR"]
+	path = references/FidelityFX-FSR
+	url = https://github.com/atyuwen/FidelityFX-FSR

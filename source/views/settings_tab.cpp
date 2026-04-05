@@ -63,6 +63,9 @@ SettingsTab::SettingsTab() {
     initButtonMappingCell();
     initEnableDitheringToggle();
     initDitheringStrengthSlider();
+    initFsrEnabledToggle();
+    initFsrTargetSelector();
+    initFsrSharpnessSelector();
     initEnableThreadAffinityToggle();
     initLowLatencyModeToggle();
     initHolepunchRetryToggle();
@@ -133,7 +136,12 @@ void SettingsTab::initLanguageSelector() {
 }
 
 void SettingsTab::initLocalResolutionSelector() {
-    std::vector<std::string> options = {"akira/settings/res_360p"_i18n, "akira/settings/res_540p"_i18n, "akira/settings/res_720p"_i18n, "akira/settings/res_1080p"_i18n};
+    std::vector<std::string> options = {
+        "akira/settings/res_360p"_i18n,
+        "akira/settings/res_540p"_i18n,
+        "akira/settings/res_720p"_i18n,
+        "akira/settings/res_1080p"_i18n,
+    };
 
     int currentIndex = 2;
     auto current = settings->getLocalVideoResolution();
@@ -678,6 +686,79 @@ void SettingsTab::initDitheringStrengthSlider() {
     );
 
     ditheringStrengthSlider->detail->setText(std::format("{}", static_cast<int>(current)));
+}
+
+void SettingsTab::initFsrEnabledToggle() {
+    bool currentValue = settings->getFsrEnabled();
+
+    fsrEnabledToggle->init(
+        "FSR Upscaling",
+        currentValue,
+        [this](bool isOn) {
+            settings->setFsrEnabled(isOn);
+            settings->writeFile();
+            updateResolutionLabels();
+        }
+    );
+}
+
+void SettingsTab::initFsrTargetSelector() {
+    std::vector<std::string> options = {"720p", "1080p", "1440p"};
+
+    int current = settings->getFsrTargetHeight();
+    int currentIndex = 1;
+    if (current <= 720) currentIndex = 0;
+    else if (current <= 1080) currentIndex = 1;
+    else currentIndex = 2;
+
+    fsrTargetSelector->init(
+        "FSR Target",
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            int height;
+            switch (selected) {
+                case 0: height = 720; break;
+                case 1: height = 1080; break;
+                case 2: height = 1440; break;
+                default: height = 1080; break;
+            }
+            settings->setFsrTargetHeight(height);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initFsrSharpnessSelector() {
+    std::vector<std::string> options = {"Low", "Medium", "High"};
+
+    float current = settings->getFsrSharpness();
+    int currentIndex = 1;
+    if (current >= 0.4f) currentIndex = 0;
+    else if (current >= 0.1f) currentIndex = 1;
+    else currentIndex = 2;
+
+    fsrSharpnessSelector->init(
+        "FSR Sharpness",
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            float sharpness;
+            switch (selected) {
+                case 0: sharpness = 0.5f; break;
+                case 1: sharpness = 0.2f; break;
+                case 2: sharpness = 0.0f; break;
+                default: sharpness = 0.2f; break;
+            }
+            settings->setFsrSharpness(sharpness);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::updateResolutionLabels() {
 }
 
 void SettingsTab::initEnableThreadAffinityToggle() {

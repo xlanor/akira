@@ -132,6 +132,47 @@ private:
     bool compileVideoShaders(bool dithering);
     bool m_dithering_enabled = false;
     bool m_uam_initialized = false;
+    bool m_fsr_enabled = false;
+    bool m_fsr_pending = false;
+    bool m_fsr_supersampling = false;
+    float m_fsr_sharpness = 0.2f;
+    int m_display_width = 0;
+    int m_display_height = 0;
+    int m_fsr_target_width = 0;
+    int m_fsr_target_height = 0;
+
+    CShader m_fsr_easu_shader;
+    CShader m_fsr_rcas_shader;
+    CShader m_fsr_pass_shader;
+
+    CMemPool::Handle m_rt_yuv_handle;
+    dk::Image m_rt_yuv_image;
+    dk::ImageLayout m_rt_yuv_layout;
+    dk::ImageDescriptor m_rt_yuv_desc;
+    int m_rt_yuv_texture_id = 0;
+
+    CMemPool::Handle m_rt_easu_handle;
+    dk::Image m_rt_easu_image;
+    dk::ImageLayout m_rt_easu_layout;
+    dk::ImageDescriptor m_rt_easu_desc;
+    int m_rt_easu_texture_id = 0;
+
+    dk::UniqueCmdBuf m_fsr_static_cmdbuf;
+    CMemPool::Handle m_fsr_static_cmdmem;
+    static constexpr unsigned FsrStaticCmdSize = 0x10000;
+    DkCmdList m_fsr_yuv_cmdlist = 0;
+    DkCmdList m_fsr_easu_cmdlist = 0;
+
+    dk::UniqueCmdBuf m_fsr_rcas_cmdbuf;
+    CMemPool::Handle m_fsr_rcas_cmdmem;
+    static constexpr unsigned FsrRcasCmdSize = 0x1000;
+
+    CMemPool::Handle m_fsr_uniform_buffer;
+
+    void initFsr();
+    void cleanupFsr();
+    void recordFsrCommands();
+    void computeFsrConstants();
 
     bool m_frame_bound = false;
 

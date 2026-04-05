@@ -33,6 +33,9 @@ private:
     BRLS_BIND(brls::DetailCell, buttonMappingCell, "settings/buttonMapping");
     BRLS_BIND(brls::BooleanCell, enableDitheringToggle, "settings/enableDithering");
     BRLS_BIND(brls::SliderCell, ditheringStrengthSlider, "settings/ditheringStrength");
+    BRLS_BIND(brls::BooleanCell, fsrEnabledToggle, "settings/fsrEnabled");
+    BRLS_BIND(brls::SelectorCell, fsrTargetSelector, "settings/fsrTarget");
+    BRLS_BIND(brls::SelectorCell, fsrSharpnessSelector, "settings/fsrSharpness");
     BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
     BRLS_BIND(brls::BooleanCell, requestIdrOnFecFailureToggle, "settings/requestIdrOnFecFailure");
@@ -103,6 +106,10 @@ private:
     void initButtonMappingCell();
     void initEnableDitheringToggle();
     void initDitheringStrengthSlider();
+    void initFsrEnabledToggle();
+    void initFsrTargetSelector();
+    void initFsrSharpnessSelector();
+    void updateResolutionLabels();
     void initEnableThreadAffinityToggle();
     void initLowLatencyModeToggle();
     void initHolepunchRetryToggle();
