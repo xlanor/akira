@@ -1,5 +1,6 @@
 #include "views/stream_view.hpp"
 #include "views/stream_menu.hpp"
+#include "stream/video_renderer.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/controller_remap_view.hpp"
 #include <format>
@@ -269,8 +270,6 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
             session->getShowStatsOverlay());
         wasMenuOpen = false;
 
-        // Skip one frame to let GPU state stabilize after menu closes
-        // Draw black and return - next frame will render video
         nvgBeginPath(vg);
         nvgRect(vg, x, y, width, height);
         nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
@@ -279,9 +278,6 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
         return;
     }
 
-    // Show logs while waiting for first video frame
-    // This doesnt seem to make much sense but its mostly for remote
-    // so that people dont think that its a black screen doing nothing.
     if (!session->hasReceivedFirstFrame())
     {
         nvgBeginPath(vg);
@@ -291,20 +287,38 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
 
         renderLogs(vg, x, y, width, height);
 
-        // Still process frames so we detect when first one arrives
         session->MainLoop();
         return;
     }
 
-    host->sendFeedbackState();
-
-    if (!session->MainLoop())
+    auto renderer = session->getVideoRenderer();
+    if (renderer)
     {
-        brls::Logger::info("Quit requested via controller");
-        intentionalDisconnect = true;
-        stopStream();
-        brls::Application::popActivity();
-        return;
+        renderer->setTickCallback([this]() -> bool {
+            checkMenuTrigger();
+            if (menuOpen)
+            {
+                brls::Application::setExclusiveRender(false);
+                session->getVideoRenderer()->setTickCallback(nullptr);
+                return false;
+            }
+
+            host->sendFeedbackState();
+
+            if (!session->MainLoop())
+            {
+                brls::Application::setExclusiveRender(false);
+                session->getVideoRenderer()->setTickCallback(nullptr);
+                intentionalDisconnect = true;
+                brls::sync([this]() {
+                    stopStream();
+                    brls::Application::popActivity();
+                });
+                return false;
+            }
+            return true;
+        });
+        brls::Application::setExclusiveRender(true);
     }
 }
 

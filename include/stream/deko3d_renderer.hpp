@@ -8,6 +8,7 @@
 #include <deko3d.hpp>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <borealis.hpp>
 #include <borealis/platforms/switch/switch_video.hpp>
@@ -40,12 +41,13 @@ public:
 
     void triggerBorderFlash() { m_border_flash_frames = BORDER_FLASH_DURATION; }
 
+    void setTickCallback(TickCallback cb) override { m_tick_callback = std::move(cb); }
+
 private:
     bool m_paused = false;
     std::optional<CMemPool> m_pool_code;
     std::optional<CMemPool> m_pool_data;
 
-    // Begin debug menu
     void initTextRendering();
     void renderStatsOverlay();
     void renderBorderFlash();
@@ -61,27 +63,33 @@ private:
     dk::Image m_font_image;
     dk::ImageLayout m_font_layout;
     dk::ImageDescriptor m_font_desc;
-    dk::MemBlock m_font_memblock; 
+    dk::MemBlock m_font_memblock;
     int m_font_texture_id = 0;
 
     CMemPool::Handle m_text_vertex_buffer;
     static constexpr size_t MAX_TEXT_VERTICES = 2048;
 
-    // End debug menu, this bit draws the actual
-    // video from chiaki-ng
     bool m_initialized = false;
     ChiakiLog* m_log = nullptr;
 
     int m_frame_width = 0;
     int m_frame_height = 0;
 
-    // borealis also uses deko3d, this is the context from
-    // borealis
     brls::SwitchVideoContext* m_vctx = nullptr;
     dk::Device m_device;
     dk::Queue m_queue;
 
     dk::UniqueCmdBuf m_cmdbuf;
+    DkCmdList m_video_cmdlist = 0;
+
+    dk::UniqueCmdBuf m_update_cmdbuf;
+    CMemPool::Handle m_update_cmdmem;
+    uint32_t m_update_cmdmem_slice = 0;
+    static constexpr unsigned UpdateCmdSliceSize = 0x1000;
+
+    dk::UniqueCmdBuf m_overlay_cmdbuf;
+    CMemPool::Handle m_overlay_cmdmem;
+    static constexpr unsigned OverlayCmdSize = 0x10000;
 
     CDescriptorSet<4096U>* m_image_descriptor_set = nullptr;
 
@@ -90,16 +98,23 @@ private:
 
     CMemPool::Handle m_vertex_buffer;
 
-    // map to NV12 layouts.
     dk::ImageLayout m_luma_layout;
     dk::ImageLayout m_chroma_layout;
-    dk::MemBlock m_mapping_memblock;
 
-    dk::Image m_luma;
-    dk::Image m_chroma;
+    struct FrameMapping {
+        uint32_t handle = 0;
+        void* cpuAddr = nullptr;
+        uint32_t size = 0;
+        uint32_t chromaOffset = 0;
+        dk::UniqueMemBlock memblock;
+        dk::Image luma;
+        dk::Image chroma;
+        dk::ImageDescriptor lumaDesc;
+        dk::ImageDescriptor chromaDesc;
+    };
 
-    dk::ImageDescriptor m_luma_desc;
-    dk::ImageDescriptor m_chroma_desc;
+    std::vector<FrameMapping> m_frame_mappings;
+    int m_current_mapping_index = -1;
 
     int m_luma_texture_id = 0;
     int m_chroma_texture_id = 0;
@@ -108,22 +123,21 @@ private:
 
     bool setupTextures(AVFrame* frame);
     void updateFrameBindings(AVFrame* frame);
+    void recordStaticVideoCommands();
 
-    void* m_current_map_addr = nullptr;
     bool m_frame_bound = false;
 
-    // Hold a ref to the current frame so FFmpeg doesn't recycle
-    // the GPU buffer while we're still rendering from it (zero-copy)
+    static constexpr int FRAME_RING_SIZE = 3;
+    AVFrame* m_frame_ring[FRAME_RING_SIZE] = {};
+    int m_frame_ring_index = 0;
     AVFrame* m_current_frame = nullptr;
-    AVFrame* m_prev_frame = nullptr;
 
-    // Use this in the below function to actually draw
     void renderVideo(AVFrame* frame);
 
-    // Register/unregister the post-render callback with borealis
     void registerCallback();
     void unregisterCallback();
     bool m_callback_registered = false;
+    TickCallback m_tick_callback;
 };
 
 #endif // BOREALIS_USE_DEKO3D

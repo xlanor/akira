@@ -95,6 +95,7 @@ public:
     void updateActualResolution(int width, int height);
 
     InputManager* getInputManager() { return m_input_manager.get(); }
+    IVideoRenderer* getVideoRenderer() { return m_video_renderer.get(); }
 
     void setSession(ChiakiSession* session);
     void startStreamTimer();

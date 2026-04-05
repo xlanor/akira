@@ -108,7 +108,6 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
 
     brls::Logger::info("Deko3dRenderer::initialize: frame={}x{}", frame_width, frame_height);
 
-    // Get deko3d context from borealis
     m_vctx = (brls::SwitchVideoContext*)brls::Application::getPlatform()->getVideoContext();
     if (!m_vctx)
     {
@@ -119,16 +118,19 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
     m_device = m_vctx->getDeko3dDevice();
     m_queue = m_vctx->getQueue();
 
-    // Create memory pools
     m_pool_code.emplace(m_device, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Code, 128 * 1024);
     m_pool_data.emplace(m_device, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached, 1 * 1024 * 1024);
 
-    // Create command buffer
     m_cmdbuf = dk::CmdBufMaker{m_device}.create();
     CMemPool::Handle cmdmem = m_pool_data->allocate(StaticCmdSize);
     m_cmdbuf.addMemory(cmdmem.getMemBlock(), cmdmem.getOffset(), cmdmem.getSize());
 
-    // Get image descriptor set from borealis
+    m_update_cmdbuf = dk::CmdBufMaker{m_device}.create();
+    m_update_cmdmem = m_pool_data->allocate(UpdateCmdSliceSize * brls::FRAMEBUFFERS_COUNT, DK_CMDMEM_ALIGNMENT);
+
+    m_overlay_cmdbuf = dk::CmdBufMaker{m_device}.create();
+    m_overlay_cmdmem = m_pool_data->allocate(OverlayCmdSize);
+
     m_image_descriptor_set = m_vctx->getImageDescriptor();
     if (!m_image_descriptor_set)
     {
@@ -136,24 +138,15 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
         return false;
     }
 
-    // Load shaders
-    brls::Logger::info("Loading vertex shader...");
     m_vertex_shader.load(*m_pool_code, "romfs:/shaders/video_vsh.dksh");
-    brls::Logger::info("Loading fragment shader...");
     m_fragment_shader.load(*m_pool_code, "romfs:/shaders/video_fsh.dksh");
-    brls::Logger::info("Shaders loaded successfully");
 
-    // Create vertex buffer
     m_vertex_buffer = m_pool_data->allocate(sizeof(QuadVertexData), alignof(Vertex));
     memcpy(m_vertex_buffer.getCpuAddr(), QuadVertexData.data(), m_vertex_buffer.getSize());
 
     brls::Logger::info("Deko3dRenderer: shaders and vertex buffer initialized");
 
-    // Initialize text rendering for stats overlay (with full error handling)
     initTextRendering();
-
-    // Register post-render callback with borealis
-    // This ensures our video renders AFTER NanoVG flush (after UI is drawn)
     registerCallback();
 
     m_initialized = true;
@@ -191,18 +184,41 @@ bool Deko3dRenderer::setupTextures(AVFrame* frame)
         .setFlags(DkImageFlags_UsageLoadStore | DkImageFlags_Usage2DEngine | DkImageFlags_UsageVideo)
         .initialize(m_chroma_layout);
 
+    recordStaticVideoCommands();
+
     m_textures_initialized = true;
     brls::Logger::info("Deko3dRenderer::setupTextures: luma_id={}, chroma_id={}", m_luma_texture_id, m_chroma_texture_id);
     return true;
 }
 
+void Deko3dRenderer::recordStaticVideoCommands()
+{
+    m_cmdbuf.clear();
+
+    m_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
+    m_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
+        .setDepthTestEnable(false)
+        .setDepthWriteEnable(false)
+        .setStencilTestEnable(false));
+    m_cmdbuf.bindColorState(dk::ColorState{});
+    m_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
+
+    m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fragment_shader });
+    m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_luma_texture_id, 0));
+    m_cmdbuf.bindTextures(DkStage_Fragment, 1, dkMakeTextureHandle(m_chroma_texture_id, 0));
+
+    m_cmdbuf.bindVtxBuffer(0, m_vertex_buffer.getGpuAddr(), m_vertex_buffer.getSize());
+    m_cmdbuf.bindVtxAttribState(VertexAttribState);
+    m_cmdbuf.bindVtxBufferState(VertexBufferState);
+
+    m_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
+
+    m_video_cmdlist = m_cmdbuf.finishList();
+    brls::Logger::info("Deko3dRenderer: static video command list recorded");
+}
+
 void Deko3dRenderer::draw(AVFrame* frame)
 {
-    static int call = 0;
-    ++call;
-    if (SettingsManager::getInstance()->getDebugRenderLog() && call % 100 == 1)
-        brls::Logger::info("draw #{}, init={}, tex={}", call, m_initialized, m_textures_initialized);
-
     if (!m_initialized)
         return;
 
@@ -211,24 +227,17 @@ void Deko3dRenderer::draw(AVFrame* frame)
 
     if (!m_textures_initialized)
     {
-        brls::Logger::info("draw: First NVTEGRA frame, calling setupTextures");
         if (!setupTextures(frame))
-        {
-            brls::Logger::error("draw: setupTextures failed");
             return;
-        }
     }
 
     if (m_paused)
         return;
 
-    // Hold a ref to prevent FFmpeg from recycling this GPU buffer
-    // while we render from it (zero-copy requires the source memory to stay valid)
     AVFrame* new_ref = av_frame_alloc();
     if (!new_ref || av_frame_ref(new_ref, frame) < 0)
     {
         if (new_ref) av_frame_free(&new_ref);
-        brls::Logger::error("draw: Failed to ref frame");
         return;
     }
 
@@ -241,104 +250,29 @@ void Deko3dRenderer::draw(AVFrame* frame)
 
 void Deko3dRenderer::renderVideo(AVFrame* frame)
 {
-    if (!m_initialized || !m_textures_initialized || !m_frame_bound || !m_current_frame)
+    if (!m_initialized || !m_textures_initialized || !m_frame_bound || !m_current_frame || !m_video_cmdlist)
         return;
 
-    // Ensure GPU is done reading the previous frame's buffer
-    // before we release its ref (which lets FFmpeg recycle it)
-    if (m_prev_frame)
-    {
-        m_queue.waitIdle();
-        av_frame_free(&m_prev_frame);
-    }
+    int oldest = m_frame_ring_index;
+    if (m_frame_ring[oldest])
+        av_frame_free(&m_frame_ring[oldest]);
 
-    // Update memblock/image/descriptor state for the current frame (CPU-side only)
-    updateFrameBindings(m_current_frame);
+    m_frame_ring[oldest] = m_current_frame;
+    m_current_frame = nullptr;
+    m_frame_ring_index = (m_frame_ring_index + 1) % FRAME_RING_SIZE;
 
-    // Get current framebuffer from borealis
-    dk::Image* framebuffer = m_vctx->getFramebuffer();
-    if (!framebuffer)
-    {
-        brls::Logger::error("renderVideo: Failed to get framebuffer from borealis");
-        return;
-    }
+    updateFrameBindings(m_frame_ring[oldest]);
 
-    unsigned screenW = brls::Application::windowWidth;
-    unsigned screenH = brls::Application::windowHeight;
-
-    // Build a single command list with descriptor updates + draw commands
-    // so the GPU processes them in one submission without cmdbuf memory reuse issues
-    m_cmdbuf.clear();
-
-    // Update texture descriptors in the same command list as the draw
-    m_image_descriptor_set->update(m_cmdbuf, m_luma_texture_id, m_luma_desc);
-    m_image_descriptor_set->update(m_cmdbuf, m_chroma_texture_id, m_chroma_desc);
-
-    // Bind render target
-    dk::ImageView colorTarget { *framebuffer };
-    m_cmdbuf.bindRenderTargets(&colorTarget);
-
-    // Set viewport and scissors to match screen dimensions
-    m_cmdbuf.setViewports(0, { { 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f } });
-    m_cmdbuf.setScissors(0, { { 0, 0, (uint32_t)screenW, (uint32_t)screenH } });
-
-    // Set up GPU render stat
-    // disable depth/stencil, no face culling
-    m_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
-    m_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
-        .setDepthTestEnable(false)
-        .setDepthWriteEnable(false)
-        .setStencilTestEnable(false));
-    m_cmdbuf.bindColorState(dk::ColorState{});
-    m_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
-
-    // Bind shaders
-    m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fragment_shader });
-
-    // Bind textures (using sampler 0 from NanoVG's pre-initialized samplers)
-    m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_luma_texture_id, 0));
-    m_cmdbuf.bindTextures(DkStage_Fragment, 1, dkMakeTextureHandle(m_chroma_texture_id, 0));
-
-    // Bind vertex buffer and state
-    m_cmdbuf.bindVtxBuffer(0, m_vertex_buffer.getGpuAddr(), m_vertex_buffer.getSize());
-    m_cmdbuf.bindVtxAttribState(VertexAttribState);
-    m_cmdbuf.bindVtxBufferState(VertexBufferState);
-
-    // Draw quad
-    m_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
-
-    // Finish command list and verify it's not empty
-    DkCmdList list = m_cmdbuf.finishList();
-    if (!list)
-    {
-        brls::Logger::error("renderVideo: finishList returned NULL - no commands!");
-        return;
-    }
-
-    // Submit video commands and FLUSH to kick GPU execution
-    m_queue.submitCommands(list);
+    m_queue.submitCommands(m_video_cmdlist);
     m_queue.flush();
 
-    // GPU is now reading from m_current_frame's buffer.
-    // Hold onto it as m_prev_frame so we can waitIdle before releasing
-    // it on the next renderVideo() call.
-    m_prev_frame = m_current_frame;
-    m_current_frame = nullptr;
-
-    // Wait for video to complete before overlaying stats (only when stats enabled)
-    if (m_show_stats)
+    if (m_show_stats || m_border_flash_frames > 0)
         m_queue.waitIdle();
 
-    // Render stats overlay on top of video (if enabled)
     renderStatsOverlay();
 
-    // Render border flash for touchpad click feedback
     if (m_border_flash_frames > 0)
-    {
-        if (!m_show_stats)
-            m_queue.waitIdle();
         renderBorderFlash();
-    }
 }
 
 void Deko3dRenderer::registerCallback()
@@ -347,6 +281,9 @@ void Deko3dRenderer::registerCallback()
         return;
 
     brls::Application::setPostRenderCallback([this]() {
+        if (m_tick_callback)
+            m_tick_callback();
+
         if (m_frame_bound && !m_paused)
         {
             renderVideo(nullptr);
@@ -362,6 +299,7 @@ void Deko3dRenderer::unregisterCallback()
     if (!m_callback_registered)
         return;
 
+    brls::Application::setExclusiveRender(false);
     brls::Application::setPostRenderCallback(nullptr);
     m_callback_registered = false;
     brls::Logger::info("Deko3dRenderer: post-render callback unregistered");
@@ -373,37 +311,61 @@ void Deko3dRenderer::updateFrameBindings(AVFrame* frame)
     if (!map)
         return;
 
-    void* map_addr = av_nvtegra_map_get_addr(map);
+    uint32_t handle = av_nvtegra_map_get_handle(map);
+    void* cpuAddr = av_nvtegra_map_get_addr(map);
+    uint32_t size = av_nvtegra_map_get_size(map);
+    uint32_t chromaOffset = static_cast<uint32_t>(frame->data[1] - frame->data[0]);
 
-    if (map_addr != m_current_map_addr)
+    int mappingIndex = -1;
+    for (size_t i = 0; i < m_frame_mappings.size(); ++i)
     {
-        size_t map_size = av_nvtegra_map_get_size(map);
-
-        if (m_mapping_memblock)
+        const auto& m = m_frame_mappings[i];
+        if (m.handle == handle && m.cpuAddr == cpuAddr && m.size == size && m.chromaOffset == chromaOffset)
         {
-            m_queue.waitIdle();
-            dkMemBlockDestroy(m_mapping_memblock);
-            m_mapping_memblock = nullptr;
+            mappingIndex = static_cast<int>(i);
+            break;
         }
-
-        m_mapping_memblock = dk::MemBlockMaker{m_device, map_size}
-            .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
-            .setStorage(map_addr)
-            .create();
-
-        m_current_map_addr = map_addr;
     }
 
-    ptrdiff_t luma_offset = frame->data[0] - (uint8_t*)map_addr;
-    ptrdiff_t chroma_offset = frame->data[1] - (uint8_t*)map_addr;
+    if (mappingIndex < 0)
+    {
+        FrameMapping mapping;
+        mapping.handle = handle;
+        mapping.cpuAddr = cpuAddr;
+        mapping.size = size;
+        mapping.chromaOffset = chromaOffset;
 
-    m_luma.initialize(m_luma_layout, m_mapping_memblock, luma_offset);
-    m_chroma.initialize(m_chroma_layout, m_mapping_memblock, chroma_offset);
+        mapping.memblock = dk::MemBlockMaker{m_device, size}
+            .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
+            .setStorage(cpuAddr)
+            .create();
 
-    m_luma_desc.initialize(m_luma);
-    m_chroma_desc.initialize(m_chroma);
+        mapping.luma.initialize(m_luma_layout, mapping.memblock, 0);
+        mapping.chroma.initialize(m_chroma_layout, mapping.memblock, chromaOffset);
 
-    m_frame_bound = true;
+        mapping.lumaDesc.initialize(mapping.luma);
+        mapping.chromaDesc.initialize(mapping.chroma);
+
+        m_frame_mappings.emplace_back(std::move(mapping));
+        mappingIndex = static_cast<int>(m_frame_mappings.size()) - 1;
+    }
+
+    if (mappingIndex == m_current_mapping_index)
+        return;
+
+    m_update_cmdbuf.clear();
+    m_update_cmdbuf.addMemory(
+        m_update_cmdmem.getMemBlock(),
+        m_update_cmdmem.getOffset() + m_update_cmdmem_slice * UpdateCmdSliceSize,
+        UpdateCmdSliceSize);
+    m_update_cmdmem_slice = (m_update_cmdmem_slice + 1) % brls::FRAMEBUFFERS_COUNT;
+
+    auto& active = m_frame_mappings[mappingIndex];
+    m_image_descriptor_set->update(m_update_cmdbuf, m_luma_texture_id, active.lumaDesc);
+    m_image_descriptor_set->update(m_update_cmdbuf, m_chroma_texture_id, active.chromaDesc);
+
+    m_queue.submitCommands(m_update_cmdbuf.finishList());
+    m_current_mapping_index = mappingIndex;
 }
 
 void Deko3dRenderer::cleanup()
@@ -419,8 +381,13 @@ void Deko3dRenderer::cleanup()
 
     if (m_current_frame)
         av_frame_free(&m_current_frame);
-    if (m_prev_frame)
-        av_frame_free(&m_prev_frame);
+
+    for (int i = 0; i < FRAME_RING_SIZE; ++i)
+    {
+        if (m_frame_ring[i])
+            av_frame_free(&m_frame_ring[i]);
+    }
+    m_frame_ring_index = 0;
 
     cleanupTextRendering();
 
@@ -435,20 +402,16 @@ void Deko3dRenderer::cleanup()
         m_chroma_texture_id = 0;
     }
 
-    if (m_mapping_memblock)
-    {
-        dkMemBlockDestroy(m_mapping_memblock);
-        m_mapping_memblock = nullptr;
-    }
+    m_frame_mappings.clear();
+    m_current_mapping_index = -1;
 
-    m_luma = dk::Image{};
-    m_chroma = dk::Image{};
-    m_luma_desc = dk::ImageDescriptor{};
-    m_chroma_desc = dk::ImageDescriptor{};
+    m_video_cmdlist = 0;
+    m_update_cmdmem.destroy();
+    m_overlay_cmdmem.destroy();
+
     m_luma_layout = dk::ImageLayout{};
     m_chroma_layout = dk::ImageLayout{};
 
-    m_current_map_addr = nullptr;
     m_frame_bound = false;
 
     m_initialized = false;
@@ -823,26 +786,24 @@ void Deko3dRenderer::renderStatsOverlay()
     if (!framebuffer)
         return;
 
-    // Build and submit render commands
-    m_cmdbuf.clear();
+    m_overlay_cmdbuf.clear();
+    m_overlay_cmdbuf.addMemory(m_overlay_cmdmem.getMemBlock(), m_overlay_cmdmem.getOffset(), m_overlay_cmdmem.getSize());
 
     dk::ImageView colorTarget{*framebuffer};
-    m_cmdbuf.bindRenderTargets(&colorTarget);
+    m_overlay_cmdbuf.bindRenderTargets(&colorTarget);
 
-    m_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
-    m_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
+    m_overlay_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
+    m_overlay_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
 
-    // Enable alpha blending
-    m_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
-    m_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
+    m_overlay_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
+    m_overlay_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
         .setDepthTestEnable(false)
         .setDepthWriteEnable(false)
         .setStencilTestEnable(false));
-    m_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
-    m_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
+    m_overlay_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
+    m_overlay_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
 
-    // Set blend function for alpha blending
-    m_cmdbuf.bindBlendStates(0, dk::BlendState{}
+    m_overlay_cmdbuf.bindBlendStates(0, dk::BlendState{}
         .setColorBlendOp(DkBlendOp_Add)
         .setSrcColorBlendFactor(DkBlendFactor_SrcAlpha)
         .setDstColorBlendFactor(DkBlendFactor_InvSrcAlpha)
@@ -850,27 +811,19 @@ void Deko3dRenderer::renderStatsOverlay()
         .setSrcAlphaBlendFactor(DkBlendFactor_One)
         .setDstAlphaBlendFactor(DkBlendFactor_InvSrcAlpha));
 
-    // Bind text shaders
-    m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
+    m_overlay_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
 
-    m_image_descriptor_set->bindForImages(m_cmdbuf);
+    m_image_descriptor_set->bindForImages(m_overlay_cmdbuf);
 
-    // Bind font texture using NanoVG's pre-existing sampler index 2 (Nearest filter, ClampToEdge)
-    // NanoVG creates 16 samplers at startup with bit-flag indices:
-    //   Bit 0 (1): MipFilter, Bit 1 (2): Nearest, Bit 2 (4): RepeatX, Bit 3 (8): RepeatY
-    // Index 2 = SamplerType_Nearest = nearest filter, clamp to edge (what we need for font)
-    m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
+    m_overlay_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
 
-    // Bind vertex buffer
-    m_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
-    m_cmdbuf.bindVtxAttribState(TextVertexAttribState);
-    m_cmdbuf.bindVtxBufferState(TextVertexBufferState);
+    m_overlay_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
+    m_overlay_cmdbuf.bindVtxAttribState(TextVertexAttribState);
+    m_overlay_cmdbuf.bindVtxBufferState(TextVertexBufferState);
 
-    // Draw
-    m_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
+    m_overlay_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
 
-    // Submit
-    DkCmdList list = m_cmdbuf.finishList();
+    DkCmdList list = m_overlay_cmdbuf.finishList();
     if (list)
     {
         m_queue.submitCommands(list);
@@ -918,13 +871,9 @@ void Deko3dRenderer::renderBorderFlash()
 
     float sw = (float)screenW, sh = (float)screenH;
 
-    // Top: edge at y=0, fades to y=T
     addGradientQuad(0, 0,    sw, 0,     0, T,    sw, T,    edgeAlpha, innerAlpha);
-    // Bottom: edge at y=sh, fades to y=sh-T
     addGradientQuad(0, sh-T, sw, sh-T,  0, sh,   sw, sh,   innerAlpha, edgeAlpha);
-    // Left: edge at x=0, fades to x=T
     addGradientQuad(0, 0,    0, sh,     T, 0,    T, sh,    edgeAlpha, innerAlpha);
-    // Right: edge at x=sw, fades to x=sw-T
     addGradientQuad(sw-T, 0, sw-T, sh,  sw, 0,   sw, sh,   innerAlpha, edgeAlpha);
 
     memcpy(m_text_vertex_buffer.getCpuAddr(), vertices.data(), vertices.size() * sizeof(TextVertex));
@@ -933,21 +882,22 @@ void Deko3dRenderer::renderBorderFlash()
     if (!framebuffer)
         return;
 
-    m_cmdbuf.clear();
+    m_overlay_cmdbuf.clear();
+    m_overlay_cmdbuf.addMemory(m_overlay_cmdmem.getMemBlock(), m_overlay_cmdmem.getOffset(), m_overlay_cmdmem.getSize());
 
     dk::ImageView colorTarget{*framebuffer};
-    m_cmdbuf.bindRenderTargets(&colorTarget);
-    m_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
-    m_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
+    m_overlay_cmdbuf.bindRenderTargets(&colorTarget);
+    m_overlay_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
+    m_overlay_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
 
-    m_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
-    m_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
+    m_overlay_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
+    m_overlay_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
         .setDepthTestEnable(false)
         .setDepthWriteEnable(false)
         .setStencilTestEnable(false));
-    m_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
-    m_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
-    m_cmdbuf.bindBlendStates(0, dk::BlendState{}
+    m_overlay_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
+    m_overlay_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
+    m_overlay_cmdbuf.bindBlendStates(0, dk::BlendState{}
         .setColorBlendOp(DkBlendOp_Add)
         .setSrcColorBlendFactor(DkBlendFactor_SrcAlpha)
         .setDstColorBlendFactor(DkBlendFactor_InvSrcAlpha)
@@ -955,16 +905,16 @@ void Deko3dRenderer::renderBorderFlash()
         .setSrcAlphaBlendFactor(DkBlendFactor_One)
         .setDstAlphaBlendFactor(DkBlendFactor_InvSrcAlpha));
 
-    m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
-    m_image_descriptor_set->bindForImages(m_cmdbuf);
-    m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
-    m_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
-    m_cmdbuf.bindVtxAttribState(TextVertexAttribState);
-    m_cmdbuf.bindVtxBufferState(TextVertexBufferState);
+    m_overlay_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
+    m_image_descriptor_set->bindForImages(m_overlay_cmdbuf);
+    m_overlay_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
+    m_overlay_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
+    m_overlay_cmdbuf.bindVtxAttribState(TextVertexAttribState);
+    m_overlay_cmdbuf.bindVtxBufferState(TextVertexBufferState);
 
-    m_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
+    m_overlay_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
 
-    DkCmdList list = m_cmdbuf.finishList();
+    DkCmdList list = m_overlay_cmdbuf.finishList();
     if (list)
     {
         m_queue.submitCommands(list);

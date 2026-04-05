@@ -2,6 +2,7 @@
 #define AKIRA_IO_VIDEO_RENDERER_HPP
 
 #include <chiaki/log.h>
+#include <functional>
 #include "stream/stream_stats.hpp"
 
 extern "C"
@@ -32,6 +33,9 @@ public:
     virtual void setPaused(bool paused) { (void)paused; }
     virtual void updateResolution(int width, int height) { (void)width; (void)height; }
     virtual void triggerBorderFlash() {}
+
+    using TickCallback = std::function<bool()>;
+    virtual void setTickCallback(TickCallback cb) { (void)cb; }
 
 protected:
     bool m_show_stats = false;
