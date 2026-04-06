@@ -35,7 +35,7 @@ private:
     BRLS_BIND(brls::SliderCell, ditheringStrengthSlider, "settings/ditheringStrength");
     BRLS_BIND(brls::BooleanCell, fsrEnabledToggle, "settings/fsrEnabled");
     BRLS_BIND(brls::SelectorCell, fsrTargetSelector, "settings/fsrTarget");
-    BRLS_BIND(brls::SelectorCell, fsrSharpnessSelector, "settings/fsrSharpness");
+    BRLS_BIND(brls::SliderCell, fsrSharpnessSlider, "settings/fsrSharpness");
     BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
     BRLS_BIND(brls::BooleanCell, requestIdrOnFecFailureToggle, "settings/requestIdrOnFecFailure");
@@ -108,7 +108,7 @@ private:
     void initDitheringStrengthSlider();
     void initFsrEnabledToggle();
     void initFsrTargetSelector();
-    void initFsrSharpnessSelector();
+    void initFsrSharpnessSlider();
     void updateResolutionLabels();
     void initEnableThreadAffinityToggle();
     void initLowLatencyModeToggle();

@@ -65,7 +65,7 @@ SettingsTab::SettingsTab() {
     initDitheringStrengthSlider();
     initFsrEnabledToggle();
     initFsrTargetSelector();
-    initFsrSharpnessSelector();
+    initFsrSharpnessSlider();
     initEnableThreadAffinityToggle();
     initLowLatencyModeToggle();
     initHolepunchRetryToggle();
@@ -730,32 +730,24 @@ void SettingsTab::initFsrTargetSelector() {
     );
 }
 
-void SettingsTab::initFsrSharpnessSelector() {
-    std::vector<std::string> options = {"Low", "Medium", "High"};
-
+void SettingsTab::initFsrSharpnessSlider() {
     float current = settings->getFsrSharpness();
-    int currentIndex = 1;
-    if (current >= 0.4f) currentIndex = 0;
-    else if (current >= 0.1f) currentIndex = 1;
-    else currentIndex = 2;
+    float normalized = 1.0f - (current / 2.0f);
 
-    fsrSharpnessSelector->init(
+    fsrSharpnessSlider->init(
         "FSR Sharpness",
-        options,
-        currentIndex,
-        [](int selected) {},
-        [this](int selected) {
-            float sharpness;
-            switch (selected) {
-                case 0: sharpness = 0.5f; break;
-                case 1: sharpness = 0.2f; break;
-                case 2: sharpness = 0.0f; break;
-                default: sharpness = 0.2f; break;
-            }
+        normalized,
+        [this](float value) {
+            float sharpness = (1.0f - value) * 2.0f;
             settings->setFsrSharpness(sharpness);
+            int percent = static_cast<int>(value * 100.0f);
+            fsrSharpnessSlider->detail->setText(std::format("{}%", percent));
             settings->writeFile();
         }
     );
+
+    int percent = static_cast<int>(normalized * 100.0f);
+    fsrSharpnessSlider->detail->setText(std::format("{}%", percent));
 }
 
 void SettingsTab::updateResolutionLabels() {

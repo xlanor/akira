@@ -428,7 +428,7 @@
                 marginLeft="15"
                 marginRight="15"/>
 
-            <brls:SelectorCell
+            <brls:SliderCell
                 id="settings/fsrSharpness"
                 title="FSR Sharpness"
                 marginLeft="15"

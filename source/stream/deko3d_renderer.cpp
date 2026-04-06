@@ -355,9 +355,10 @@ void Deko3dRenderer::initFsr()
         return;
     }
 
-    brls::Logger::info("Deko3dRenderer::initFsr: {}x{} -> {}x{} (display {}x{}, supersampling={})",
+    brls::Logger::info("Deko3dRenderer::initFsr: input={}x{} target={}x{} display={}x{} ss={} ratio={:.2f}x{:.2f}",
         m_frame_width, m_frame_height, m_fsr_target_width, m_fsr_target_height,
-        m_display_width, m_display_height, m_fsr_supersampling);
+        m_display_width, m_display_height, m_fsr_supersampling,
+        (float)m_fsr_target_width / m_frame_width, (float)m_fsr_target_height / m_frame_height);
 
     m_fsr_easu_shader.load(*m_pool_code, "romfs:/shaders/fsr_easu_fsh.dksh");
     m_fsr_rcas_shader.load(*m_pool_code, "romfs:/shaders/fsr_rcas_fsh.dksh");
@@ -394,6 +395,14 @@ void Deko3dRenderer::initFsr()
     m_rt_easu_desc.initialize(m_rt_easu_image);
     m_rt_easu_texture_id = m_vctx->allocateImageIndex();
 
+    if (m_fsr_supersampling)
+    {
+        m_rt_rcas_handle = imagesPool->allocate(m_rt_easu_layout.getSize(), m_rt_easu_layout.getAlignment());
+        m_rt_rcas_image.initialize(m_rt_easu_layout, m_rt_rcas_handle.getMemBlock(), m_rt_rcas_handle.getOffset());
+        m_rt_rcas_desc.initialize(m_rt_rcas_image);
+        m_rt_rcas_texture_id = m_vctx->allocateImageIndex();
+    }
+
     m_fsr_uniform_buffer = m_pool_data->allocate(512, DK_UNIFORM_BUF_ALIGNMENT);
     computeFsrConstants();
 
@@ -411,6 +420,8 @@ void Deko3dRenderer::initFsr()
         UpdateCmdSliceSize);
     m_image_descriptor_set->update(m_update_cmdbuf, m_rt_yuv_texture_id, m_rt_yuv_desc);
     m_image_descriptor_set->update(m_update_cmdbuf, m_rt_easu_texture_id, m_rt_easu_desc);
+    if (m_rt_rcas_texture_id)
+        m_image_descriptor_set->update(m_update_cmdbuf, m_rt_rcas_texture_id, m_rt_rcas_desc);
     m_queue.submitCommands(m_update_cmdbuf.finishList());
     m_queue.waitIdle();
 
@@ -552,9 +563,14 @@ void Deko3dRenderer::cleanupFsr()
         m_vctx->freeImageIndex(m_rt_easu_texture_id);
         m_rt_easu_texture_id = 0;
     }
+    if (m_rt_rcas_texture_id) {
+        m_vctx->freeImageIndex(m_rt_rcas_texture_id);
+        m_rt_rcas_texture_id = 0;
+    }
 
     m_rt_yuv_handle.destroy();
     m_rt_easu_handle.destroy();
+    m_rt_rcas_handle.destroy();
     m_rt_yuv_image = dk::Image{};
     m_rt_easu_image = dk::Image{};
 
@@ -647,22 +663,35 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
             m_fsr_rcas_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
 
             m_image_descriptor_set->bindForImages(m_fsr_rcas_cmdbuf);
-            if (m_fsr_supersampling)
-            {
-                m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fsr_pass_shader });
-                m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_easu_texture_id, 0));
-            }
-            else
-            {
-                m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fsr_rcas_shader });
-                m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_easu_texture_id, 0));
-                m_fsr_rcas_cmdbuf.bindUniformBuffer(DkStage_Fragment, 0,
-                    m_fsr_uniform_buffer.getGpuAddr() + 256, 16);
-            }
+
+            m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fsr_rcas_shader });
+            m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_easu_texture_id, 0));
+            m_fsr_rcas_cmdbuf.bindUniformBuffer(DkStage_Fragment, 0,
+                m_fsr_uniform_buffer.getGpuAddr() + 256, 16);
             m_fsr_rcas_cmdbuf.bindVtxBuffer(0, m_vertex_buffer.getGpuAddr(), m_vertex_buffer.getSize());
             m_fsr_rcas_cmdbuf.bindVtxAttribState(VertexAttribState);
             m_fsr_rcas_cmdbuf.bindVtxBufferState(VertexBufferState);
-            m_fsr_rcas_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
+
+            if (m_fsr_supersampling)
+            {
+                dk::ImageView rcasTarget{m_rt_rcas_image};
+                m_fsr_rcas_cmdbuf.bindRenderTargets(&rcasTarget);
+                m_fsr_rcas_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)m_fsr_target_width, (float)m_fsr_target_height, 0.0f, 1.0f }});
+                m_fsr_rcas_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)m_fsr_target_width, (uint32_t)m_fsr_target_height }});
+                m_fsr_rcas_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
+
+                dk::ImageView finalTarget{*framebuffer};
+                m_fsr_rcas_cmdbuf.bindRenderTargets(&finalTarget);
+                m_fsr_rcas_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)m_display_width, (float)m_display_height, 0.0f, 1.0f }});
+                m_fsr_rcas_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)m_display_width, (uint32_t)m_display_height }});
+                m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fsr_pass_shader });
+                m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_rcas_texture_id, 0));
+                m_fsr_rcas_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
+            }
+            else
+            {
+                m_fsr_rcas_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
+            }
 
             m_queue.submitCommands(m_fsr_rcas_cmdbuf.finishList());
         }

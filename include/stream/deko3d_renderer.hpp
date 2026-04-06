@@ -157,6 +157,11 @@ private:
     dk::ImageDescriptor m_rt_easu_desc;
     int m_rt_easu_texture_id = 0;
 
+    CMemPool::Handle m_rt_rcas_handle;
+    dk::Image m_rt_rcas_image;
+    dk::ImageDescriptor m_rt_rcas_desc;
+    int m_rt_rcas_texture_id = 0;
+
     dk::UniqueCmdBuf m_fsr_static_cmdbuf;
     CMemPool::Handle m_fsr_static_cmdmem;
     static constexpr unsigned FsrStaticCmdSize = 0x10000;
@@ -165,7 +170,7 @@ private:
 
     dk::UniqueCmdBuf m_fsr_rcas_cmdbuf;
     CMemPool::Handle m_fsr_rcas_cmdmem;
-    static constexpr unsigned FsrRcasCmdSize = 0x1000;
+    static constexpr unsigned FsrRcasCmdSize = 0x4000;
 
     CMemPool::Handle m_fsr_uniform_buffer;
 

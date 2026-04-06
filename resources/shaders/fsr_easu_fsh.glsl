@@ -23,9 +23,33 @@ float AMax3F1(float x, float y, float z) { return max(x, max(y, z)); }
 vec3 AMin3F3(vec3 x, vec3 y, vec3 z) { return min(x, min(y, z)); }
 vec3 AMax3F3(vec3 x, vec3 y, vec3 z) { return max(x, max(y, z)); }
 
-vec4 FsrEasuRF(vec2 p) { return textureGather(inputTexture, p, 0); }
-vec4 FsrEasuGF(vec2 p) { return textureGather(inputTexture, p, 1); }
-vec4 FsrEasuBF(vec2 p) { return textureGather(inputTexture, p, 2); }
+vec2 _texSize = vec2(textureSize(inputTexture, 0));
+vec2 _rcpSize = 1.0 / _texSize;
+
+vec4 FsrEasuRF(vec2 p) {
+    vec2 tl = (floor(p * _texSize - 0.5) + 0.5) * _rcpSize;
+    return vec4(
+        texture(inputTexture, tl + vec2(0.0, _rcpSize.y)).r,
+        texture(inputTexture, tl + _rcpSize).r,
+        texture(inputTexture, tl + vec2(_rcpSize.x, 0.0)).r,
+        texture(inputTexture, tl).r);
+}
+vec4 FsrEasuGF(vec2 p) {
+    vec2 tl = (floor(p * _texSize - 0.5) + 0.5) * _rcpSize;
+    return vec4(
+        texture(inputTexture, tl + vec2(0.0, _rcpSize.y)).g,
+        texture(inputTexture, tl + _rcpSize).g,
+        texture(inputTexture, tl + vec2(_rcpSize.x, 0.0)).g,
+        texture(inputTexture, tl).g);
+}
+vec4 FsrEasuBF(vec2 p) {
+    vec2 tl = (floor(p * _texSize - 0.5) + 0.5) * _rcpSize;
+    return vec4(
+        texture(inputTexture, tl + vec2(0.0, _rcpSize.y)).b,
+        texture(inputTexture, tl + _rcpSize).b,
+        texture(inputTexture, tl + vec2(_rcpSize.x, 0.0)).b,
+        texture(inputTexture, tl).b);
+}
 
 void FsrEasuTapF(
     inout vec3 aC,
@@ -162,22 +186,7 @@ void FsrEasuF(out vec3 pix, uvec2 ip, uvec4 con0, uvec4 con1, uvec4 con2, uvec4 
 void main()
 {
     uvec2 ip = uvec2(gl_FragCoord.xy);
-
-    vec2 pp = vec2(ip) * uintBitsToFloat(Const0.xy) + uintBitsToFloat(Const0.zw);
-    vec2 fp = floor(pp);
-    pp -= fp;
-
-    vec2 p0 = fp * uintBitsToFloat(Const1.xy) + uintBitsToFloat(Const1.zw);
-
-    vec4 fR = FsrEasuRF(p0);
-    vec4 fG = FsrEasuGF(p0);
-    vec4 fB = FsrEasuBF(p0);
-
-    vec3 tl = vec3(fR.w, fG.w, fB.w);
-    vec3 tr = vec3(fR.z, fG.z, fB.z);
-    vec3 bl = vec3(fR.x, fG.x, fB.x);
-    vec3 br = vec3(fR.y, fG.y, fB.y);
-
-    vec3 c = mix(mix(tl, tr, pp.x), mix(bl, br, pp.x), pp.y);
+    vec3 c;
+    FsrEasuF(c, ip, Const0, Const1, Const2, Const3);
     outColor = vec4(c, 1.0);
 }
