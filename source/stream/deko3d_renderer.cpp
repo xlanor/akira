@@ -375,31 +375,31 @@ void Deko3dRenderer::initFsr()
         .setType(DkImageType_2D)
         .setFormat(DkImageFormat_RGBA8_Unorm)
         .setDimensions(m_frame_width, m_frame_height, 1)
-        .setFlags(DkImageFlags_UsageRender | DkImageFlags_Usage2DEngine)
+        .setFlags(DkImageFlags_UsageRender | DkImageFlags_UsageLoadStore | DkImageFlags_Usage2DEngine)
         .initialize(m_rt_yuv_layout);
 
     m_rt_yuv_handle = imagesPool->allocate(m_rt_yuv_layout.getSize(), m_rt_yuv_layout.getAlignment());
     m_rt_yuv_image.initialize(m_rt_yuv_layout, m_rt_yuv_handle.getMemBlock(), m_rt_yuv_handle.getOffset());
-    m_rt_yuv_desc.initialize(m_rt_yuv_image);
+    m_rt_yuv_desc.initialize(m_rt_yuv_image, true);
     m_rt_yuv_texture_id = m_vctx->allocateImageIndex();
 
     dk::ImageLayoutMaker{m_device}
         .setType(DkImageType_2D)
         .setFormat(DkImageFormat_RGBA8_Unorm)
         .setDimensions(m_fsr_target_width, m_fsr_target_height, 1)
-        .setFlags(DkImageFlags_UsageRender | DkImageFlags_Usage2DEngine)
+        .setFlags(DkImageFlags_UsageRender | DkImageFlags_UsageLoadStore | DkImageFlags_Usage2DEngine)
         .initialize(m_rt_easu_layout);
 
     m_rt_easu_handle = imagesPool->allocate(m_rt_easu_layout.getSize(), m_rt_easu_layout.getAlignment());
     m_rt_easu_image.initialize(m_rt_easu_layout, m_rt_easu_handle.getMemBlock(), m_rt_easu_handle.getOffset());
-    m_rt_easu_desc.initialize(m_rt_easu_image);
+    m_rt_easu_desc.initialize(m_rt_easu_image, true);
     m_rt_easu_texture_id = m_vctx->allocateImageIndex();
 
     if (m_fsr_supersampling)
     {
         m_rt_rcas_handle = imagesPool->allocate(m_rt_easu_layout.getSize(), m_rt_easu_layout.getAlignment());
         m_rt_rcas_image.initialize(m_rt_easu_layout, m_rt_rcas_handle.getMemBlock(), m_rt_rcas_handle.getOffset());
-        m_rt_rcas_desc.initialize(m_rt_rcas_image);
+        m_rt_rcas_desc.initialize(m_rt_rcas_image, true);
         m_rt_rcas_texture_id = m_vctx->allocateImageIndex();
     }
 
@@ -512,6 +512,8 @@ void Deko3dRenderer::recordFsrCommands()
     m_fsr_static_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
 
     m_fsr_yuv_cmdlist = m_fsr_static_cmdbuf.finishList();
+
+    m_fsr_static_cmdbuf.barrier(DkBarrier_Fragments, DkInvalidateFlags_Image);
 
     dk::ImageView easuTarget{m_rt_easu_image};
     m_fsr_static_cmdbuf.bindRenderTargets(&easuTarget);

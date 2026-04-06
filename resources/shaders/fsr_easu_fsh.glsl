@@ -23,32 +23,41 @@ float AMax3F1(float x, float y, float z) { return max(x, max(y, z)); }
 vec3 AMin3F3(vec3 x, vec3 y, vec3 z) { return min(x, min(y, z)); }
 vec3 AMax3F3(vec3 x, vec3 y, vec3 z) { return max(x, max(y, z)); }
 
-vec2 _texSize = vec2(textureSize(inputTexture, 0));
-vec2 _rcpSize = 1.0 / _texSize;
+vec2 _ts = vec2(textureSize(inputTexture, 0));
 
-vec4 FsrEasuRF(vec2 p) {
-    vec2 tl = (floor(p * _texSize - 0.5) + 0.5) * _rcpSize;
-    return vec4(
-        texture(inputTexture, tl + vec2(0.0, _rcpSize.y)).r,
-        texture(inputTexture, tl + _rcpSize).r,
-        texture(inputTexture, tl + vec2(_rcpSize.x, 0.0)).r,
-        texture(inputTexture, tl).r);
-}
-vec4 FsrEasuGF(vec2 p) {
-    vec2 tl = (floor(p * _texSize - 0.5) + 0.5) * _rcpSize;
-    return vec4(
-        texture(inputTexture, tl + vec2(0.0, _rcpSize.y)).g,
-        texture(inputTexture, tl + _rcpSize).g,
-        texture(inputTexture, tl + vec2(_rcpSize.x, 0.0)).g,
-        texture(inputTexture, tl).g);
-}
-vec4 FsrEasuBF(vec2 p) {
-    vec2 tl = (floor(p * _texSize - 0.5) + 0.5) * _rcpSize;
-    return vec4(
-        texture(inputTexture, tl + vec2(0.0, _rcpSize.y)).b,
-        texture(inputTexture, tl + _rcpSize).b,
-        texture(inputTexture, tl + vec2(_rcpSize.x, 0.0)).b,
-        texture(inputTexture, tl).b);
+void FsrEasuFetch12(vec2 p0,
+    out vec4 bczzR, out vec4 bczzG, out vec4 bczzB,
+    out vec4 ijfeR, out vec4 ijfeG, out vec4 ijfeB,
+    out vec4 klhgR, out vec4 klhgG, out vec4 klhgB,
+    out vec4 zzonR, out vec4 zzonG, out vec4 zzonB)
+{
+    ivec2 f = ivec2(floor(p0 * _ts - 0.5));
+
+    vec3 tb = texelFetch(inputTexture, f + ivec2(0,-1), 0).rgb;
+    vec3 tc = texelFetch(inputTexture, f + ivec2(1,-1), 0).rgb;
+    vec3 te = texelFetch(inputTexture, f + ivec2(-1,0), 0).rgb;
+    vec3 tf = texelFetch(inputTexture, f,               0).rgb;
+    vec3 tg = texelFetch(inputTexture, f + ivec2(1, 0), 0).rgb;
+    vec3 th = texelFetch(inputTexture, f + ivec2(2, 0), 0).rgb;
+    vec3 ti = texelFetch(inputTexture, f + ivec2(-1,1), 0).rgb;
+    vec3 tj = texelFetch(inputTexture, f + ivec2(0, 1), 0).rgb;
+    vec3 tk = texelFetch(inputTexture, f + ivec2(1, 1), 0).rgb;
+    vec3 tl = texelFetch(inputTexture, f + ivec2(2, 1), 0).rgb;
+    vec3 tn = texelFetch(inputTexture, f + ivec2(0, 2), 0).rgb;
+    vec3 to = texelFetch(inputTexture, f + ivec2(1, 2), 0).rgb;
+
+    bczzR = vec4(tb.r, tc.r, 0.0, 0.0);
+    bczzG = vec4(tb.g, tc.g, 0.0, 0.0);
+    bczzB = vec4(tb.b, tc.b, 0.0, 0.0);
+    ijfeR = vec4(ti.r, tj.r, tf.r, te.r);
+    ijfeG = vec4(ti.g, tj.g, tf.g, te.g);
+    ijfeB = vec4(ti.b, tj.b, tf.b, te.b);
+    klhgR = vec4(tk.r, tl.r, th.r, tg.r);
+    klhgG = vec4(tk.g, tl.g, th.g, tg.g);
+    klhgB = vec4(tk.b, tl.b, th.b, tg.b);
+    zzonR = vec4(0.0, 0.0, to.r, tn.r);
+    zzonG = vec4(0.0, 0.0, to.g, tn.g);
+    zzonB = vec4(0.0, 0.0, to.b, tn.b);
 }
 
 void FsrEasuTapF(
@@ -114,18 +123,15 @@ void FsrEasuF(out vec3 pix, uvec2 ip, uvec4 con0, uvec4 con1, uvec4 con2, uvec4 
     vec2 p2 = p0 + uintBitsToFloat(con2.zw);
     vec2 p3 = p0 + uintBitsToFloat(con3.xy);
 
-    vec4 bczzR = FsrEasuRF(p0);
-    vec4 bczzG = FsrEasuGF(p0);
-    vec4 bczzB = FsrEasuBF(p0);
-    vec4 ijfeR = FsrEasuRF(p1);
-    vec4 ijfeG = FsrEasuGF(p1);
-    vec4 ijfeB = FsrEasuBF(p1);
-    vec4 klhgR = FsrEasuRF(p2);
-    vec4 klhgG = FsrEasuGF(p2);
-    vec4 klhgB = FsrEasuBF(p2);
-    vec4 zzonR = FsrEasuRF(p3);
-    vec4 zzonG = FsrEasuGF(p3);
-    vec4 zzonB = FsrEasuBF(p3);
+    vec4 bczzR, bczzG, bczzB;
+    vec4 ijfeR, ijfeG, ijfeB;
+    vec4 klhgR, klhgG, klhgB;
+    vec4 zzonR, zzonG, zzonB;
+    FsrEasuFetch12(p0,
+        bczzR, bczzG, bczzB,
+        ijfeR, ijfeG, ijfeB,
+        klhgR, klhgG, klhgB,
+        zzonR, zzonG, zzonB);
 
     vec4 bczzL = bczzB * 0.5 + (bczzR * 0.5 + bczzG);
     vec4 ijfeL = ijfeB * 0.5 + (ijfeR * 0.5 + ijfeG);
