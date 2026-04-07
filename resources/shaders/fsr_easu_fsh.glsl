@@ -15,8 +15,6 @@ layout (binding = 0, std140) uniform FsrEasuConstants {
 
 float APrxLoRcpF1(float a) { return uintBitsToFloat(0x7ef07ebbu - floatBitsToUint(a)); }
 float APrxLoRsqF1(float a) { return uintBitsToFloat(0x5f347d74u - (floatBitsToUint(a) >> 1u)); }
-float AMin3F1(float x, float y, float z) { return min(x, min(y, z)); }
-float AMax3F1(float x, float y, float z) { return max(x, max(y, z)); }
 
 void FsrEasuTapY(
     inout float aC,
@@ -78,20 +76,17 @@ void main()
     vec2 fp = floor(pp);
     pp -= fp;
 
-    ivec2 base = ivec2(fp);
+    vec2 rcpSize = uintBitsToFloat(Const1.xy);
 
-    float Yb = texelFetch(lumaPlane, base + ivec2(0,-1), 0).r;
-    float Yc = texelFetch(lumaPlane, base + ivec2(1,-1), 0).r;
-    float Ye = texelFetch(lumaPlane, base + ivec2(-1,0), 0).r;
-    float Yf = texelFetch(lumaPlane, base,               0).r;
-    float Yg = texelFetch(lumaPlane, base + ivec2(1, 0), 0).r;
-    float Yh = texelFetch(lumaPlane, base + ivec2(2, 0), 0).r;
-    float Yi = texelFetch(lumaPlane, base + ivec2(-1,1), 0).r;
-    float Yj = texelFetch(lumaPlane, base + ivec2(0, 1), 0).r;
-    float Yk = texelFetch(lumaPlane, base + ivec2(1, 1), 0).r;
-    float Yl = texelFetch(lumaPlane, base + ivec2(2, 1), 0).r;
-    float Yn = texelFetch(lumaPlane, base + ivec2(0, 2), 0).r;
-    float Yo = texelFetch(lumaPlane, base + ivec2(1, 2), 0).r;
+    vec4 gA = textureGather(lumaPlane, fp * rcpSize);
+    vec4 gB = textureGather(lumaPlane, (fp + vec2(2.0, 0.0)) * rcpSize);
+    vec4 gC = textureGather(lumaPlane, (fp + vec2(0.0, 2.0)) * rcpSize);
+    vec4 gD = textureGather(lumaPlane, (fp + vec2(2.0, 2.0)) * rcpSize);
+
+    float Yb = gA.z, Yc = gB.w;
+    float Ye = gA.x, Yf = gA.y, Yg = gB.x, Yh = gB.y;
+    float Yi = gC.w, Yj = gC.z, Yk = gD.w, Yl = gD.z;
+    float Yn = gC.y, Yo = gD.x;
 
     vec2 dir = vec2(0.0);
     float len = 0.0;
@@ -136,8 +131,7 @@ void main()
 
     float finalY = min(maxY, max(minY, aC / aW));
 
-    vec2 rcpLumaSize = uintBitsToFloat(Const1.xy);
-    vec2 chromaUV = (fp + pp + 0.5) * rcpLumaSize;
+    vec2 chromaUV = (fp + pp + 0.5) * rcpSize;
     vec2 uv_raw = texture(chromaPlane, chromaUV).rg;
 
     float y = (finalY - 16.0/255.0) / ((235.0 - 16.0) / 255.0);
