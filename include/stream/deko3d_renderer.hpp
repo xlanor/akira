@@ -145,12 +145,6 @@ private:
     CShader m_fsr_rcas_shader;
     CShader m_fsr_pass_shader;
 
-    CMemPool::Handle m_rt_yuv_handle;
-    dk::Image m_rt_yuv_image;
-    dk::ImageLayout m_rt_yuv_layout;
-    dk::ImageDescriptor m_rt_yuv_desc;
-    int m_rt_yuv_texture_id = 0;
-
     CMemPool::Handle m_rt_easu_handle;
     dk::Image m_rt_easu_image;
     dk::ImageLayout m_rt_easu_layout;
@@ -165,7 +159,6 @@ private:
     dk::UniqueCmdBuf m_fsr_static_cmdbuf;
     CMemPool::Handle m_fsr_static_cmdmem;
     static constexpr unsigned FsrStaticCmdSize = 0x10000;
-    DkCmdList m_fsr_yuv_cmdlist = 0;
     DkCmdList m_fsr_easu_cmdlist = 0;
 
     dk::UniqueCmdBuf m_fsr_rcas_cmdbuf;
