@@ -170,6 +170,12 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
 
 bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map<uint32_t, int8_t>* finger_id_touch_id)
 {
+    if (m_border_tap_hold > 0)
+    {
+        chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
+        m_border_tap_hold--;
+    }
+
     HidTouchScreenState sw_state = {0};
 
     size_t got = hidGetTouchScreenStates(&sw_state, 1);
@@ -233,9 +239,8 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         if (isBorder && !isTracked)
         {
             chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
+            m_border_tap_hold = 1;
             Session::GetInstance()->triggerBorderFlash();
-            brls::Logger::info("Touch: border tap -> touchpad button only, raw=({},{})", rawX, rawY);
-            continue;
         }
 
         if (!isTracked)
