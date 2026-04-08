@@ -31,7 +31,6 @@ private:
     BRLS_BIND(brls::BooleanCell, sleepOnExitToggle, "settings/sleepOnExit");
     BRLS_BIND(brls::DetailCell, buttonMappingCell, "settings/buttonMapping");
     BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
-    BRLS_BIND(brls::BooleanCell, lowLatencyModeToggle, "settings/lowLatencyMode");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
     BRLS_BIND(brls::BooleanCell, requestIdrOnFecFailureToggle, "settings/requestIdrOnFecFailure");
     BRLS_BIND(brls::SliderCell, packetLossMaxSlider, "settings/packetLossMax");
@@ -62,6 +61,7 @@ private:
     BRLS_BIND(brls::Label, versionLabel, "settings/version");
     BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
     BRLS_BIND(brls::BooleanCell, unlockBitrateMaxToggle, "settings/unlockBitrateMax");
+    BRLS_BIND(brls::BooleanCell, lowLatencyModeToggle, "settings/lowLatencyMode");
     BRLS_BIND(brls::BooleanCell, portGuessingToggle, "settings/portGuessing");
     BRLS_BIND(brls::SliderCell, portGuessingCountSlider, "settings/portGuessingCount");
     BRLS_BIND(brls::SliderCell, portGuessingSocksSlider, "settings/portGuessingSocks");
