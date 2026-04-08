@@ -12,7 +12,7 @@
 
     <brls:Label
         id="host_settings/title"
-        text="Host Settings"
+        text="@i18n/akira/host_settings/title"
         fontSize="24"
         marginBottom="30"/>
 
@@ -60,7 +60,7 @@
 
             <brls:Button
                 id="host_settings/lookupBtn"
-                text="Look Up"
+                text="@i18n/akira/host_settings/look_up"
                 style="bordered"
                 width="120"
                 marginLeft="10"/>
@@ -90,14 +90,14 @@
 
         <brls:Button
             id="host_settings/cancelBtn"
-            text="Cancel"
+            text="@i18n/akira/common/cancel"
             style="bordered"
             width="150"
             marginRight="15"/>
 
         <brls:Button
             id="host_settings/saveBtn"
-            text="Save"
+            text="@i18n/akira/common/save"
             style="primary"
             width="150"/>
 
@@ -105,7 +105,7 @@
 
     <brls:Label
         id="host_settings/hint"
-        text="Leave PSN Account ID empty to use global setting"
+        text="@i18n/akira/host_settings/psn_account_id_empty_hint"
         fontSize="12"
         textColor="#888888"/>
 

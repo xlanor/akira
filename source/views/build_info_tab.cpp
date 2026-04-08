@@ -2,6 +2,9 @@
 #include <fstream>
 #include <sstream>
 
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 BuildInfoTab::BuildInfoTab() {
     this->inflateFromXMLRes("xml/tabs/build_info_tab.xml");
     loadBuildInfo();
@@ -15,7 +18,7 @@ void BuildInfoTab::loadBuildInfo() {
     std::ifstream file("romfs:/build_info.txt");
 
     if (!file.is_open()) {
-        addInfoRow("Could not load build info", true);
+        addInfoRow("akira/build_info/load_error"_i18n, true);
         return;
     }
 

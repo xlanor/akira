@@ -43,7 +43,7 @@
 
             <brls:Button
                 id="network/checkNatBtn"
-                text="Check NAT Type"
+                text="@i18n/akira/network/check_nat"
                 style="primary"
                 marginBottom="30"/>
 

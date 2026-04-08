@@ -10,7 +10,7 @@
 
     <brls:Label
         id="remap/title"
-        text="Button Mapping"
+        text="@i18n/akira/remap/title"
         fontSize="24"
         marginBottom="15"/>
 
@@ -71,7 +71,7 @@
 
         <brls:Label
             id="remap/captureLabel"
-            text="Press button(s) for:"
+            text="@i18n/akira/remap/capture_prompt"
             fontSize="22"
             marginBottom="10"/>
 
@@ -83,7 +83,7 @@
             marginBottom="20"/>
 
         <brls:Label
-            text="Release all buttons to confirm. Hold X on any entry to reset."
+            text="@i18n/akira/remap/capture_hint"
             fontSize="14"
             textColor="#888888"/>
 

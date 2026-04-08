@@ -30,6 +30,9 @@
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
 
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 extern "C" {
 #include <libavutil/log.h>
 }
@@ -144,7 +147,7 @@ public:
             auto* header = appletFrame->getHeader();
             if (header) {
                 auto* attribution = new brls::Label();
-                attribution->setText("Akira uses chiaki-ng for its remote capabilities");
+                attribution->setText("akira/app/about"_i18n);
                 attribution->setFontSize(20);
                 attribution->setTextColor(nvgRGBA(170, 170, 170, 255));
                 attribution->setMarginRight(20);
@@ -163,7 +166,7 @@ public:
                         auto* rowBox = dynamic_cast<brls::Box*>(containerBox->getChildren()[0]);
                         if (rowBox) {
                             auto* ipLabel = new brls::Label();
-                            ipLabel->setText("IP: " + getLocalIpAddress());
+                            ipLabel->setText("akira/app/ip_prefix"_i18n + getLocalIpAddress());
                             ipLabel->setFontSize(18);
                             ipLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
                             ipLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
@@ -200,7 +203,12 @@ int main(int argc, char* argv[])
 
     av_log_set_callback(ffmpeg_log_callback);
 
-    brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_EN_US;
+    std::string overrideLocale = SettingsManager::getInstance()->getDebugLocale();
+    if (!overrideLocale.empty()) {
+        brls::Platform::APP_LOCALE_DEFAULT = overrideLocale;
+    } else {
+        brls::Platform::APP_LOCALE_DEFAULT = brls::LOCALE_AUTO;
+    }
 
     initCustomTheme();
 

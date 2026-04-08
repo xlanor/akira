@@ -18,13 +18,13 @@
 
         <brls:Label
             id="benchmark/title"
-            text="GHASH Benchmark"
+            text="@i18n/akira/benchmark/title"
             fontSize="24"
             textColor="#FFFFFF"/>
 
         <brls:Label
             id="benchmark/status"
-            text="Running..."
+            text="@i18n/akira/benchmark/running"
             fontSize="16"
             textColor="#888888"/>
     </brls:Box>
@@ -53,7 +53,7 @@
 
         <brls:Button
             id="benchmark/close"
-            text="Close"
+            text="@i18n/akira/common/close"
             style="bordered"/>
     </brls:Box>
 

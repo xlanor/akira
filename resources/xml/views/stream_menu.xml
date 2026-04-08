@@ -27,7 +27,7 @@
             <brls:Label
                 width="auto"
                 height="auto"
-                text="Stream Menu"
+                text="@i18n/akira/stream_menu/title"
                 fontSize="24"/>
 
         </brls:Box>
@@ -47,7 +47,7 @@
             highlightCornerRadius="6"
             style="borderless"
             textColor="@theme/brls/accent"
-            text="Show Stats"/>
+            text="@i18n/akira/stream_menu/show_stats"/>
 
         <brls:Rectangle
             width="auto"
@@ -64,7 +64,7 @@
             highlightCornerRadius="6"
             style="borderless"
             textColor="@theme/brls/accent"
-            text="Button Mapping"/>
+            text="@i18n/akira/stream_menu/button_mapping"/>
 
         <brls:Rectangle
             width="auto"
@@ -81,7 +81,7 @@
             highlightCornerRadius="6"
             style="borderless"
             textColor="@theme/brls/accent"
-            text="Disconnect"/>
+            text="@i18n/akira/stream_menu/disconnect"/>
 
         <brls:Rectangle
             width="auto"
@@ -98,7 +98,7 @@
             highlightCornerRadius="6"
             style="borderless"
             textColor="@theme/brls/accent"
-            text="Disconnect & Sleep"/>
+            text="@i18n/akira/stream_menu/disconnect_sleep"/>
 
         <brls:Rectangle
             width="auto"
@@ -115,7 +115,7 @@
             highlightCornerRadius="6"
             style="borderless"
             textColor="@theme/brls/accent"
-            text="Reset Gyro (Debug)"/>
+            text="@i18n/akira/stream_menu/reset_gyro"/>
 
     </brls:Box>
 

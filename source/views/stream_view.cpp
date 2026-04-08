@@ -11,6 +11,8 @@
 #include <switch.h>
 #include <thread>
 #include <chrono>
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
 
 StreamView::StreamView(Host* host)
     : host(host)
@@ -134,7 +136,7 @@ void StreamView::startStream()
         if (!session->InitController())
         {
             brls::Logger::error("Failed to initialize controller");
-            throw Exception("Failed to initialize controller");
+            throw Exception("akira/stream/failed_init_controller"_i18n);
         }
 
         if (host->isRemote())
@@ -151,14 +153,14 @@ void StreamView::startStream()
                 if (!dm->isPsnTokenValid())
                 {
                     brls::Logger::error("PSN token not valid for remote connection");
-                    throw Exception("PSN token expired. Please refresh in settings.");
+                    throw Exception("akira/stream/psn_token_expired"_i18n);
                 }
 
                 ChiakiErrorCode err = host->connectHolepunch();
                 if (err != CHIAKI_ERR_SUCCESS)
                 {
                     brls::Logger::error("Holepunch connection failed: {}", chiaki_error_string(err));
-                    throw Exception(std::string("Remote connection failed: ") + chiaki_error_string(err));
+                    throw Exception(brls::getStr("akira/stream/holepunch_failed", chiaki_error_string(err)));
                 }
 
                 brls::Logger::info("Holepunch successful!");
@@ -191,7 +193,7 @@ void StreamView::startStream()
 
         std::string errorMsg = e.what();
         brls::sync([errorMsg]() {
-            auto* dialog = new brls::Dialog("Connection Failed\n\n" + errorMsg);
+            auto* dialog = new brls::Dialog(brls::getStr("akira/stream/connection_failed", errorMsg));
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
@@ -244,7 +246,8 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
         nvgFontSize(vg, 24);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgText(vg, x + width / 2, y + height / 2, "Connecting...", nullptr);
+        std::string connectingText = "akira/stream/connecting"_i18n;
+        nvgText(vg, x + width / 2, y + height / 2, connectingText.c_str(), nullptr);
 
         return;
     }
@@ -327,7 +330,7 @@ void StreamView::onConnected()
     std::string hostName = host->getHostName();
     brls::Logger::info("Connected to {}", hostName);
     brls::sync([hostName]() {
-        brls::Application::notify("Connected to " + hostName);
+        brls::Application::notify(brls::getStr("akira/stream/connected_to", hostName));
     });
 }
 
@@ -342,49 +345,49 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
     switch (event->reason)
     {
         case CHIAKI_QUIT_REASON_NONE:
-            reasonStr = "No error";
+            reasonStr = "akira/stream/quit_none"_i18n;
             break;
         case CHIAKI_QUIT_REASON_STOPPED:
-            reasonStr = "Session stopped";
+            reasonStr = "akira/stream/quit_stopped"_i18n;
             break;
         case CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN:
-            reasonStr = "Unknown session request";
+            reasonStr = "akira/stream/quit_request_unknown"_i18n;
             break;
         case CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED:
-            reasonStr = "Connection refused";
+            reasonStr = "akira/stream/quit_connection_refused"_i18n;
             break;
         case CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_IN_USE:
-            reasonStr = "Remote Play in use";
+            reasonStr = "akira/stream/quit_rp_in_use"_i18n;
             break;
         case CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_CRASH:
-            reasonStr = "Remote Play crashed";
+            reasonStr = "akira/stream/quit_rp_crash"_i18n;
             break;
         case CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_VERSION_MISMATCH:
-            reasonStr = "Version mismatch";
+            reasonStr = "akira/stream/quit_version_mismatch"_i18n;
             break;
         case CHIAKI_QUIT_REASON_CTRL_UNKNOWN:
-            reasonStr = "Control connection error";
+            reasonStr = "akira/stream/quit_ctrl_unknown"_i18n;
             break;
         case CHIAKI_QUIT_REASON_CTRL_CONNECT_FAILED:
-            reasonStr = "Control connection failed";
+            reasonStr = "akira/stream/quit_ctrl_connect_failed"_i18n;
             break;
         case CHIAKI_QUIT_REASON_CTRL_CONNECTION_REFUSED:
-            reasonStr = "Control connection refused";
+            reasonStr = "akira/stream/quit_ctrl_connection_refused"_i18n;
             break;
         case CHIAKI_QUIT_REASON_STREAM_CONNECTION_UNKNOWN:
-            reasonStr = "Stream connection error";
+            reasonStr = "akira/stream/quit_stream_unknown"_i18n;
             break;
         case CHIAKI_QUIT_REASON_STREAM_CONNECTION_REMOTE_DISCONNECTED:
-            reasonStr = "Remote disconnected";
+            reasonStr = "akira/stream/quit_remote_disconnected"_i18n;
             break;
         case CHIAKI_QUIT_REASON_STREAM_CONNECTION_REMOTE_SHUTDOWN:
-            reasonStr = "Remote shutdown";
+            reasonStr = "akira/stream/quit_remote_shutdown"_i18n;
             break;
         case CHIAKI_QUIT_REASON_PSN_REGIST_FAILED:
-            reasonStr = "PSN registration failed";
+            reasonStr = "akira/stream/quit_psn_regist_failed"_i18n;
             break;
         default:
-            reasonStr = std::format("Unknown error (code: {})", static_cast<int>(event->reason));
+            reasonStr = brls::getStr("akira/stream/quit_unknown", static_cast<int>(event->reason));
             break;
     }
 
@@ -427,7 +430,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             brls::Application::notify(reasonStr);
             brls::Application::popActivity();
         } else {
-            auto* dialog = new brls::Dialog("Session Ended\n\n" + reasonStr);
+            auto* dialog = new brls::Dialog(brls::getStr("akira/stream/session_ended", reasonStr));
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
@@ -635,7 +638,7 @@ void StreamView::retryWithWake()
             brls::Logger::error("Wake failed with code {}", wakeResult);
             stopStream();
             SharedViewHolder::release(this);
-            auto* dialog = new brls::Dialog("Failed to wake console");
+            auto* dialog = new brls::Dialog("akira/stream/wake_failed"_i18n);
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
@@ -649,7 +652,7 @@ void StreamView::retryWithWake()
     int delaySeconds = 5 + (wakeRetryCount - 1) * 3;
     brls::Logger::info("Wake retry attempt {}/{}, waiting {} seconds...",
                        wakeRetryCount, MAX_WAKE_RETRIES, delaySeconds);
-    brls::Application::notify(std::format("Waking console (attempt {}/{})...", wakeRetryCount, MAX_WAKE_RETRIES));
+    brls::Application::notify(brls::getStr("akira/stream/waking_attempt", wakeRetryCount, MAX_WAKE_RETRIES));
 
     std::this_thread::sleep_for(std::chrono::seconds(delaySeconds));
 
@@ -658,7 +661,7 @@ void StreamView::retryWithWake()
 
     try {
         if (!session->InitController()) {
-            throw Exception("Failed to initialize controller");
+            throw Exception("akira/stream/failed_init_controller"_i18n);
         }
         host->initSession(session);
         host->startSession();
@@ -673,7 +676,7 @@ void StreamView::retryWithWake()
         if (wakeRetryCount >= MAX_WAKE_RETRIES) {
             SharedViewHolder::release(this);
             std::string errorMsg = e.what();
-            auto* dialog = new brls::Dialog(std::format("Connection Failed after {} attempts\n\n{}", MAX_WAKE_RETRIES, errorMsg));
+            auto* dialog = new brls::Dialog(brls::getStr("akira/stream/connection_failed_attempts", MAX_WAKE_RETRIES, errorMsg));
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
@@ -701,14 +704,14 @@ void StreamView::onFocusChanged(bool focused)
         brls::Application::forceUnblockInputs();
 
         auto weak = weak_from_this();
-        auto* dialog = new brls::Dialog("Stream disconnected. Reconnect?");
-        dialog->addButton("No", [weak]() {
+        auto* dialog = new brls::Dialog("akira/stream/disconnected_reconnect"_i18n);
+        dialog->addButton("akira/stream/no"_i18n, [weak]() {
             if (auto self = weak.lock()) {
                 SharedViewHolder::release(self.get());
             }
             brls::Application::popActivity();
         });
-        dialog->addButton("Yes", [weak]() {
+        dialog->addButton("akira/stream/yes"_i18n, [weak]() {
             if (auto self = weak.lock()) {
                 self->attemptReconnect();
             }
@@ -733,7 +736,7 @@ void StreamView::attemptReconnect()
     wakeRetryCount = 0;
     wakeAttempted = false;
 
-    brls::Application::notify("Reconnecting...");
+    brls::Application::notify("akira/stream/reconnecting"_i18n);
     startStream();
 
     reconnecting = false;

@@ -3,6 +3,9 @@
 #include "core/swipe_direction.hpp"
 
 #include <borealis/core/touch/tap_gesture.hpp>
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 #include <algorithm>
 
 ControllerRemapView::ControllerRemapView()
@@ -69,24 +72,24 @@ brls::View* ControllerRemapView::create()
 void ControllerRemapView::initRemappableButtons()
 {
     remappableButtons = {
-        {CHIAKI_CONTROLLER_BUTTON_CROSS,    "Cross",    false},
-        {CHIAKI_CONTROLLER_BUTTON_MOON,     "Circle",   false},
-        {CHIAKI_CONTROLLER_BUTTON_BOX,      "Square",   false},
-        {CHIAKI_CONTROLLER_BUTTON_PYRAMID,  "Triangle", false},
-        {CHIAKI_CONTROLLER_BUTTON_L1,       "L1",       false},
-        {CHIAKI_CONTROLLER_BUTTON_R1,       "R1",       false},
-        {CHIAKI_CONTROLLER_ANALOG_BUTTON_L2, "L2",      true},
-        {CHIAKI_CONTROLLER_ANALOG_BUTTON_R2, "R2",      true},
-        {CHIAKI_CONTROLLER_BUTTON_L3,       "L3",       false},
-        {CHIAKI_CONTROLLER_BUTTON_R3,       "R3",       false},
-        {CHIAKI_CONTROLLER_BUTTON_OPTIONS,  "Options",  false},
-        {CHIAKI_CONTROLLER_BUTTON_SHARE,    "Share",    false},
-        {CHIAKI_CONTROLLER_BUTTON_TOUCHPAD, "Touchpad", false},
-        {CHIAKI_CONTROLLER_BUTTON_PS,       "PS",       false},
-        {SWIPE_TOUCHPAD_UP,                 "Swipe Up",    false},
-        {SWIPE_TOUCHPAD_DOWN,               "Swipe Down",  false},
-        {SWIPE_TOUCHPAD_LEFT,               "Swipe Left",  false},
-        {SWIPE_TOUCHPAD_RIGHT,              "Swipe Right", false},
+        {CHIAKI_CONTROLLER_BUTTON_CROSS,    "akira/remap/cross"_i18n,    false},
+        {CHIAKI_CONTROLLER_BUTTON_MOON,     "akira/remap/circle"_i18n,   false},
+        {CHIAKI_CONTROLLER_BUTTON_BOX,      "akira/remap/square"_i18n,   false},
+        {CHIAKI_CONTROLLER_BUTTON_PYRAMID,  "akira/remap/triangle"_i18n, false},
+        {CHIAKI_CONTROLLER_BUTTON_L1,       "akira/remap/l1"_i18n,       false},
+        {CHIAKI_CONTROLLER_BUTTON_R1,       "akira/remap/r1"_i18n,       false},
+        {CHIAKI_CONTROLLER_ANALOG_BUTTON_L2, "akira/remap/l2"_i18n,      true},
+        {CHIAKI_CONTROLLER_ANALOG_BUTTON_R2, "akira/remap/r2"_i18n,      true},
+        {CHIAKI_CONTROLLER_BUTTON_L3,       "akira/remap/l3"_i18n,       false},
+        {CHIAKI_CONTROLLER_BUTTON_R3,       "akira/remap/r3"_i18n,       false},
+        {CHIAKI_CONTROLLER_BUTTON_OPTIONS,  "akira/remap/options"_i18n,  false},
+        {CHIAKI_CONTROLLER_BUTTON_SHARE,    "akira/remap/share"_i18n,    false},
+        {CHIAKI_CONTROLLER_BUTTON_TOUCHPAD, "akira/remap/touchpad"_i18n, false},
+        {CHIAKI_CONTROLLER_BUTTON_PS,       "akira/remap/ps"_i18n,       false},
+        {SWIPE_TOUCHPAD_UP,                 "akira/remap/swipe_up"_i18n,    false},
+        {SWIPE_TOUCHPAD_DOWN,               "akira/remap/swipe_down"_i18n,  false},
+        {SWIPE_TOUCHPAD_LEFT,               "akira/remap/swipe_left"_i18n,  false},
+        {SWIPE_TOUCHPAD_RIGHT,              "akira/remap/swipe_right"_i18n, false},
     };
 }
 
@@ -139,7 +142,7 @@ void ControllerRemapView::buildUI()
         if (isToggleableButton(target)) {
             auto* toggle = new brls::BooleanCell();
             toggle->init(
-                remappableButtons[i].displayName + " Enabled",
+                remappableButtons[i].displayName + "akira/remap/enabled_suffix"_i18n,
                 settings->isButtonEnabled(target),
                 [this, target](bool isOn) {
                     switch (target) {
@@ -164,7 +167,7 @@ void ControllerRemapView::buildUI()
 
     resetAllBtn = new brls::Button();
     resetAllBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
-    resetAllBtn->setText("Reset All to Defaults");
+    resetAllBtn->setText("akira/remap/reset_all"_i18n);
     resetAllBtn->setMargins(20, 0, 0, 0);
     resetAllBtn->setFocusable(true);
     resetAllBtn->registerClickAction([this](brls::View*) {
@@ -223,14 +226,14 @@ void ControllerRemapView::updateCellDisplay(int index)
         }
     } else {
         auto* lbl = new brls::Label();
-        lbl->setText("(not mapped)");
+        lbl->setText("akira/remap/not_mapped"_i18n);
         lbl->setFontSize(14);
         switchBox->addView(lbl);
     }
 
     if (isDefaultMapping(button)) {
         auto* statusLbl = new brls::Label();
-        statusLbl->setText("(default)");
+        statusLbl->setText("akira/remap/default"_i18n);
         statusLbl->setFontSize(14);
         statusLbl->setMarginLeft(8);
         statusLbl->setTextColor(nvgRGBA(136, 136, 136, 255));
@@ -365,7 +368,7 @@ void ControllerRemapView::enterCaptureMode(uint32_t target)
 
     captureSwitchBox->clearViews();
     auto* waitLbl = new brls::Label();
-    waitLbl->setText("Waiting...");
+    waitLbl->setText("akira/remap/waiting"_i18n);
     waitLbl->setFontSize(22);
     waitLbl->setTextColor(nvgRGBA(0, 204, 136, 255));
     captureSwitchBox->addView(waitLbl);
@@ -403,7 +406,7 @@ void ControllerRemapView::updateCaptureDisplay()
 
     if (peakHeldButtons.empty()) {
         auto* waitLbl = new brls::Label();
-        waitLbl->setText("Waiting...");
+        waitLbl->setText("akira/remap/waiting"_i18n);
         waitLbl->setFontSize(22);
         waitLbl->setTextColor(nvgRGBA(0, 204, 136, 255));
         captureSwitchBox->addView(waitLbl);
@@ -617,7 +620,7 @@ std::vector<uint64_t> ControllerRemapView::getDefaultForButton(uint32_t chiakiBu
 
 std::string ControllerRemapView::formatMapping(const std::vector<uint64_t>& buttons)
 {
-    if (buttons.empty()) return "(not mapped)";
+    if (buttons.empty()) return "akira/remap/not_mapped"_i18n;
 
     std::string result;
     for (size_t i = 0; i < buttons.size(); i++) {

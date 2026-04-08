@@ -2,6 +2,9 @@
 #include <fstream>
 #include <vector>
 
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 static const std::vector<std::string> sensitiveKeys = {
     "global_duid", "psn_access_token", "psn_account_id",
     "psn_refresh_token", "remote_duid", "rp_key", "rp_regist_key"
@@ -12,7 +15,7 @@ ConfigViewTab::ConfigViewTab() {
 
     revealBtn->registerClickAction([this](brls::View* view) {
         credentialsRevealed = !credentialsRevealed;
-        revealBtn->setText(credentialsRevealed ? "Hide Secrets" : "Reveal Secrets");
+        revealBtn->setText(credentialsRevealed ? "akira/config_view/hide_secrets"_i18n : "akira/config_view/reveal_secrets"_i18n);
         configContainer->clearViews();
         loadConfigFromFile();
         return true;
@@ -66,8 +69,8 @@ void ConfigViewTab::loadConfigFromFile() {
     std::ifstream file("sdmc:/switch/akira/akira.toml");
 
     if (!file.is_open()) {
-        addLine("Config file not found", false);
-        addLine("sdmc:/switch/akira/akira.toml", false);
+        addLine("akira/config_view/file_not_found"_i18n, false);
+        addLine("akira/config_view/file_path"_i18n, false);
         return;
     }
 

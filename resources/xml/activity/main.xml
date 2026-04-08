@@ -4,29 +4,29 @@
         title="Akira"
         grow="1.0">
 
-        <brls:Tab label="Hosts">
+        <brls:Tab label="@i18n/akira/tabs/hosts">
             <HostListTab/>
         </brls:Tab>
 
-        <brls:Tab label="Settings">
+        <brls:Tab label="@i18n/akira/tabs/settings">
             <SettingsTab/>
         </brls:Tab>
 
         <brls:Separator/>
 
-        <brls:Tab label="Add Host">
+        <brls:Tab label="@i18n/akira/tabs/add_host">
             <AddHostTab/>
         </brls:Tab>
 
-        <brls:Tab label="Build Info">
+        <brls:Tab label="@i18n/akira/tabs/build_info">
             <BuildInfoTab/>
         </brls:Tab>
 
-        <brls:Tab label="Config">
+        <brls:Tab label="@i18n/akira/tabs/config">
             <ConfigViewTab/>
         </brls:Tab>
 
-        <brls:Tab label="Network">
+        <brls:Tab label="@i18n/akira/tabs/network">
             <NetworkUtilitiesTab/>
         </brls:Tab>
 

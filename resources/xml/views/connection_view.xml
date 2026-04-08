@@ -18,7 +18,7 @@
 
         <brls:Label
             id="connection/title"
-            text="Connecting..."
+            text="@i18n/akira/connection/connecting"
             fontSize="24"
             textColor="#FFFFFF"/>
 
@@ -44,7 +44,7 @@
 
         <brls:Button
             id="connection/cancel"
-            text="Cancel"
+            text="@i18n/akira/connection/cancel"
             style="bordered"/>
     </brls:Box>
 

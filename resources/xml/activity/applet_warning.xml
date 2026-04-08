@@ -9,6 +9,6 @@
     <brls:Label
         width="auto"
         height="auto"
-        text="Please launch Akira in application mode"
+        text="@i18n/akira/app/applet_warning"
         fontSize="28"/>
 </brls:Box>

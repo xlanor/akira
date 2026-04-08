@@ -1,30 +1,33 @@
 #include "views/add_host_tab.hpp"
 #include "core/host.hpp"
 
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 AddHostTab::AddHostTab() {
     this->inflateFromXMLRes("xml/tabs/add_host.xml");
 
     settings = SettingsManager::getInstance();
 
     hostNameInput->init(
-        "Console Name",
+        "akira/add_host/console_name"_i18n,
         "",
         [](std::string text) {},
-        "e.g., Living Room PS5",
-        "Name to identify this console"
+        "akira/add_host/console_name_placeholder"_i18n,
+        "akira/add_host/console_name_hint"_i18n
     );
 
     hostAddrInput->init(
-        "IP Address",
+        "akira/add_host/ip_address"_i18n,
         "",
         [](std::string text) {},
-        "e.g., 192.168.1.100",
-        "PlayStation's IP address"
+        "akira/add_host/ip_placeholder"_i18n,
+        "akira/add_host/ip_hint"_i18n
     );
 
     std::vector<std::string> targetOptions = {"PS4", "PS5"};
     targetSelector->init(
-        "Console Type",
+        "akira/add_host/console_type"_i18n,
         targetOptions,
         1,  // Default to PS5
         [](int selected) {},
@@ -47,26 +50,26 @@ void AddHostTab::onSaveClicked() {
     int targetIndex = targetSelector->getSelection();
 
     if (name.empty()) {
-        statusLabel->setText("Please enter a console name");
+        statusLabel->setText("akira/add_host/error_no_name"_i18n);
         statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
         return;
     }
 
     if (addr.empty()) {
-        statusLabel->setText("Please enter an IP address");
+        statusLabel->setText("akira/add_host/error_no_ip"_i18n);
         statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
         return;
     }
 
     if (!SettingsManager::isValidHostAddress(addr)) {
-        statusLabel->setText("Invalid IP address or hostname");
+        statusLabel->setText("akira/add_host/error_invalid_ip"_i18n);
         statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
         return;
     }
 
     auto* hostsMap = settings->getHostsMap();
     if (hostsMap->find(name) != hostsMap->end()) {
-        statusLabel->setText("A console with this name already exists");
+        statusLabel->setText("akira/add_host/error_duplicate_name"_i18n);
         statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
         return;
     }
@@ -81,7 +84,7 @@ void AddHostTab::onSaveClicked() {
 
     settings->writeFile();
 
-    statusLabel->setText("Console added successfully!");
+    statusLabel->setText("akira/add_host/success"_i18n);
     statusLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
 
     brls::Logger::info("Added host: {} at {}", name, addr);

@@ -2,11 +2,14 @@
 #include "views/benchmark_view.hpp"
 #include "views/controller_remap_view.hpp"
 #include "core/discovery_manager.hpp"
+#include <borealis/core/i18n.hpp>
 #include <format>
 
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+
+using namespace brls::literals;
 
 // Custom button styles with colored backgrounds, no border
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
@@ -40,6 +43,7 @@ SettingsTab::SettingsTab() {
 
     settings = SettingsManager::getInstance();
 
+    initLanguageSelector();
     initLocalResolutionSelector();
     initRemoteResolutionSelector();
     initLocalFpsSelector();
@@ -83,7 +87,7 @@ SettingsTab::SettingsTab() {
 
     revealCredentialsBtn->registerClickAction([this](brls::View*) {
         credentialsRevealed = !credentialsRevealed;
-        revealCredentialsBtn->setText(credentialsRevealed ? "Hide Secrets" : "Reveal Secrets");
+        revealCredentialsBtn->setText(credentialsRevealed ? "akira/settings/hide_secrets"_i18n : "akira/settings/reveal_secrets"_i18n);
         updateCredentialsDisplay();
         return true;
     });
@@ -95,8 +99,39 @@ brls::View* SettingsTab::create() {
     return new SettingsTab();
 }
 
+void SettingsTab::initLanguageSelector() {
+    static const std::vector<std::string> localeCodes = {"", "en-US", "zh-Hans"};
+
+    std::vector<std::string> options = {
+        "akira/settings/lang_system"_i18n,
+        "akira/settings/lang_en"_i18n,
+        "akira/settings/lang_zh_hans"_i18n,
+    };
+
+    std::string currentLocale = settings->getDebugLocale();
+    int currentIndex = 0;
+    for (size_t i = 1; i < localeCodes.size(); i++) {
+        if (localeCodes[i] == currentLocale) {
+            currentIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    languageSelector->init(
+        "akira/settings/language"_i18n,
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            std::string locale = (selected > 0 && selected < (int)localeCodes.size()) ? localeCodes[selected] : "";
+            settings->setDebugLocale(locale);
+            settings->writeFile();
+        }
+    );
+}
+
 void SettingsTab::initLocalResolutionSelector() {
-    std::vector<std::string> options = {"360p", "540p", "720p", "1080p"};
+    std::vector<std::string> options = {"akira/settings/res_360p"_i18n, "akira/settings/res_540p"_i18n, "akira/settings/res_720p"_i18n, "akira/settings/res_1080p"_i18n};
 
     int currentIndex = 2;
     auto current = settings->getLocalVideoResolution();
@@ -108,7 +143,7 @@ void SettingsTab::initLocalResolutionSelector() {
     }
 
     localResolutionSelector->init(
-        "Local Resolution",
+        "akira/settings/local_resolution"_i18n,
         options,
         currentIndex,
         [](int selected) {},
@@ -130,7 +165,7 @@ void SettingsTab::initLocalResolutionSelector() {
 }
 
 void SettingsTab::initRemoteResolutionSelector() {
-    std::vector<std::string> options = {"360p", "540p", "720p", "1080p"};
+    std::vector<std::string> options = {"akira/settings/res_360p"_i18n, "akira/settings/res_540p"_i18n, "akira/settings/res_720p"_i18n, "akira/settings/res_1080p"_i18n};
 
     int currentIndex = 2;
     auto current = settings->getRemoteVideoResolution();
@@ -142,7 +177,7 @@ void SettingsTab::initRemoteResolutionSelector() {
     }
 
     remoteResolutionSelector->init(
-        "Remote Resolution",
+        "akira/settings/remote_resolution"_i18n,
         options,
         currentIndex,
         [](int selected) {},
@@ -164,7 +199,7 @@ void SettingsTab::initRemoteResolutionSelector() {
 }
 
 void SettingsTab::initLocalFpsSelector() {
-    std::vector<std::string> options = {"30 FPS", "60 FPS"};
+    std::vector<std::string> options = {"akira/settings/fps_30"_i18n, "akira/settings/fps_60"_i18n};
 
     int currentIndex = 1;
     if (settings->getLocalVideoFPS() == CHIAKI_VIDEO_FPS_PRESET_30) {
@@ -172,7 +207,7 @@ void SettingsTab::initLocalFpsSelector() {
     }
 
     localFpsSelector->init(
-        "Local Frame Rate",
+        "akira/settings/local_frame_rate"_i18n,
         options,
         currentIndex,
         [](int selected) {},
@@ -186,7 +221,7 @@ void SettingsTab::initLocalFpsSelector() {
 }
 
 void SettingsTab::initRemoteFpsSelector() {
-    std::vector<std::string> options = {"30 FPS", "60 FPS"};
+    std::vector<std::string> options = {"akira/settings/fps_30"_i18n, "akira/settings/fps_60"_i18n};
 
     int currentIndex = 1;
     if (settings->getRemoteVideoFPS() == CHIAKI_VIDEO_FPS_PRESET_30) {
@@ -194,7 +229,7 @@ void SettingsTab::initRemoteFpsSelector() {
     }
 
     remoteFpsSelector->init(
-        "Remote Frame Rate",
+        "akira/settings/remote_frame_rate"_i18n,
         options,
         currentIndex,
         [](int selected) {},
@@ -227,7 +262,7 @@ void SettingsTab::initLocalBitrateSlider() {
     localBitrateSlider->detail->setWidth(100);
     localBitrateSlider->detail->setShrink(0);
     localBitrateSlider->init(
-        "Local Network Bitrate",
+        "akira/settings/local_bitrate"_i18n,
         normalizedValue,
         [this](float value) {
             auto resolution = settings->getLocalVideoResolution();
@@ -235,13 +270,13 @@ void SettingsTab::initLocalBitrateSlider() {
             int minBitrate = settings->getMinBitrateForResolution(resolution);
             int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
             settings->setLocalVideoBitrate(bitrate);
-            localBitrateSlider->detail->setText(std::format("{} kbps", bitrate));
+            localBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", bitrate));
             settings->writeFile();
             brls::Logger::info("Local bitrate set to {}", bitrate);
         }
     );
 
-    localBitrateSlider->detail->setText(std::format("{} kbps", currentBitrate));
+    localBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", currentBitrate));
 }
 
 void SettingsTab::updateLocalBitrateSlider() {
@@ -254,7 +289,7 @@ void SettingsTab::updateLocalBitrateSlider() {
 
     float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
     localBitrateSlider->slider->setProgress(normalizedValue);
-    localBitrateSlider->detail->setText(std::format("{} kbps", defaultBitrate));
+    localBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", defaultBitrate));
 }
 
 void SettingsTab::initRemoteBitrateSlider() {
@@ -277,7 +312,7 @@ void SettingsTab::initRemoteBitrateSlider() {
     remoteBitrateSlider->detail->setWidth(100);
     remoteBitrateSlider->detail->setShrink(0);
     remoteBitrateSlider->init(
-        "Remote Play Bitrate",
+        "akira/settings/remote_bitrate"_i18n,
         normalizedValue,
         [this](float value) {
             auto resolution = settings->getRemoteVideoResolution();
@@ -285,13 +320,13 @@ void SettingsTab::initRemoteBitrateSlider() {
             int minBitrate = settings->getMinBitrateForResolution(resolution);
             int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
             settings->setRemoteVideoBitrate(bitrate);
-            remoteBitrateSlider->detail->setText(std::format("{} kbps", bitrate));
+            remoteBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", bitrate));
             settings->writeFile();
             brls::Logger::info("Remote bitrate set to {}", bitrate);
         }
     );
 
-    remoteBitrateSlider->detail->setText(std::format("{} kbps", currentBitrate));
+    remoteBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", currentBitrate));
 }
 
 void SettingsTab::updateRemoteBitrateSlider() {
@@ -304,11 +339,11 @@ void SettingsTab::updateRemoteBitrateSlider() {
 
     float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
     remoteBitrateSlider->slider->setProgress(normalizedValue);
-    remoteBitrateSlider->detail->setText(std::format("{} kbps", defaultBitrate));
+    remoteBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", defaultBitrate));
 }
 
 void SettingsTab::initVpnResolutionSelector() {
-    std::vector<std::string> options = {"360p", "540p", "720p"};
+    std::vector<std::string> options = {"akira/settings/res_360p"_i18n, "akira/settings/res_540p"_i18n, "akira/settings/res_720p"_i18n};
 
     int currentIndex = 2;
     auto current = settings->getVpnVideoResolution();
@@ -320,7 +355,7 @@ void SettingsTab::initVpnResolutionSelector() {
     }
 
     vpnResolutionSelector->init(
-        "VPN Resolution",
+        "akira/settings/vpn_resolution"_i18n,
         options,
         currentIndex,
         [](int selected) {},
@@ -340,7 +375,7 @@ void SettingsTab::initVpnResolutionSelector() {
 }
 
 void SettingsTab::initVpnFpsSelector() {
-    std::vector<std::string> options = {"30 FPS", "60 FPS"};
+    std::vector<std::string> options = {"akira/settings/fps_30"_i18n, "akira/settings/fps_60"_i18n};
 
     int currentIndex = 0;
     if (settings->getVpnVideoFPS() == CHIAKI_VIDEO_FPS_PRESET_60) {
@@ -348,7 +383,7 @@ void SettingsTab::initVpnFpsSelector() {
     }
 
     vpnFpsSelector->init(
-        "VPN Frame Rate",
+        "akira/settings/vpn_frame_rate"_i18n,
         options,
         currentIndex,
         [](int selected) {},
@@ -377,20 +412,20 @@ void SettingsTab::initVpnBitrateSlider() {
     vpnBitrateSlider->detail->setWidth(100);
     vpnBitrateSlider->detail->setShrink(0);
     vpnBitrateSlider->init(
-        "VPN Bitrate",
+        "akira/settings/vpn_bitrate"_i18n,
         normalizedValue,
         [this](float value) {
             const int VPN_MIN_BITRATE = 2000;
             const int VPN_MAX_BITRATE = 15000;
             int bitrate = VPN_MIN_BITRATE + static_cast<int>(value * (VPN_MAX_BITRATE - VPN_MIN_BITRATE));
             settings->setVpnVideoBitrate(bitrate);
-            vpnBitrateSlider->detail->setText(std::format("{} kbps", bitrate));
+            vpnBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", bitrate));
             settings->writeFile();
             brls::Logger::info("VPN bitrate set to {}", bitrate);
         }
     );
 
-    vpnBitrateSlider->detail->setText(std::format("{} kbps", currentBitrate));
+    vpnBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", currentBitrate));
 }
 
 void SettingsTab::updateVpnBitrateSlider() {
@@ -402,16 +437,16 @@ void SettingsTab::updateVpnBitrateSlider() {
 
     float normalizedValue = static_cast<float>(VPN_DEFAULT_BITRATE - VPN_MIN_BITRATE) / (VPN_MAX_BITRATE - VPN_MIN_BITRATE);
     vpnBitrateSlider->slider->setProgress(normalizedValue);
-    vpnBitrateSlider->detail->setText(std::format("{} kbps", VPN_DEFAULT_BITRATE));
+    vpnBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", VPN_DEFAULT_BITRATE));
 }
 
 void SettingsTab::initHapticSelector() {
-    std::vector<std::string> options = {"Disabled", "Weak", "Strong"};
+    std::vector<std::string> options = {"akira/settings/haptic_disabled"_i18n, "akira/settings/haptic_weak"_i18n, "akira/settings/haptic_strong"_i18n};
 
     int currentIndex = static_cast<int>(settings->getHaptic(nullptr));
 
     hapticSelector->init(
-        "Haptic Feedback",
+        "akira/settings/haptic_feedback"_i18n,
         options,
         currentIndex,
         [this](int selected) {
@@ -453,7 +488,7 @@ void SettingsTab::initRumbleFreqLowSlider() {
     rumbleFreqLowSlider->detail->setWidth(100);
     rumbleFreqLowSlider->detail->setShrink(0);
     rumbleFreqLowSlider->init(
-        "Rumble Low Frequency",
+        "akira/settings/rumble_low_freq"_i18n,
         normalized,
         [this](float value) {
             constexpr float MIN_FREQ = 40.0f;
@@ -461,7 +496,7 @@ void SettingsTab::initRumbleFreqLowSlider() {
             float freq = MIN_FREQ + value * (MAX_FREQ - MIN_FREQ);
             freq = static_cast<float>(static_cast<int>(freq));
             settings->setRumbleFreqLow(freq);
-            rumbleFreqLowSlider->detail->setText(std::format("{} Hz", static_cast<int>(freq)));
+            rumbleFreqLowSlider->detail->setText(brls::getStr("akira/settings/hz_format", static_cast<int>(freq)));
             settings->writeFile();
 
             auto* inputMgr = brls::Application::getPlatform()->getInputManager();
@@ -472,7 +507,7 @@ void SettingsTab::initRumbleFreqLowSlider() {
         }
     );
 
-    rumbleFreqLowSlider->detail->setText(std::format("{} Hz", static_cast<int>(currentFreq)));
+    rumbleFreqLowSlider->detail->setText(brls::getStr("akira/settings/hz_format", static_cast<int>(currentFreq)));
 }
 
 void SettingsTab::initRumbleFreqHighSlider() {
@@ -486,7 +521,7 @@ void SettingsTab::initRumbleFreqHighSlider() {
     rumbleFreqHighSlider->detail->setWidth(100);
     rumbleFreqHighSlider->detail->setShrink(0);
     rumbleFreqHighSlider->init(
-        "Rumble High Frequency",
+        "akira/settings/rumble_high_freq"_i18n,
         normalized,
         [this](float value) {
             constexpr float MIN_FREQ = 40.0f;
@@ -494,7 +529,7 @@ void SettingsTab::initRumbleFreqHighSlider() {
             float freq = MIN_FREQ + value * (MAX_FREQ - MIN_FREQ);
             freq = static_cast<float>(static_cast<int>(freq));
             settings->setRumbleFreqHigh(freq);
-            rumbleFreqHighSlider->detail->setText(std::format("{} Hz", static_cast<int>(freq)));
+            rumbleFreqHighSlider->detail->setText(brls::getStr("akira/settings/hz_format", static_cast<int>(freq)));
             settings->writeFile();
 
             auto* inputMgr = brls::Application::getPlatform()->getInputManager();
@@ -505,7 +540,7 @@ void SettingsTab::initRumbleFreqHighSlider() {
         }
     );
 
-    rumbleFreqHighSlider->detail->setText(std::format("{} Hz", static_cast<int>(currentFreq)));
+    rumbleFreqHighSlider->detail->setText(brls::getStr("akira/settings/hz_format", static_cast<int>(currentFreq)));
 }
 
 void SettingsTab::initRumbleEnvelopeAttackSlider() {
@@ -519,7 +554,7 @@ void SettingsTab::initRumbleEnvelopeAttackSlider() {
     rumbleEnvelopeAttackSlider->detail->setWidth(100);
     rumbleEnvelopeAttackSlider->detail->setShrink(0);
     rumbleEnvelopeAttackSlider->init(
-        "Rumble Attack",
+        "akira/settings/rumble_attack"_i18n,
         normalized,
         [this](float value) {
             constexpr float MIN_ATTACK = 0.20f;
@@ -527,12 +562,12 @@ void SettingsTab::initRumbleEnvelopeAttackSlider() {
             float attack = MIN_ATTACK + value * (MAX_ATTACK - MIN_ATTACK);
             attack = static_cast<float>(static_cast<int>(attack * 100.0f)) / 100.0f;
             settings->setRumbleEnvelopeAttack(attack);
-            rumbleEnvelopeAttackSlider->detail->setText(std::format("{}%", static_cast<int>(attack * 100.0f)));
+            rumbleEnvelopeAttackSlider->detail->setText(brls::getStr("akira/settings/percent_format", static_cast<int>(attack * 100.0f)));
             settings->writeFile();
         }
     );
 
-    rumbleEnvelopeAttackSlider->detail->setText(std::format("{}%", static_cast<int>(currentAttack * 100.0f)));
+    rumbleEnvelopeAttackSlider->detail->setText(brls::getStr("akira/settings/percent_format", static_cast<int>(currentAttack * 100.0f)));
 }
 
 void SettingsTab::initRumbleEnvelopeDecaySlider() {
@@ -546,7 +581,7 @@ void SettingsTab::initRumbleEnvelopeDecaySlider() {
     rumbleEnvelopeDecaySlider->detail->setWidth(100);
     rumbleEnvelopeDecaySlider->detail->setShrink(0);
     rumbleEnvelopeDecaySlider->init(
-        "Rumble Sustain",
+        "akira/settings/rumble_sustain"_i18n,
         normalized,
         [this](float value) {
             constexpr float MIN_DECAY = 0.50f;
@@ -554,20 +589,20 @@ void SettingsTab::initRumbleEnvelopeDecaySlider() {
             float decay = MIN_DECAY + value * (MAX_DECAY - MIN_DECAY);
             decay = static_cast<float>(static_cast<int>(decay * 100.0f)) / 100.0f;
             settings->setRumbleEnvelopeDecay(decay);
-            rumbleEnvelopeDecaySlider->detail->setText(std::format("{}%", static_cast<int>(decay * 100.0f)));
+            rumbleEnvelopeDecaySlider->detail->setText(brls::getStr("akira/settings/percent_format", static_cast<int>(decay * 100.0f)));
             settings->writeFile();
         }
     );
 
-    rumbleEnvelopeDecaySlider->detail->setText(std::format("{}%", static_cast<int>(currentDecay * 100.0f)));
+    rumbleEnvelopeDecaySlider->detail->setText(brls::getStr("akira/settings/percent_format", static_cast<int>(currentDecay * 100.0f)));
 }
 
 void SettingsTab::initGyroSourceSelector() {
-    std::vector<std::string> options = {"Auto", "Left Joy-Con", "Right Joy-Con"};
+    std::vector<std::string> options = {"akira/settings/gyro_auto"_i18n, "akira/settings/gyro_left"_i18n, "akira/settings/gyro_right"_i18n};
     int currentIndex = static_cast<int>(settings->getGyroSource());
 
     gyroSourceSelector->init(
-        "Gyro Source",
+        "akira/settings/gyro_source"_i18n,
         options,
         currentIndex,
         [](int selected) {},
@@ -582,7 +617,7 @@ void SettingsTab::initSleepOnExitToggle() {
     bool currentValue = settings->getSleepOnExit();
 
     sleepOnExitToggle->init(
-        "Sleep Console on Exit",
+        "akira/settings/sleep_on_exit"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setSleepOnExit(isOn);
@@ -592,8 +627,8 @@ void SettingsTab::initSleepOnExitToggle() {
 }
 
 void SettingsTab::initButtonMappingCell() {
-    buttonMappingCell->setText("Button Mapping");
-    buttonMappingCell->setDetailText("Configure");
+    buttonMappingCell->setText("akira/settings/button_mapping"_i18n);
+    buttonMappingCell->setDetailText("akira/common/configure"_i18n);
 
     buttonMappingCell->registerClickAction([](brls::View*) {
         auto* remapView = new ControllerRemapView();
@@ -606,7 +641,7 @@ void SettingsTab::initEnableThreadAffinityToggle() {
     bool currentValue = settings->getEnableThreadAffinity();
 
     enableThreadAffinityToggle->init(
-        "Enable Thread Affinity",
+        "akira/settings/thread_affinity"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setEnableThreadAffinity(isOn);
@@ -620,7 +655,7 @@ void SettingsTab::initLowLatencyModeToggle() {
     bool currentValue = settings->getLowLatencyMode();
 
     lowLatencyModeToggle->init(
-        "Low Latency Mode",
+        "akira/settings/low_latency_mode"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setLowLatencyMode(isOn);
@@ -634,7 +669,7 @@ void SettingsTab::initHolepunchRetryToggle() {
     bool currentValue = settings->getHolepunchRetry();
 
     holepunchRetryToggle->init(
-        "Enable Holepunch Retry",
+        "akira/settings/holepunch_retry"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setHolepunchRetry(isOn);
@@ -647,28 +682,28 @@ void SettingsTab::initHolepunchRetryToggle() {
 void SettingsTab::initPsnAccountSection() {
     std::string currentOnlineId = settings->getPsnOnlineId(nullptr);
     psnOnlineIdInput->init(
-        "PSN Online ID",
+        "akira/settings/psn_online_id"_i18n,
         currentOnlineId,
         [this](std::string text) {
             settings->setPsnOnlineId(nullptr, text);
             settings->writeFile();
             brls::Logger::info("PSN Online ID set to {}", text);
         },
-        "Enter your PSN username",
-        "Used to look up your Account ID"
+        "akira/settings/psn_online_id_placeholder"_i18n,
+        "akira/settings/psn_online_id_hint"_i18n
     );
 
     std::string currentAccountId = settings->getPsnAccountId(nullptr);
     psnAccountIdInput->init(
-        "Account ID (Base64)",
+        "akira/settings/psn_account_id"_i18n,
         currentAccountId,
         [this](std::string text) {
             settings->setPsnAccountId(nullptr, text);
             settings->writeFile();
             brls::Logger::info("PSN Account ID set");
         },
-        "Base64 encoded account ID",
-        "Required for PS5 and PS4 9.0+"
+        "akira/settings/psn_account_id_placeholder"_i18n,
+        "akira/settings/psn_account_id_hint"_i18n
     );
 
     lookupBtn->setStyle(&BUTTONSTYLE_BLUE);
@@ -677,11 +712,11 @@ void SettingsTab::initPsnAccountSection() {
     lookupBtn->registerClickAction([this](brls::View* view) {
         std::string onlineId = psnOnlineIdInput->getValue();
         if (onlineId.empty()) {
-            brls::Application::notify("Please enter a PSN Online ID first");
+            brls::Application::notify("akira/settings/enter_online_id_first"_i18n);
             return true;
         }
 
-        brls::Application::notify("Looking up account ID...");
+        brls::Application::notify("akira/settings/looking_up"_i18n);
 
         DiscoveryManager::getInstance()->lookupPsnAccountId(
             onlineId,
@@ -691,13 +726,13 @@ void SettingsTab::initPsnAccountSection() {
                     settings->setPsnAccountId(nullptr, accountId);
                     settings->writeFile();
                     updateCredentialsDisplay();
-                    brls::Application::notify("Account ID found!");
+                    brls::Application::notify("akira/settings/account_id_found"_i18n);
                     brls::Logger::info("Found account ID for PSN user");
                 });
             },
             [](const std::string& error) {
                 brls::sync([error]() {
-                    brls::Application::notify("Lookup failed: " + error);
+                    brls::Application::notify(brls::getStr("akira/settings/lookup_failed", error));
                     brls::Logger::error("PSN account lookup failed: {}", error);
                 });
             }
@@ -710,20 +745,20 @@ void SettingsTab::initPsnAccountSection() {
 void SettingsTab::initCompanionSection() {
     std::string currentHost = settings->getCompanionHost();
     companionHostInput->init(
-        "Companion Host",
+        "akira/settings/companion_host"_i18n,
         currentHost,
         [this](std::string text) {
             settings->setCompanionHost(text);
             settings->writeFile();
             brls::Logger::info("Companion host set to {}", text);
         },
-        "IP address of companion app",
-        "e.g., 192.168.1.100"
+        "akira/settings/companion_host_placeholder"_i18n,
+        "akira/settings/companion_host_hint"_i18n
     );
 
     std::string currentPort = std::format("{}", settings->getCompanionPort());
     companionPortInput->init(
-        "Companion Port",
+        "akira/settings/companion_port"_i18n,
         currentPort,
         [this](std::string text) {
             int port = std::atoi(text.c_str());
@@ -732,11 +767,11 @@ void SettingsTab::initCompanionSection() {
                 settings->writeFile();
                 brls::Logger::info("Companion port set to {}", port);
             } else {
-                brls::Application::notify("Invalid port number");
+                brls::Application::notify("akira/settings/invalid_port"_i18n);
             }
         },
-        "Port number (1-65535)",
-        "Default: 8080"
+        "akira/settings/companion_port_placeholder"_i18n,
+        "akira/settings/companion_port_hint"_i18n
     );
 
     fetchPsnBtn->setStyle(&BUTTONSTYLE_GREEN);
@@ -747,7 +782,7 @@ void SettingsTab::initCompanionSection() {
         std::string portStr = companionPortInput->getValue();
 
         if (host.empty()) {
-            brls::Application::notify("Please enter companion host first");
+            brls::Application::notify("akira/settings/enter_companion_host_first"_i18n);
             return true;
         }
 
@@ -756,7 +791,7 @@ void SettingsTab::initCompanionSection() {
             port = 8080;
         }
 
-        brls::Application::notify("Fetching PSN credentials...");
+        brls::Application::notify("akira/settings/fetching_credentials"_i18n);
 
         DiscoveryManager::getInstance()->fetchCompanionCredentials(
             host, port,
@@ -789,14 +824,14 @@ void SettingsTab::initCompanionSection() {
                         brls::Logger::info("DUID set from companion");
                     }
                     settings->writeFile();
-                    brls::Application::notify("PSN credentials fetched!");
+                    brls::Application::notify("akira/settings/credentials_fetched"_i18n);
                     brls::Logger::info("Fetched PSN credentials from companion");
                     updateCredentialsDisplay();
                 });
             },
             [](const std::string& error) {
                 brls::sync([error]() {
-                    brls::Application::notify("Fetch failed: " + error);
+                    brls::Application::notify(brls::getStr("akira/settings/fetch_failed", error));
                     brls::Logger::error("Failed to fetch PSN credentials: {}", error);
                 });
             }
@@ -811,23 +846,23 @@ void SettingsTab::initCompanionSection() {
     refreshTokenBtn->registerClickAction([this](brls::View* view) {
         std::string refreshToken = settings->getPsnRefreshToken();
         if (refreshToken.empty()) {
-            brls::Application::notify("No refresh token stored. Fetch credentials first.");
+            brls::Application::notify("akira/settings/no_refresh_token"_i18n);
             return true;
         }
 
-        brls::Application::notify("Refreshing PSN token...");
+        brls::Application::notify("akira/settings/refreshing_token"_i18n);
 
         DiscoveryManager::getInstance()->refreshPsnToken(
             [this]() {
                 brls::sync([this]() {
-                    brls::Application::notify("Token refreshed successfully!");
+                    brls::Application::notify("akira/settings/token_refreshed"_i18n);
                     brls::Logger::info("PSN token refreshed");
                     updateCredentialsDisplay();
                 });
             },
             [](const std::string& error) {
                 brls::sync([error]() {
-                    brls::Application::notify("Refresh failed: " + error);
+                    brls::Application::notify(brls::getStr("akira/settings/refresh_failed", error));
                     brls::Logger::error("Failed to refresh PSN token: {}", error);
                 });
             }
@@ -840,18 +875,18 @@ void SettingsTab::initCompanionSection() {
     clearPsnBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
 
     clearPsnBtn->registerClickAction([this](brls::View* view) {
-        auto* dialog = new brls::Dialog("Are you sure you want to clear all PSN data?\n\nThis will remove:\n- Access Token\n- Refresh Token\n- Token Expiry\n\nYou will need to fetch credentials again.");
+        auto* dialog = new brls::Dialog("akira/settings/clear_psn_confirm"_i18n);
 
-        dialog->addButton("Cancel", [dialog]() {
+        dialog->addButton("akira/common/cancel"_i18n, [dialog]() {
             dialog->close();
         });
 
-        dialog->addButton("Clear All", [this, dialog]() {
+        dialog->addButton("akira/settings/clear_all"_i18n, [this, dialog]() {
             dialog->close();
             settings->clearPsnTokenData();
             settings->writeFile();
             updateCredentialsDisplay();
-            brls::Application::notify("PSN data cleared");
+            brls::Application::notify("akira/settings/psn_data_cleared"_i18n);
         });
 
         dialog->open();
@@ -860,47 +895,47 @@ void SettingsTab::initCompanionSection() {
 }
 
 std::string SettingsTab::censorString(const std::string& str) {
-    if (str.empty()) return "Not set";
+    if (str.empty()) return "akira/common/not_set"_i18n;
     if (str.length() <= 5) return str;
     return "****" + str.substr(str.length() - 5);
 }
 
 void SettingsTab::updateCredentialsDisplay() {
-    credOnlineIdCell->setText("Online ID");
+    credOnlineIdCell->setText("akira/settings/online_id"_i18n);
     std::string onlineId = settings->getPsnOnlineId(nullptr);
-    credOnlineIdCell->setDetailText(onlineId.empty() ? "Not set" : onlineId);
+    credOnlineIdCell->setDetailText(onlineId.empty() ? "akira/common/not_set"_i18n : onlineId);
 
-    credAccountIdCell->setText("Account ID");
+    credAccountIdCell->setText("akira/settings/account_id"_i18n);
     std::string accountId = settings->getPsnAccountId(nullptr);
-    credAccountIdCell->setDetailText(accountId.empty() ? "Not set" : accountId);
+    credAccountIdCell->setDetailText(accountId.empty() ? "akira/common/not_set"_i18n : accountId);
 
-    credAccessTokenCell->setText("Access Token");
+    credAccessTokenCell->setText("akira/settings/access_token"_i18n);
     std::string accessToken = settings->getPsnAccessToken();
     if (credentialsRevealed) {
         if (!accessToken.empty()) {
             std::string displayToken = accessToken.length() > 40 ? accessToken.substr(0, 36) + "..." : accessToken;
             credAccessTokenCell->setDetailText(displayToken);
         } else {
-            credAccessTokenCell->setDetailText("Not set");
+            credAccessTokenCell->setDetailText("akira/common/not_set"_i18n);
         }
     } else {
         credAccessTokenCell->setDetailText(censorString(accessToken));
     }
 
-    credRefreshTokenCell->setText("Refresh Token");
+    credRefreshTokenCell->setText("akira/settings/refresh_token"_i18n);
     std::string refreshToken = settings->getPsnRefreshToken();
     if (credentialsRevealed) {
         if (!refreshToken.empty()) {
             std::string displayToken = refreshToken.length() > 40 ? refreshToken.substr(0, 36) + "..." : refreshToken;
             credRefreshTokenCell->setDetailText(displayToken);
         } else {
-            credRefreshTokenCell->setDetailText("Not set");
+            credRefreshTokenCell->setDetailText("akira/common/not_set"_i18n);
         }
     } else {
         credRefreshTokenCell->setDetailText(censorString(refreshToken));
     }
 
-    credTokenExpiryCell->setText("Token Expires");
+    credTokenExpiryCell->setText("akira/settings/token_expires"_i18n);
     int64_t expiresAt = settings->getPsnTokenExpiresAt();
     if (expiresAt > 0) {
         std::time_t expTime = static_cast<std::time_t>(expiresAt);
@@ -910,22 +945,22 @@ void SettingsTab::updateCredentialsDisplay() {
 
         std::time_t now = std::time(nullptr);
         if (now > expTime) {
-            credTokenExpiryCell->setDetailText(oss.str() + " (EXPIRED)");
+            credTokenExpiryCell->setDetailText(oss.str() + "akira/settings/expired_suffix"_i18n);
         } else {
             credTokenExpiryCell->setDetailText(oss.str());
         }
     } else {
-        credTokenExpiryCell->setDetailText("Not set");
+        credTokenExpiryCell->setDetailText("akira/common/not_set"_i18n);
     }
 
-    credDuidCell->setText("DUID");
+    credDuidCell->setText("akira/settings/duid"_i18n);
     std::string duid = settings->getGlobalDuid();
     if (credentialsRevealed) {
         if (!duid.empty()) {
             std::string displayDuid = duid.length() > 40 ? duid.substr(0, 36) + "..." : duid;
             credDuidCell->setDetailText(displayDuid);
         } else {
-            credDuidCell->setDetailText("Not set");
+            credDuidCell->setDetailText("akira/common/not_set"_i18n);
         }
     } else {
         credDuidCell->setDetailText(censorString(duid));
@@ -936,7 +971,7 @@ void SettingsTab::initPortGuessingToggle() {
     bool currentValue = settings->getPortGuessing();
 
     portGuessingToggle->init(
-        "Port Guessing",
+        "akira/settings/port_guessing"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setPortGuessing(isOn);
@@ -956,7 +991,7 @@ void SettingsTab::initPortGuessingCountSlider() {
     portGuessingCountSlider->detail->setWidth(60);
     portGuessingCountSlider->detail->setShrink(0);
     portGuessingCountSlider->init(
-        "Port Guess Count",
+        "akira/settings/port_guess_count"_i18n,
         normalized,
         [this](float value) {
             int count = static_cast<int>(1 + value * 74);
@@ -980,7 +1015,7 @@ void SettingsTab::initPortGuessingSocksSlider() {
     portGuessingSocksSlider->detail->setWidth(60);
     portGuessingSocksSlider->detail->setShrink(0);
     portGuessingSocksSlider->init(
-        "Probe Socket Count",
+        "akira/settings/probe_socket_count"_i18n,
         normalized,
         [this](float value) {
             int count = static_cast<int>(1 + value * 249);
@@ -1011,7 +1046,7 @@ void SettingsTab::initPowerUserSection() {
         if (powerUserClickCount >= 7 && !settings->getPowerUserMenuUnlocked()) {
             settings->setPowerUserMenuUnlocked(true);
             settings->writeFile();
-            brls::Application::notify("Power User Menu unlocked!");
+            brls::Application::notify("akira/settings/power_user_unlocked"_i18n);
             brls::Logger::info("Power User Menu unlocked");
             updatePowerUserVisibility();
             brls::Application::giveFocus(unlockBitrateMaxToggle);
@@ -1022,7 +1057,7 @@ void SettingsTab::initPowerUserSection() {
     });
 
     unlockBitrateMaxToggle->init(
-        "Unlock Bitrate Max",
+        "akira/settings/unlock_bitrate_max"_i18n,
         settings->getUnlockBitrateMax(),
         [this](bool isOn) {
             settings->setUnlockBitrateMax(isOn);
@@ -1034,7 +1069,7 @@ void SettingsTab::initPowerUserSection() {
     );
 
     autoReconnectToggle->init(
-        "Auto Reconnect",
+        "akira/settings/auto_reconnect"_i18n,
         settings->getAutoReconnect(),
         [this](bool isOn) {
             settings->setAutoReconnect(isOn);
@@ -1065,7 +1100,7 @@ void SettingsTab::initRequestIdrOnFecFailureToggle() {
     bool currentValue = settings->getRequestIdrOnFecFailure();
 
     requestIdrOnFecFailureToggle->init(
-        "Request IDR on FEC Failure",
+        "akira/settings/request_idr"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setRequestIdrOnFecFailure(isOn);
@@ -1081,16 +1116,16 @@ void SettingsTab::initPacketLossMaxSlider() {
     packetLossMaxSlider->detail->setWidth(60);
     packetLossMaxSlider->detail->setShrink(0);
     packetLossMaxSlider->init(
-        "Packet Loss Max Reported",
+        "akira/settings/packet_loss_max"_i18n,
         currentValue,
         [this](float value) {
             int percent = static_cast<int>(value * 100.0f);
             settings->setPacketLossMax(value);
-            packetLossMaxSlider->detail->setText(std::format("{}%", percent));
+            packetLossMaxSlider->detail->setText(brls::getStr("akira/settings/percent_format", percent));
             settings->writeFile();
         }
     );
-    packetLossMaxSlider->detail->setText(std::format("{}%", currentPercent));
+    packetLossMaxSlider->detail->setText(brls::getStr("akira/settings/percent_format", currentPercent));
     packetLossMaxSlider->slider->setStep(0.05f);
 }
 
@@ -1098,7 +1133,7 @@ void SettingsTab::initEnableFileLoggingToggle() {
     bool currentValue = settings->getEnableFileLogging();
 
     enableFileLoggingToggle->init(
-        "File Logging",
+        "akira/settings/file_logging"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setEnableFileLogging(isOn);
@@ -1125,7 +1160,7 @@ void SettingsTab::initDebugLwipLogToggle() {
     bool currentValue = settings->getDebugLwipLog();
 
     debugLwipLogToggle->init(
-        "lwIP Relay Log",
+        "akira/settings/lwip_log"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setDebugLwipLog(isOn);
@@ -1138,7 +1173,7 @@ void SettingsTab::initDebugWireguardLogToggle() {
     bool currentValue = settings->getDebugWireguardLog();
 
     debugWireguardLogToggle->init(
-        "WireGuard Log",
+        "akira/settings/wireguard_log"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setDebugWireguardLog(isOn);
@@ -1151,7 +1186,7 @@ void SettingsTab::initDebugRenderLogToggle() {
     bool currentValue = settings->getDebugRenderLog();
 
     debugRenderLogToggle->init(
-        "Render Log",
+        "akira/settings/render_log"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setDebugRenderLog(isOn);
@@ -1164,7 +1199,7 @@ void SettingsTab::initDebugChiakiLogToggle() {
     bool currentValue = settings->getDebugChiakiLog();
 
     debugChiakiLogToggle->init(
-        "Chiaki Log",
+        "akira/settings/chiaki_log"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setDebugChiakiLog(isOn);
@@ -1177,7 +1212,7 @@ void SettingsTab::initDebugDiscoveryLogToggle() {
     bool currentValue = settings->getDebugDiscoveryLog();
 
     debugDiscoveryLogToggle->init(
-        "Discovery Log",
+        "akira/settings/discovery_log"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setDebugDiscoveryLog(isOn);
@@ -1190,7 +1225,7 @@ void SettingsTab::initDebugFfmpegLogToggle() {
     bool currentValue = settings->getDebugFfmpegLog();
 
     debugFfmpegLogToggle->init(
-        "FFmpeg Log",
+        "akira/settings/ffmpeg_log"_i18n,
         currentValue,
         [this](bool isOn) {
             settings->setDebugFfmpegLog(isOn);

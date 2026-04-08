@@ -2,6 +2,9 @@
 #include "core/discovery_manager.hpp"
 #include <ranges>
 
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 // Custom button style with colored background, no border
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
     .shadowType              = brls::ShadowType::GENERIC,
@@ -24,7 +27,7 @@ HostSettingsView::HostSettingsView(Host* host)
     settings = SettingsManager::getInstance();
     originalHostName = host->getHostName();
 
-    titleLabel->setText("Settings for " + host->getHostName());
+    titleLabel->setText(brls::getStr("akira/host_settings/settings_for", host->getHostName()));
 
     initHostNameInput();
     initHostAddrInput();
@@ -66,22 +69,22 @@ void HostSettingsView::initHostNameInput()
     }
 
     hostNameInput->init(
-        "Host Name",
+        "akira/host_settings/host_name"_i18n,
         displayName,
         [](std::string text) {},
-        "e.g., Living Room PS5",
-        "Name to identify this console"
+        "akira/host_settings/host_name_placeholder"_i18n,
+        "akira/host_settings/host_name_hint"_i18n
     );
 }
 
 void HostSettingsView::initHostAddrInput()
 {
     hostAddrInput->init(
-        "IP Address",
+        "akira/host_settings/ip_address"_i18n,
         host->getHostAddr(),
         [](std::string text) {},
-        "e.g., 192.168.1.100",
-        "PlayStation's IP address"
+        "akira/host_settings/ip_placeholder"_i18n,
+        "akira/host_settings/ip_hint"_i18n
     );
 
     if (host->isRemote()) {
@@ -94,22 +97,22 @@ void HostSettingsView::initPsnAccountIdInput()
     std::string currentId = host->getPerHostPsnAccountId();
 
     psnAccountIdInput->init(
-        "PSN Account ID",
+        "akira/host_settings/psn_account_id"_i18n,
         currentId,
         [](std::string text) {},
-        "Leave empty for global",
-        "Base64 encoded account ID (per-host override)"
+        "akira/host_settings/psn_account_id_placeholder"_i18n,
+        "akira/host_settings/psn_account_id_hint"_i18n
     );
 }
 
 void HostSettingsView::initLookupButton()
 {
     psnOnlineIdInput->init(
-        "Look up by Online ID",
+        "akira/host_settings/lookup_by_online_id"_i18n,
         "",
         [](std::string text) {},
-        "Enter PSN username",
-        "Look up account ID from PSN username"
+        "akira/host_settings/lookup_online_id_placeholder"_i18n,
+        "akira/host_settings/lookup_online_id_hint"_i18n
     );
 
     // Style lookup button with blue
@@ -119,11 +122,11 @@ void HostSettingsView::initLookupButton()
     lookupBtn->registerClickAction([this](brls::View* view) {
         std::string onlineId = psnOnlineIdInput->getValue();
         if (onlineId.empty()) {
-            brls::Application::notify("Please enter a PSN Online ID first");
+            brls::Application::notify("akira/host_settings/enter_online_id_first"_i18n);
             return true;
         }
 
-        brls::Application::notify("Looking up account ID...");
+        brls::Application::notify("akira/host_settings/looking_up"_i18n);
 
         DiscoveryManager::getInstance()->lookupPsnAccountId(
             onlineId,
@@ -131,13 +134,13 @@ void HostSettingsView::initLookupButton()
                 brls::sync([this, accountId]() {
                     psnAccountIdInput->setValue(accountId);
                     psnOnlineIdInput->setValue("");
-                    brls::Application::notify("Account ID found!");
+                    brls::Application::notify("akira/host_settings/account_id_found"_i18n);
                     brls::Logger::info("Found account ID for PSN user");
                 });
             },
             [](const std::string& error) {
                 brls::sync([error]() {
-                    brls::Application::notify("Lookup failed: " + error);
+                    brls::Application::notify(brls::getStr("akira/host_settings/lookup_failed", error));
                     brls::Logger::error("PSN account lookup failed: {}", error);
                 });
             }
@@ -152,17 +155,17 @@ void HostSettingsView::initConsolePINInput()
     std::string currentPin = settings->getConsolePIN(host);
 
     consolePINInput->init(
-        "Console PIN",
+        "akira/host_settings/console_pin"_i18n,
         currentPin,
         [](std::string text) {},
-        "4-digit PIN",
-        "For auto-login (optional)"
+        "akira/host_settings/console_pin_placeholder"_i18n,
+        "akira/host_settings/console_pin_hint"_i18n
     );
 }
 
 void HostSettingsView::initHapticSelector()
 {
-    std::vector<std::string> options = {"Inherit", "Disabled", "Weak", "Strong"};
+    std::vector<std::string> options = {"akira/host_settings/haptic_inherit"_i18n, "akira/host_settings/haptic_disabled"_i18n, "akira/host_settings/haptic_weak"_i18n, "akira/host_settings/haptic_strong"_i18n};
 
     // Map host haptic to selector index:
     // -1 (inherit) -> 0, 0 (disabled) -> 1, 1 (weak) -> 2, 2 (strong) -> 3
@@ -174,7 +177,7 @@ void HostSettingsView::initHapticSelector()
     selectedHaptic = hostHaptic;
 
     hapticSelector->init(
-        "Haptic Feedback",
+        "akira/settings/haptic_feedback"_i18n,
         options,
         currentIndex,
         [](int selected) {
@@ -213,7 +216,7 @@ void HostSettingsView::onSaveClicked()
     std::string consolePIN = consolePINInput->getValue();
 
     if (newHostName.empty()) {
-        brls::Application::notify("Host name cannot be empty");
+        brls::Application::notify("akira/host_settings/error_empty_name"_i18n);
         return;
     }
 
@@ -225,22 +228,22 @@ void HostSettingsView::onSaveClicked()
 
     if (!host->isRemote()) {
         if (newHostAddr.empty()) {
-            brls::Application::notify("IP address cannot be empty");
+            brls::Application::notify("akira/host_settings/error_empty_ip"_i18n);
             return;
         }
         if (!SettingsManager::isValidHostAddress(newHostAddr)) {
-            brls::Application::notify("Invalid IP address or hostname");
+            brls::Application::notify("akira/host_settings/error_invalid_ip"_i18n);
             return;
         }
     }
 
     if (!consolePIN.empty()) {
         if (consolePIN.length() != 4) {
-            brls::Application::notify("Console PIN must be 4 digits");
+            brls::Application::notify("akira/host_settings/error_pin_length"_i18n);
             return;
         }
         if (!std::ranges::all_of(consolePIN, ::isdigit)) {
-            brls::Application::notify("Console PIN must be digits only");
+            brls::Application::notify("akira/host_settings/error_pin_digits"_i18n);
             return;
         }
     }
@@ -248,7 +251,7 @@ void HostSettingsView::onSaveClicked()
     if (newHostName != originalHostName) {
         auto* hostsMap = settings->getHostsMap();
         if (hostsMap->find(newHostName) != hostsMap->end()) {
-            brls::Application::notify("A host with this name already exists");
+            brls::Application::notify("akira/host_settings/error_duplicate_name"_i18n);
             return;
         }
         settings->renameHost(originalHostName, newHostName);
@@ -268,7 +271,7 @@ void HostSettingsView::onSaveClicked()
         consolePIN.empty() ? "(none)" : "****",
         selectedHaptic);
 
-    brls::Application::notify("Settings saved");
+    brls::Application::notify("akira/host_settings/saved"_i18n);
 
     if (onSaved) {
         onSaved();
