@@ -41,6 +41,10 @@ public:
 
     void triggerBorderFlash() { m_border_flash_frames = BORDER_FLASH_DURATION; }
 
+    void setShowTouchDebug(bool show) override { m_show_touch_debug = show; }
+    bool getShowTouchDebug() const override { return m_show_touch_debug; }
+    void showTouchCoords(uint16_t rawX, uint16_t rawY, uint16_t mappedX, uint16_t mappedY) override;
+
     void setTickCallback(TickCallback cb) override { m_tick_callback = std::move(cb); }
 
 private:
@@ -51,10 +55,17 @@ private:
     void initTextRendering();
     void renderStatsOverlay();
     void renderBorderFlash();
+    void renderTouchDebug();
     void cleanupTextRendering();
 
     int m_border_flash_frames = 0;
     static constexpr int BORDER_FLASH_DURATION = 20;
+
+    int m_touch_debug_frames = 0;
+    static constexpr int TOUCH_DEBUG_DURATION = 240;
+    uint16_t m_touch_debug_raw_x = 0, m_touch_debug_raw_y = 0;
+    uint16_t m_touch_debug_mapped_x = 0, m_touch_debug_mapped_y = 0;
+    uint16_t m_touch_debug_screen_x = 0, m_touch_debug_screen_y = 0;
 
     CShader m_text_vertex_shader;
     CShader m_text_fragment_shader;

@@ -529,6 +529,7 @@ void StreamView::showDisconnectMenu()
     auto* menu = new StreamMenu();
 
     menu->setStatsEnabled(session->getShowStatsOverlay());
+    menu->setTouchDebugEnabled(session->getShowTouchDebug());
 
     auto weak = weak_from_this();
 
@@ -536,6 +537,16 @@ void StreamView::showDisconnectMenu()
         if (auto self = weak.lock()) {
             brls::Logger::info("Stats overlay toggled: {}", enabled);
             self->session->setShowStatsOverlay(enabled);
+            self->session->setVideoPaused(false);
+            self->menuOpen = false;
+            brls::Application::blockInputs(true);
+        }
+    });
+
+    menu->setOnTouchDebugToggle([weak](bool enabled) {
+        if (auto self = weak.lock()) {
+            brls::Logger::info("Touch debug toggled: {}", enabled);
+            self->session->setShowTouchDebug(enabled);
             self->session->setVideoPaused(false);
             self->menuOpen = false;
             brls::Application::blockInputs(true);

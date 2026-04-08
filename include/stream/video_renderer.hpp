@@ -34,11 +34,18 @@ public:
     virtual void updateResolution(int width, int height) { (void)width; (void)height; }
     virtual void triggerBorderFlash() {}
 
+    virtual void setShowTouchDebug(bool show) { m_show_touch_debug = show; }
+    virtual bool getShowTouchDebug() const { return m_show_touch_debug; }
+    virtual void showTouchCoords(uint16_t rawX, uint16_t rawY, uint16_t mappedX, uint16_t mappedY) {
+        (void)rawX; (void)rawY; (void)mappedX; (void)mappedY;
+    }
+
     using TickCallback = std::function<bool()>;
     virtual void setTickCallback(TickCallback cb) { (void)cb; }
 
 protected:
     bool m_show_stats = false;
+    bool m_show_touch_debug = false;
     StreamStats m_stats;
 };
 

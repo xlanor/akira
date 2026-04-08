@@ -330,6 +330,25 @@ void Session::triggerBorderFlash()
         m_video_renderer->triggerBorderFlash();
 }
 
+void Session::showTouchCoords(uint16_t rawX, uint16_t rawY, uint16_t mappedX, uint16_t mappedY)
+{
+    if (m_video_renderer)
+        m_video_renderer->showTouchCoords(rawX, rawY, mappedX, mappedY);
+}
+
+void Session::setShowTouchDebug(bool show)
+{
+    if (m_video_renderer)
+        m_video_renderer->setShowTouchDebug(show);
+}
+
+bool Session::getShowTouchDebug() const
+{
+    if (m_video_renderer)
+        return m_video_renderer->getShowTouchDebug();
+    return false;
+}
+
 void Session::setSession(ChiakiSession* session)
 {
     m_session = session;

@@ -266,13 +266,16 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
     m_queue.submitCommands(m_video_cmdlist);
     m_queue.flush();
 
-    if (m_show_stats || m_border_flash_frames > 0)
+    if (m_show_stats || m_border_flash_frames > 0 || m_touch_debug_frames > 0)
         m_queue.waitIdle();
 
     renderStatsOverlay();
 
     if (m_border_flash_frames > 0)
         renderBorderFlash();
+
+    if (m_touch_debug_frames > 0)
+        renderTouchDebug();
 }
 
 void Deko3dRenderer::registerCallback()
@@ -931,6 +934,141 @@ void Deko3dRenderer::renderBorderFlash()
     if (list)
     {
         m_queue.submitCommands(list);
+        m_queue.flush();
+    }
+}
+
+void Deko3dRenderer::showTouchCoords(uint16_t rawX, uint16_t rawY, uint16_t mappedX, uint16_t mappedY)
+{
+    if (!m_show_touch_debug)
+        return;
+    m_touch_debug_raw_x = rawX;
+    m_touch_debug_raw_y = rawY;
+    m_touch_debug_mapped_x = mappedX;
+    m_touch_debug_mapped_y = mappedY;
+    m_touch_debug_screen_x = rawX;
+    m_touch_debug_screen_y = rawY;
+    m_touch_debug_frames = TOUCH_DEBUG_DURATION;
+}
+
+void Deko3dRenderer::renderTouchDebug()
+{
+    if (m_touch_debug_frames <= 0 || !m_text_initialized)
+        return;
+
+    m_touch_debug_frames--;
+
+    float fade = (float)m_touch_debug_frames / (float)TOUCH_DEBUG_DURATION;
+    float alpha = fade;
+
+    unsigned screenW = brls::Application::windowWidth;
+    unsigned screenH = brls::Application::windowHeight;
+
+    float dotX = (float)m_touch_debug_screen_x;
+    float dotY = (float)m_touch_debug_screen_y;
+
+    constexpr float DOT_SIZE = 14.0f;
+    float r = 1.0f, g = 0.8f, b = 0.2f;
+
+    std::vector<TextVertex> vertices;
+    vertices.reserve(128);
+
+    auto addQuad = [&](float x1, float y1, float x2, float y2, float cr, float cg, float cb, float ca) {
+        float nx1, ny1, nx2, ny2;
+        pixelToNDC(x1, y1, screenW, screenH, nx1, ny1);
+        pixelToNDC(x2, y2, screenW, screenH, nx2, ny2);
+        vertices.push_back({{ nx1, ny1, 0.0f }, { -1.0f, -1.0f }, { cr, cg, cb, ca }});
+        vertices.push_back({{ nx2, ny1, 0.0f }, { -1.0f, -1.0f }, { cr, cg, cb, ca }});
+        vertices.push_back({{ nx1, ny2, 0.0f }, { -1.0f, -1.0f }, { cr, cg, cb, ca }});
+        vertices.push_back({{ nx2, ny1, 0.0f }, { -1.0f, -1.0f }, { cr, cg, cb, ca }});
+        vertices.push_back({{ nx2, ny2, 0.0f }, { -1.0f, -1.0f }, { cr, cg, cb, ca }});
+        vertices.push_back({{ nx1, ny2, 0.0f }, { -1.0f, -1.0f }, { cr, cg, cb, ca }});
+    };
+
+    addQuad(dotX - DOT_SIZE, dotY - DOT_SIZE, dotX + DOT_SIZE, dotY + DOT_SIZE, r, g, b, alpha);
+
+    constexpr float CHAR_SCALE = 2.0f;
+    float charW = BitmapFont::CHAR_WIDTH * CHAR_SCALE;
+    float charH = BitmapFont::CHAR_HEIGHT * CHAR_SCALE;
+
+    std::string line1 = std::format("HID:({},{})", m_touch_debug_raw_x, m_touch_debug_raw_y);
+    std::string line2 = std::format("PAD:({},{})", m_touch_debug_mapped_x, m_touch_debug_mapped_y);
+
+    float textX = dotX + DOT_SIZE + 4.0f;
+    float textY = dotY - charH;
+
+    if (textX + line1.size() * charW > screenW - 10)
+        textX = dotX - DOT_SIZE - 4.0f - line1.size() * charW;
+    if (textY < 10)
+        textY = dotY + DOT_SIZE + 4.0f;
+
+    auto drawText = [&](const std::string& text, float startX, float startY) {
+        float cx = startX;
+        for (char c : text)
+        {
+            float u1, v1, u2, v2;
+            BitmapFont::getCharUV(c, u1, v1, u2, v2);
+            float nx1, ny1, nx2, ny2;
+            pixelToNDC(cx, startY, screenW, screenH, nx1, ny1);
+            pixelToNDC(cx + charW, startY + charH, screenW, screenH, nx2, ny2);
+            vertices.push_back({{ nx1, ny1, 0.0f }, { u1, v1 }, { r, g, b, alpha }});
+            vertices.push_back({{ nx2, ny1, 0.0f }, { u2, v1 }, { r, g, b, alpha }});
+            vertices.push_back({{ nx1, ny2, 0.0f }, { u1, v2 }, { r, g, b, alpha }});
+            vertices.push_back({{ nx2, ny1, 0.0f }, { u2, v1 }, { r, g, b, alpha }});
+            vertices.push_back({{ nx2, ny2, 0.0f }, { u2, v2 }, { r, g, b, alpha }});
+            vertices.push_back({{ nx1, ny2, 0.0f }, { u1, v2 }, { r, g, b, alpha }});
+            cx += charW;
+        }
+    };
+
+    drawText(line1, textX, textY);
+    drawText(line2, textX, textY + charH + 2.0f);
+
+    if (vertices.size() > MAX_TEXT_VERTICES)
+        return;
+
+    memcpy(m_text_vertex_buffer.getCpuAddr(), vertices.data(), vertices.size() * sizeof(TextVertex));
+
+    dk::Image* framebuffer = m_vctx->getFramebuffer();
+    if (!framebuffer)
+        return;
+
+    m_overlay_cmdbuf.clear();
+    m_overlay_cmdbuf.addMemory(m_overlay_cmdmem.getMemBlock(), m_overlay_cmdmem.getOffset(), m_overlay_cmdmem.getSize());
+
+    dk::ImageView colorTarget{*framebuffer};
+    m_overlay_cmdbuf.bindRenderTargets(&colorTarget);
+    m_overlay_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
+    m_overlay_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
+
+    m_overlay_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
+    m_overlay_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
+        .setDepthTestEnable(false)
+        .setDepthWriteEnable(false)
+        .setStencilTestEnable(false));
+    m_overlay_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
+    m_overlay_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
+    m_overlay_cmdbuf.bindBlendStates(0, dk::BlendState{}
+        .setColorBlendOp(DkBlendOp_Add)
+        .setSrcColorBlendFactor(DkBlendFactor_SrcAlpha)
+        .setDstColorBlendFactor(DkBlendFactor_InvSrcAlpha)
+        .setAlphaBlendOp(DkBlendOp_Add)
+        .setSrcAlphaBlendFactor(DkBlendFactor_One)
+        .setDstAlphaBlendFactor(DkBlendFactor_InvSrcAlpha));
+
+    m_overlay_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
+    m_image_descriptor_set->bindForImages(m_overlay_cmdbuf);
+    m_overlay_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
+    m_overlay_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
+    m_overlay_cmdbuf.bindVtxAttribState(TextVertexAttribState);
+    m_overlay_cmdbuf.bindVtxBufferState(TextVertexBufferState);
+
+    m_overlay_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
+
+    DkCmdList touchList = m_overlay_cmdbuf.finishList();
+    if (touchList)
+    {
+        m_queue.submitCommands(touchList);
         m_queue.flush();
     }
 }

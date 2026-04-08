@@ -33,6 +33,15 @@ StreamMenu::StreamMenu()
         return true;
     });
 
+    this->touchDebugButton->registerClickAction([this](brls::View*) {
+        brls::Logger::info("StreamMenu: touch debug button clicked");
+        bool newState = !this->touchDebugEnabled;
+        if (this->onTouchDebugToggle)
+            this->onTouchDebugToggle(newState);
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        return true;
+    });
+
     this->resetGyroButton->registerClickAction([this](brls::View*) {
         brls::Logger::info("StreamMenu: reset gyro button clicked");
         if (this->onGyroReset)
@@ -104,11 +113,25 @@ void StreamMenu::setOnButtonMapping(std::function<void()> callback)
     this->onButtonMapping = callback;
 }
 
+void StreamMenu::setOnTouchDebugToggle(std::function<void(bool)> callback)
+{
+    this->onTouchDebugToggle = callback;
+}
+
 void StreamMenu::setStatsEnabled(bool enabled)
 {
     this->statsEnabled = enabled;
     if (this->statsButton)
     {
         this->statsButton->setText(enabled ? "akira/stream_menu/hide_stats"_i18n : "akira/stream_menu/show_stats"_i18n);
+    }
+}
+
+void StreamMenu::setTouchDebugEnabled(bool enabled)
+{
+    this->touchDebugEnabled = enabled;
+    if (this->touchDebugButton)
+    {
+        this->touchDebugButton->setText(enabled ? "Hide Touch Debug" : "Debug Touch");
     }
 }

@@ -89,6 +89,9 @@ public:
     void setShowStatsOverlay(bool show) { m_show_stats_overlay = show; }
     void setVideoPaused(bool paused);
     void triggerBorderFlash();
+    void showTouchCoords(uint16_t rawX, uint16_t rawY, uint16_t mappedX, uint16_t mappedY);
+    void setShowTouchDebug(bool show);
+    bool getShowTouchDebug() const;
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);
 
     bool hasReceivedFirstFrame() const { return m_first_frame_received; }

@@ -250,6 +250,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
             brls::Logger::info("Touch: new finger_id={} -> touch_id={}, raw=({},{}) mapped=({},{})",
                 sw_state.touches[i].finger_id, touch_id,
                 sw_state.touches[i].x, sw_state.touches[i].y, x, y);
+            Session::GetInstance()->showTouchCoords(rawX, rawY, x, y);
             if (touch_id < 0)
                 brls::Logger::warning("Touch: no free touch slots (max {})", CHIAKI_CONTROLLER_TOUCHES_MAX);
         }
