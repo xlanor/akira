@@ -29,12 +29,12 @@
                 marginBottom="12">
 
                 <brls:Label
-                    text="PlayStation Consoles"
+                    text="@i18n/akira/hosts/title"
                     fontSize="24"/>
 
                 <brls:Button
                     id="host/findRemoteBtn"
-                    text="Find Remote"
+                    text="@i18n/akira/hosts/find_remote"
                     style="bordered"/>
 
             </brls:Box>
@@ -62,13 +62,13 @@
         visibility="gone">
 
         <brls:Label
-            text="No consoles found"
+            text="@i18n/akira/hosts/no_consoles"
             fontSize="20"
             textColor="#888888"
             marginBottom="10"/>
 
         <brls:Label
-            text="Make sure your PlayStation is on the same network"
+            text="@i18n/akira/hosts/no_consoles_hint"
             fontSize="14"
             textColor="#666666"/>
     </brls:Box>

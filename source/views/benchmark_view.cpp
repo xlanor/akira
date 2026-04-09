@@ -5,6 +5,9 @@
 
 #include <format>
 #include <memory>
+
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
 #include <vector>
 #include <chrono>
 #include <cstdio>
@@ -56,7 +59,7 @@ void BenchmarkView::startBenchmark()
     if (err != CHIAKI_ERR_SUCCESS) {
         benchmarkRunning = false;
         benchmarkFinished = true;
-        addLogLine("ERROR: Failed to create benchmark thread");
+        addLogLine("akira/benchmark/error_thread"_i18n);
     } else {
         args.release();
         threadStarted = true;
@@ -108,16 +111,16 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
     BenchmarkView* view = args->view;
     delete args;
 
-    view->addLogLine("========================================");
-    view->addLogLine("        GHASH Benchmark Results");
-    view->addLogLine("========================================");
+    view->addLogLine("akira/benchmark/header_line"_i18n);
+    view->addLogLine("akira/benchmark/results_title"_i18n);
+    view->addLogLine("akira/benchmark/header_line"_i18n);
     view->addLogLine("");
 
     const int iterations = 10000;
     const size_t sizes[] = {64, 256, 1024, 4096};
     const int numSizes = 4;
 
-    view->addLogLine(std::format("Iterations per test: {}", iterations));
+    view->addLogLine(brls::getStr("akira/benchmark/iterations", iterations));
     view->addLogLine("");
 
     uint8_t key[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
@@ -129,11 +132,11 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         std::vector<uint8_t> data(size, 0xAB);
         uint8_t tag[16];
 
-        view->addLogLine("----------------------------------------");
-        view->addLogLine(std::format("Testing {} byte blocks...", size));
+        view->addLogLine("akira/benchmark/separator"_i18n);
+        view->addLogLine(brls::getStr("akira/benchmark/testing_blocks", size));
         view->addLogLine("");
 
-        view->addLogLine(std::format("  [TABLE] Running {} iterations...", iterations));
+        view->addLogLine(brls::getStr("akira/benchmark/table_running", iterations));
         chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_TABLE);
         ChiakiGmacContext tableCtx;
         chiaki_gmac_context_init(&tableCtx);
@@ -149,11 +152,10 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         double tableOps = (iterations * 1000.0) / tableMs;
         double tableMBs = (iterations * size * 1000.0) / (tableMs * 1024.0 * 1024.0);
 
-        view->addLogLine(std::format("  [TABLE] {:.0f} ops/s | {:.2f} MB/s | {:.1f} ms total",
-                 tableOps, tableMBs, tableMs));
+        view->addLogLine(brls::getStr("akira/benchmark/table_result", tableOps, tableMBs, tableMs));
 
 #ifdef CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL
-        view->addLogLine(std::format("  [PMULL] Running {} iterations...", iterations));
+        view->addLogLine(brls::getStr("akira/benchmark/pmull_running", iterations));
         chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
         ChiakiGmacContext pmullCtx;
         chiaki_gmac_context_init(&pmullCtx);
@@ -169,26 +171,26 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
         double pmullOps = (iterations * 1000.0) / pmullMs;
         double pmullMBs = (iterations * size * 1000.0) / (pmullMs * 1024.0 * 1024.0);
 
-        view->addLogLine(std::format("  [PMULL] {:.0f} ops/s | {:.2f} MB/s | {:.1f} ms total",
+        view->addLogLine(fmt::format(fmt::runtime("akira/benchmark/pmull_result"_i18n),
                  pmullOps, pmullMBs, pmullMs));
 
         double speedup = tableMs / pmullMs;
         if (speedup >= 1.0) {
-            view->addLogLine(std::format("  >> PMULL is {:.2f}x faster", speedup));
+            view->addLogLine(fmt::format(fmt::runtime("akira/benchmark/pmull_faster"_i18n), speedup));
         } else {
-            view->addLogLine(std::format("  >> TABLE is {:.2f}x faster", 1.0 / speedup));
+            view->addLogLine(fmt::format(fmt::runtime("akira/benchmark/table_faster"_i18n), 1.0 / speedup));
         }
 #else
-        view->addLogLine("  [PMULL] Not compiled (CHIAKI_LIB_ENABLE_LIBNX_EXPERIMENTAL not set)");
+        view->addLogLine("akira/benchmark/pmull_not_compiled"_i18n);
 #endif
         view->addLogLine("");
     }
 
     chiaki_libnx_set_ghash_mode(CHIAKI_LIBNX_GHASH_PMULL);
 
-    view->addLogLine("========================================");
-    view->addLogLine("         Benchmark Complete!");
-    view->addLogLine("========================================");
+    view->addLogLine("akira/benchmark/header_line"_i18n);
+    view->addLogLine("akira/benchmark/complete_title"_i18n);
+    view->addLogLine("akira/benchmark/header_line"_i18n);
 
     brls::sync([]() {
         auto* statusLabel = (brls::Label*)brls::Application::getCurrentFocus();
@@ -199,7 +201,7 @@ void* BenchmarkView::benchmarkThreadFunc(void* user)
                 if (benchView) {
                     auto* status = (brls::Label*)benchView->getView("benchmark/status");
                     if (status) {
-                        status->setText("Complete");
+                        status->setText("akira/benchmark/complete"_i18n);
                     }
                     break;
                 }

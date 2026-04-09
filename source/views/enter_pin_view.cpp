@@ -1,6 +1,9 @@
 #include "views/enter_pin_view.hpp"
 #include <format>
 
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 EnterPinView::EnterPinView(Host* host, PinViewType type, bool isError)
     : host(host)
     , type(type)
@@ -44,17 +47,17 @@ std::string EnterPinView::getTitle() const
         case PinViewType::Registration:
             if (isError)
             {
-                return "Registration failed. Please try again with a new PIN.";
+                return "akira/pin/registration_error"_i18n;
             }
-            return "Enter the PIN shown on your PlayStation";
+            return "akira/pin/registration_prompt"_i18n;
         case PinViewType::Login:
             if (isError)
             {
-                return "Login PIN incorrect. Please try again.";
+                return "akira/pin/login_error"_i18n;
             }
-            return "Enter your login PIN";
+            return "akira/pin/login_prompt"_i18n;
         default:
-            return "Enter PIN";
+            return "akira/pin/enter_pin"_i18n;
     }
 }
 
@@ -62,7 +65,7 @@ void EnterPinView::showPinDialog()
 {
     int maxLen = getMaxPinLength();
     std::string title = getTitle();
-    std::string hint = std::format("{} digits without spaces", maxLen);
+    std::string hint = brls::getStr("akira/pin/digits_hint", maxLen);
 
     ASYNC_RETAIN
     bool success = brls::Application::getImeManager()->openForNumber(
@@ -129,7 +132,7 @@ void EnterPinView::draw(NVGcontext* vg, float x, float y, float width, float hei
 
     nvgFontSize(vg, 16);
     nvgFillColor(vg, nvgRGBA(180, 180, 180, 255));
-    std::string instruction = "Press A to enter PIN";
+    std::string instruction = "akira/pin/press_a"_i18n;
     nvgText(vg, x + width / 2, y + height / 2 + 20, instruction.c_str(), nullptr);
 
     if (!pinDialogShown)

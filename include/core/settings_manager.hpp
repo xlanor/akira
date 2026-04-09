@@ -75,6 +75,7 @@ private:
     bool enableFileLogging = false;
     bool enableThreadAffinity = false;
     bool lowLatencyMode = false;
+    std::string debugLocale;
 
     // Debug logging settings
     bool debugLwipLog = false;
@@ -259,6 +260,9 @@ public:
 
     bool getLowLatencyMode() const;
     void setLowLatencyMode(bool enabled);
+
+    std::string getDebugLocale() const;
+    void setDebugLocale(const std::string& locale);
 
     // Debug logging
     bool getDebugLwipLog() const;

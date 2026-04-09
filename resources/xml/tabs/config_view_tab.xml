@@ -10,7 +10,7 @@
 
     <brls:Button
         id="config/revealBtn"
-        text="Reveal Secrets"
+        text="@i18n/akira/config_view/reveal_secrets"
         marginBottom="15"/>
 
     <brls:ScrollingFrame

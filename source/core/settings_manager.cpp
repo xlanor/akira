@@ -343,6 +343,8 @@ void SettingsManager::parseTomlFile() {
             enableThreadAffinity = *val;
         if (auto val = config["low_latency_mode"].value<bool>())
             lowLatencyMode = *val;
+        if (auto val = config["debug_locale"].value<std::string>())
+            debugLocale = *val;
         if (auto val = config["debug_lwip_log"].value<bool>())
             debugLwipLog = *val;
         if (auto val = config["debug_wireguard_log"].value<bool>())
@@ -706,6 +708,8 @@ int SettingsManager::writeFile() {
         config.insert("enable_thread_affinity", enableThreadAffinity);
     if (lowLatencyMode)
         config.insert("low_latency_mode", lowLatencyMode);
+    if (!debugLocale.empty())
+        config.insert("debug_locale", debugLocale);
     if (debugLwipLog)
         config.insert("debug_lwip_log", debugLwipLog);
     if (debugWireguardLog)
@@ -1412,6 +1416,14 @@ bool SettingsManager::getLowLatencyMode() const {
 
 void SettingsManager::setLowLatencyMode(bool enabled) {
     lowLatencyMode = enabled;
+}
+
+std::string SettingsManager::getDebugLocale() const {
+    return debugLocale;
+}
+
+void SettingsManager::setDebugLocale(const std::string& locale) {
+    debugLocale = locale;
 }
 
 bool SettingsManager::getDebugLwipLog() const {

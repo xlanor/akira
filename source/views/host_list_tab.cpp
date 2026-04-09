@@ -7,6 +7,9 @@
 #include "stream/session.hpp"
 #include "util/shared_view_holder.hpp"
 
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
+
 #include <ctime>
 
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
@@ -82,7 +85,7 @@ public:
         remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         auto* remoteBadgeLabel = new brls::Label();
-        remoteBadgeLabel->setText("Remote");
+        remoteBadgeLabel->setText("akira/hosts/remote"_i18n);
         remoteBadgeLabel->setFontSize(11);
         remoteBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
         remoteBadge->addView(remoteBadgeLabel);
@@ -100,7 +103,7 @@ public:
         autoBadge->setVisibility(host->isAuto() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         auto* autoBadgeLabel = new brls::Label();
-        autoBadgeLabel->setText("Auto");
+        autoBadgeLabel->setText("akira/hosts/auto"_i18n);
         autoBadgeLabel->setFontSize(11);
         autoBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
         autoBadge->addView(autoBadgeLabel);
@@ -118,7 +121,7 @@ public:
         manualBadge->setVisibility(host->isManual() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         auto* manualBadgeLabel = new brls::Label();
-        manualBadgeLabel->setText("Manual");
+        manualBadgeLabel->setText("akira/hosts/manual"_i18n);
         manualBadgeLabel->setFontSize(11);
         manualBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
         manualBadge->addView(manualBadgeLabel);
@@ -159,7 +162,7 @@ public:
     void updateState() {
         std::string status = host->getTargetString() + " - " + host->getStateString();
         if (host->isRegistered()) {
-            status += " (Registered)";
+            status += " (" + "akira/common/registered"_i18n + ")";
         }
         statusLabel->setText(status);
 
@@ -169,7 +172,7 @@ public:
         manualBadge->setVisibility(host->isManual() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         if (host->isRemote()) {
-            addrLabel->setText("PSN Remote Play");
+            addrLabel->setText("akira/hosts/psn_remote_play"_i18n);
         } else {
             addrLabel->setText(host->getHostAddr());
         }
@@ -211,7 +214,7 @@ private:
 
     void createConnectButton() {
         connectBtn = new brls::Button();
-        connectBtn->setText("Connect");
+        connectBtn->setText("akira/hosts/connect"_i18n);
         connectBtn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
         connectBtn->setShrink(0);
         connectBtn->setMarginRight(10);
@@ -230,8 +233,8 @@ private:
             std::string onlineId = settings->getPsnOnlineId(host);
 
             if (needsAccountId && accountId.empty()) {
-                auto* dialog = new brls::Dialog("PSN Account ID Required\n\nPlease configure your PSN Account ID in Settings before connecting.");
-                dialog->addButton("OK", [dialog]() {
+                auto* dialog = new brls::Dialog("akira/hosts/psn_account_id_required"_i18n);
+                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
                     dialog->close();
                 });
                 dialog->open();
@@ -239,8 +242,8 @@ private:
             }
 
             if (!needsAccountId && onlineId.empty()) {
-                auto* dialog = new brls::Dialog("PSN Online ID Required\n\nFor PS4 firmware < 7.0, please configure your PSN Online ID in Settings before connecting.");
-                dialog->addButton("OK", [dialog]() {
+                auto* dialog = new brls::Dialog("akira/hosts/psn_online_id_required"_i18n);
+                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
                     dialog->close();
                 });
                 dialog->open();
@@ -270,7 +273,7 @@ private:
 
     void createWakeButton() {
         wakeBtn = new brls::Button();
-        wakeBtn->setText("Wake");
+        wakeBtn->setText("akira/hosts/wake"_i18n);
         wakeBtn->setStyle(&BUTTONSTYLE_ORANGE);
         wakeBtn->setShrink(0);
         wakeBtn->setMarginRight(10);
@@ -281,9 +284,9 @@ private:
 
             int result = host->wakeup();
             if (result == 0) {
-                brls::Application::notify("Wake-up signal sent to " + host->getHostName());
+                brls::Application::notify(brls::getStr("akira/hosts/wake_sent", host->getHostName()));
             } else {
-                brls::Application::notify("Failed to wake " + host->getHostName());
+                brls::Application::notify(brls::getStr("akira/hosts/wake_failed", host->getHostName()));
             }
 
             return true;
@@ -293,7 +296,7 @@ private:
 
     void createRegisterButton() {
         registerBtn = new brls::Button();
-        registerBtn->setText("Register");
+        registerBtn->setText("akira/hosts/register"_i18n);
         registerBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
         registerBtn->setShrink(0);
         registerBtn->setMarginRight(10);
@@ -311,8 +314,8 @@ private:
             std::string onlineId = settings->getPsnOnlineId(host);
 
             if (needsAccountId && accountId.empty()) {
-                auto* dialog = new brls::Dialog("PSN Account ID Required\n\nPlease configure your PSN Account ID in Settings before registering.\n");
-                dialog->addButton("OK", [dialog]() {
+                auto* dialog = new brls::Dialog("akira/hosts/psn_account_id_required_register"_i18n);
+                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
                     dialog->close();
                 });
                 dialog->open();
@@ -320,8 +323,8 @@ private:
             }
 
             if (!needsAccountId && onlineId.empty()) {
-                auto* dialog = new brls::Dialog("PSN Online ID Required\n\nFor PS4 firmware < 9.0, please enter your PSN username in Settings before registering.");
-                dialog->addButton("OK", [dialog]() {
+                auto* dialog = new brls::Dialog("akira/hosts/psn_online_id_required_register"_i18n);
+                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
                     dialog->close();
                 });
                 dialog->open();
@@ -337,7 +340,7 @@ private:
                 brls::sync([hostPtr]() {
                     brls::Logger::info("onRegistSuccess: inside brls::sync");
                     HostListTab::isRegistering = false;
-                    brls::Application::notify("Registration successful!");
+                    brls::Application::notify("akira/hosts/registration_success"_i18n);
                     SettingsManager::getInstance()->writeFile();
                     if (HostListTab::currentInstance) {
                         HostListTab::currentInstance->updateHostItem(hostPtr);
@@ -348,14 +351,14 @@ private:
             host->setOnRegistFailed([]() {
                 brls::sync([]() {
                     HostListTab::isRegistering = false;
-                    brls::Application::notify("Registration failed. Check PIN and try again.");
+                    brls::Application::notify("akira/hosts/registration_failed"_i18n);
                 });
             });
 
             host->setOnRegistCanceled([]() {
                 brls::sync([]() {
                     HostListTab::isRegistering = false;
-                    brls::Application::notify("Registration canceled");
+                    brls::Application::notify("akira/hosts/registration_canceled"_i18n);
                 });
             });
 
@@ -371,16 +374,16 @@ private:
                     std::string errorMsg;
                     switch (result) {
                         case HOST_REGISTER_ERROR_SETTING_PSNACCOUNTID:
-                            errorMsg = "Error: PSN Account ID is required. Configure in Settings.";
+                            errorMsg = "akira/hosts/error_psn_account_id"_i18n;
                             break;
                         case HOST_REGISTER_ERROR_SETTING_PSNONLINEID:
-                            errorMsg = "Error: PSN Online ID is required for PS4 < 7.0.";
+                            errorMsg = "akira/hosts/error_psn_online_id"_i18n;
                             break;
                         case HOST_REGISTER_ERROR_UNDEFINED_TARGET:
-                            errorMsg = "Error: Console type not recognized.";
+                            errorMsg = "akira/hosts/error_console_type"_i18n;
                             break;
                         default:
-                            errorMsg = "Error: Registration failed.";
+                            errorMsg = "akira/hosts/error_registration_failed"_i18n;
                             break;
                     }
                     brls::Logger::error("Registration failed: {}", errorMsg);
@@ -397,7 +400,7 @@ private:
 
     void createLinkButton() {
         linkBtn = new brls::Button();
-        linkBtn->setText("Link");
+        linkBtn->setText("akira/hosts/link"_i18n);
         linkBtn->setStyle(&BUTTONSTYLE_BLUE);
         linkBtn->setShrink(0);
         linkBtn->setMarginRight(10);
@@ -418,13 +421,13 @@ private:
             }
 
             if (hostNames.empty()) {
-                brls::Application::notify("No registered hosts to link");
+                brls::Application::notify("akira/hosts/no_registered_hosts"_i18n);
                 return true;
             }
 
             Host* remoteHost = host;
             auto* dropdown = new brls::Dropdown(
-                "Select host to link",
+                "akira/hosts/select_host_to_link"_i18n,
                 hostNames,
                 [remoteHost, hostPtrs, hostNames](int selected) {
                     if (selected < 0 || selected >= (int)hostPtrs.size()) return;
@@ -446,7 +449,7 @@ private:
                     localHost->setRemoteDuid(remoteHost->getRemoteDuid());
                     settings->writeFile();
 
-                    brls::Application::notify("Linked to " + remoteName);
+                    brls::Application::notify(brls::getStr("akira/hosts/linked_to", remoteName));
 
                     brls::sync([]() {
                         if (HostListTab::currentInstance) {
@@ -467,7 +470,7 @@ private:
 
     void createSettingsButton() {
         settingsBtn = new brls::Button();
-        settingsBtn->setText("Settings");
+        settingsBtn->setText("akira/hosts/settings"_i18n);
         settingsBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
         settingsBtn->setShrink(0);
         settingsBtn->setMarginRight(10);
@@ -494,20 +497,20 @@ private:
 
     void createDeleteButton() {
         deleteBtn = new brls::Button();
-        deleteBtn->setText("Delete");
+        deleteBtn->setText("akira/hosts/delete"_i18n);
         deleteBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
         deleteBtn->setShrink(0);
         std::string hostName = host->getHostName();
         deleteBtn->registerClickAction([hostName](brls::View* view) {
             brls::Logger::info("Delete button clicked for {}", hostName);
 
-            auto* dialog = new brls::Dialog("Delete \"" + hostName + "\"?\n\nThis will remove the host and its registration data.");
-            dialog->addButton("Cancel", []() {});
-            dialog->addButton("Delete", [hostName]() {
+            auto* dialog = new brls::Dialog(brls::getStr("akira/hosts/delete_confirm", hostName));
+            dialog->addButton("akira/common/cancel"_i18n, []() {});
+            dialog->addButton("akira/common/delete"_i18n, [hostName]() {
                 auto* settings = SettingsManager::getInstance();
                 settings->removeHost(hostName);
                 settings->writeFile();
-                brls::Application::notify("Host deleted");
+                brls::Application::notify("akira/hosts/host_deleted"_i18n);
                 if (HostListTab::currentInstance) {
                     // If this was the last host, give focus to Find Remote button first
                     // to avoid dangling focus pointer when host list becomes empty
@@ -570,7 +573,7 @@ void HostListTab::initFindRemoteButton() {
         std::string refreshToken = settings->getPsnRefreshToken();
 
         if (refreshToken.empty()) {
-            brls::Application::notify("No PSN token set");
+            brls::Application::notify("akira/hosts/no_psn_token"_i18n);
             return true;
         }
 
@@ -585,22 +588,22 @@ void HostListTab::initFindRemoteButton() {
         };
 
         if (expiresAt > 0 && now > expiresAt) {
-            brls::Application::notify("Token expired, refreshing...");
+            brls::Application::notify("akira/hosts/token_expired_refreshing"_i18n);
             discovery->refreshPsnToken(
                 [this, onComplete]() {
                     brls::sync([this, onComplete]() {
-                        brls::Application::notify("Finding remote devices...");
+                        brls::Application::notify("akira/hosts/finding_remote"_i18n);
                         discovery->refreshRemoteDevices(onComplete);
                     });
                 },
                 [](const std::string& error) {
                     brls::sync([error]() {
-                        brls::Application::notify("Token refresh failed: " + error);
+                        brls::Application::notify(brls::getStr("akira/hosts/token_refresh_failed", error));
                     });
                 }
             );
         } else {
-            brls::Application::notify("Finding remote devices...");
+            brls::Application::notify("akira/hosts/finding_remote"_i18n);
             discovery->refreshRemoteDevices(onComplete);
         }
 

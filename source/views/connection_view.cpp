@@ -7,6 +7,8 @@
 #include "util/shared_view_holder.hpp"
 #include <chiaki/remote/holepunch.h>
 #include <chiaki/thread.h>
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
 
 ConnectionView::ConnectionView(Host* host)
     : host(host)
@@ -15,7 +17,7 @@ ConnectionView::ConnectionView(Host* host)
     this->inflateFromXMLRes("xml/views/connection_view.xml");
 
     auto* titleLabel = (brls::Label*)this->getView("connection/title");
-    titleLabel->setText("Connecting to " + host->getHostName());
+    titleLabel->setText(brls::getStr("akira/connection/connecting_to", host->getHostName()));
 
     setFocusable(true);
 }
@@ -52,7 +54,7 @@ void ConnectionView::setupAndStart()
     brls::Logger::info("CONNECTION ATTEMPT: {} to {}", connType, host->getHostName());
     brls::Logger::info("========================================");
 
-    addLogLine("Starting connection...", brls::LogLevel::LOG_INFO);
+    addLogLine("akira/connection/starting"_i18n, brls::LogLevel::LOG_INFO);
 
     startConnection();
 }
@@ -183,7 +185,7 @@ void ConnectionView::startConnection()
     if (err != CHIAKI_ERR_SUCCESS) {
         connectionRunning = false;
         connectionFinished = true;
-        connectionError = "Failed to create connection thread";
+        connectionError = "akira/connection/failed_create_thread"_i18n;
         brls::Logger::error("{}", connectionError);
     } else {
         args.release();
@@ -205,7 +207,7 @@ void* ConnectionView::connectionThreadFunc(void* user)
         auto* dm = DiscoveryManager::getInstance();
         if (!dm->isPsnTokenValid()) {
             if (auto view = weak.lock()) {
-                view->connectionError = "PSN token expired. Please refresh in settings.";
+                view->connectionError = "akira/connection/psn_token_expired"_i18n;
                 brls::Logger::error("{}", view->connectionError);
                 view->connectionSuccess = false;
                 view->connectionFinished = true;
@@ -219,7 +221,7 @@ void* ConnectionView::connectionThreadFunc(void* user)
         ChiakiErrorCode err = host->connectHolepunch();
         if (err != CHIAKI_ERR_SUCCESS) {
             if (auto view = weak.lock()) {
-                view->connectionError = std::string("Holepunch failed: ") + chiaki_error_string(err);
+                view->connectionError = brls::getStr("akira/connection/holepunch_failed", chiaki_error_string(err));
                 brls::Logger::error("{}", view->connectionError);
                 view->connectionSuccess = false;
                 view->connectionFinished = true;
@@ -263,7 +265,7 @@ void ConnectionView::onConnectionComplete()
     } else {
         std::string error = connectionError;
         brls::sync([error]() {
-            auto* dialog = new brls::Dialog("Connection Failed\n\n" + error);
+            auto* dialog = new brls::Dialog(brls::getStr("akira/connection/connection_failed", error));
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });

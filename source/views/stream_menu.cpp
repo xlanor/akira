@@ -1,4 +1,6 @@
 #include "views/stream_menu.hpp"
+#include <borealis/core/i18n.hpp>
+using namespace brls::literals;
 
 StreamMenu::StreamMenu()
 {
@@ -107,6 +109,6 @@ void StreamMenu::setStatsEnabled(bool enabled)
     this->statsEnabled = enabled;
     if (this->statsButton)
     {
-        this->statsButton->setText(enabled ? "Hide Stats" : "Show Stats");
+        this->statsButton->setText(enabled ? "akira/stream_menu/hide_stats"_i18n : "akira/stream_menu/show_stats"_i18n);
     }
 }

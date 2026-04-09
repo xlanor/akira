@@ -17,8 +17,33 @@
             paddingLeft="@style/brls/tab_frame/content_padding_sides"
             paddingRight="@style/brls/tab_frame/content_padding_sides">
 
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30">
+
+            <brls:SelectorCell
+                id="settings/language"
+                title="@i18n/akira/settings/language"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="@i18n/akira/settings/language_desc"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+        </brls:Box>
+
         <brls:Header
-            title="Local Network Settings"
+            title="@i18n/akira/settings/local_network"
             marginBottom="10"/>
 
         <brls:Box
@@ -32,24 +57,24 @@
 
             <brls:SelectorCell
                 id="settings/localResolution"
-                title="Resolution"
+                title="@i18n/akira/settings/resolution"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SelectorCell
                 id="settings/localFps"
-                title="Frame Rate"
+                title="@i18n/akira/settings/frame_rate"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SliderCell
                 id="settings/localBitrate"
-                title="Target Bitrate (ceiling, actual may be lower)"
+                title="@i18n/akira/settings/bitrate"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Settings for local network connections (higher bitrate may cause issues)"
+                text="@i18n/akira/settings/local_network_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -59,7 +84,7 @@
         </brls:Box>
 
         <brls:Header
-            title="Remote Play Settings"
+            title="@i18n/akira/settings/remote_play"
             marginBottom="10"/>
 
         <brls:Box
@@ -73,24 +98,24 @@
 
             <brls:SelectorCell
                 id="settings/remoteResolution"
-                title="Resolution"
+                title="@i18n/akira/settings/resolution"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SelectorCell
                 id="settings/remoteFps"
-                title="Frame Rate"
+                title="@i18n/akira/settings/frame_rate"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SliderCell
                 id="settings/remoteBitrate"
-                title="Target Bitrate (ceiling, actual may be lower)"
+                title="@i18n/akira/settings/bitrate"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Settings for remote connections (higher bitrate may cause issues)"
+                text="@i18n/akira/settings/remote_play_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -100,7 +125,7 @@
         </brls:Box>
 
         <brls:Header
-            title="VPN Settings"
+            title="@i18n/akira/settings/vpn"
             marginBottom="10"/>
 
         <brls:Box
@@ -114,24 +139,24 @@
 
             <brls:SelectorCell
                 id="settings/vpnResolution"
-                title="Resolution"
+                title="@i18n/akira/settings/resolution"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SelectorCell
                 id="settings/vpnFps"
-                title="Frame Rate"
+                title="@i18n/akira/settings/frame_rate"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SliderCell
                 id="settings/vpnBitrate"
-                title="Target Bitrate (ceiling, actual may be lower)"
+                title="@i18n/akira/settings/bitrate"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Settings for WireGuard VPN connections"
+                text="@i18n/akira/settings/vpn_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -152,19 +177,19 @@
             visibility="gone">
 
             <brls:Header
-                title="Power User Settings"
+                title="@i18n/akira/settings/power_user"
                 marginBottom="10"
                 marginLeft="15"
                 marginTop="15"/>
 
             <brls:BooleanCell
                 id="settings/unlockBitrateMax"
-                title="Unlock Bitrate Max"
+                title="@i18n/akira/settings/unlock_bitrate_max"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Enables higher bitrate limits (720p: 25000, 1080p: 30000) with 5000 minimum"
+                text="@i18n/akira/settings/unlock_bitrate_max_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -174,12 +199,12 @@
 
             <brls:BooleanCell
                 id="settings/portGuessing"
-                title="Port Guessing"
+                title="@i18n/akira/settings/port_guessing"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Guess nearby ports for NAT traversal. Helps on mobile hotspots and port-rewriting NATs."
+                text="@i18n/akira/settings/port_guessing_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -188,12 +213,12 @@
 
             <brls:SliderCell
                 id="settings/portGuessingCount"
-                title="Port Guess Count"
+                title="@i18n/akira/settings/port_guess_count"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Number of ports to advertise to the console (max 75)"
+                text="@i18n/akira/settings/port_guess_count_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -202,12 +227,12 @@
 
             <brls:SliderCell
                 id="settings/portGuessingSocks"
-                title="Probe Socket Count"
+                title="@i18n/akira/settings/probe_socket_count"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Number of local sockets to open for NAT probing (max 250)"
+                text="@i18n/akira/settings/probe_socket_count_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -216,12 +241,12 @@
 
             <brls:BooleanCell
                 id="settings/autoReconnect"
-                title="Auto Reconnect"
+                title="@i18n/akira/settings/auto_reconnect"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Automatically reconnect to the last session when resuming from sleep or returning from the home menu"
+                text="@i18n/akira/settings/auto_reconnect_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -230,12 +255,12 @@
 
             <brls:BooleanCell
                 id="settings/lowLatencyMode"
-                title="Low Latency Mode"
+                title="@i18n/akira/settings/low_latency_mode"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Keep only the newest decoded frame to reduce queueing delay. May increase dropped frames or visible stutter under load."
+                text="@i18n/akira/settings/low_latency_mode_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -244,13 +269,13 @@
 
             <brls:Button
                 id="settings/runBenchmark"
-                text="Run GHASH Benchmark"
+                text="@i18n/akira/settings/run_benchmark"
                 marginLeft="15"
                 marginRight="15"
                 marginTop="10"/>
 
             <brls:Label
-                text="Compares TABLE vs PMULL performance"
+                text="@i18n/akira/settings/benchmark_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -260,7 +285,7 @@
         </brls:Box>
 
         <brls:Header
-            title="Controller"
+            title="@i18n/akira/settings/controller"
             marginBottom="10"/>
 
         <brls:Box
@@ -274,56 +299,56 @@
 
             <brls:SelectorCell
                 id="settings/haptic"
-                title="Haptic Feedback"
+                title="@i18n/akira/settings/haptic_feedback"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SliderCell
                 id="settings/rumbleFreqLow"
-                title="Rumble Low Frequency"
+                title="@i18n/akira/settings/rumble_low_freq"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SliderCell
                 id="settings/rumbleFreqHigh"
-                title="Rumble High Frequency"
+                title="@i18n/akira/settings/rumble_high_freq"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SliderCell
                 id="settings/rumbleEnvelopeAttack"
-                title="Rumble Attack"
+                title="@i18n/akira/settings/rumble_attack"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SliderCell
                 id="settings/rumbleEnvelopeDecay"
-                title="Rumble Sustain"
+                title="@i18n/akira/settings/rumble_sustain"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:SelectorCell
                 id="settings/gyroSource"
-                title="Gyro Source"
+                title="@i18n/akira/settings/gyro_source"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:BooleanCell
                 id="settings/sleepOnExit"
-                title="Sleep Console on Exit"
+                title="@i18n/akira/settings/sleep_on_exit"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:DetailCell
                 id="settings/buttonMapping"
-                title="Button Mapping"
+                title="@i18n/akira/settings/button_mapping"
                 marginLeft="15"
                 marginRight="15"/>
 
         </brls:Box>
 
         <brls:Header
-            title="Performance"
+            title="@i18n/akira/settings/performance"
             marginBottom="10"/>
 
         <brls:Box
@@ -337,12 +362,12 @@
 
             <brls:BooleanCell
                 id="settings/enableThreadAffinity"
-                title="Enable Thread Affinity"
+                title="@i18n/akira/settings/thread_affinity"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Pin threads to specific CPU cores for better performance. Requires app restart."
+                text="@i18n/akira/settings/thread_affinity_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -352,12 +377,12 @@
 
             <brls:BooleanCell
                 id="settings/holepunchRetry"
-                title="Enable Holepunch Retry"
+                title="@i18n/akira/settings/holepunch_retry"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Automatically retry holepunch up to 4 times with increasing delays (3s, 6s, 9s)"
+                text="@i18n/akira/settings/holepunch_retry_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -366,12 +391,12 @@
 
             <brls:BooleanCell
                 id="settings/requestIdrOnFecFailure"
-                title="Request IDR on FEC Failure"
+                title="@i18n/akira/settings/request_idr"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Request keyframe when frame recovery fails. Improves recovery but may cause brief freezes."
+                text="@i18n/akira/settings/request_idr_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -380,12 +405,12 @@
 
             <brls:SliderCell
                 id="settings/packetLossMax"
-                title="Packet Loss Max Reported"
+                title="@i18n/akira/settings/packet_loss_max"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Limits reported packet loss to server. Lower values prevent quality degradation but may cause buffer issues on bad networks."
+                text="@i18n/akira/settings/packet_loss_max_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -395,7 +420,7 @@
         </brls:Box>
 
         <brls:Header
-            title="Debug Logging"
+            title="@i18n/akira/settings/debug_logging"
             marginBottom="10"/>
 
         <brls:Box
@@ -409,12 +434,12 @@
 
             <brls:BooleanCell
                 id="settings/enableFileLogging"
-                title="File Logging"
+                title="@i18n/akira/settings/file_logging"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Save logs to SD card (/switch/akira/logs/). Requires app restart."
+                text="@i18n/akira/settings/file_logging_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -423,12 +448,12 @@
 
             <brls:BooleanCell
                 id="settings/debugLwipLog"
-                title="lwIP Relay Log"
+                title="@i18n/akira/settings/lwip_log"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Enable verbose lwIP relay logging (very spammy during streaming)"
+                text="@i18n/akira/settings/lwip_log_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -437,12 +462,12 @@
 
             <brls:BooleanCell
                 id="settings/debugWireguardLog"
-                title="WireGuard Log"
+                title="@i18n/akira/settings/wireguard_log"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Enable WireGuard library logging (handshakes, keepalives, packet stats)"
+                text="@i18n/akira/settings/wireguard_log_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -451,12 +476,12 @@
 
             <brls:BooleanCell
                 id="settings/debugRenderLog"
-                title="Render Log"
+                title="@i18n/akira/settings/render_log"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Enable renderer logging (draw calls, texture bindings, stats overlay)"
+                text="@i18n/akira/settings/render_log_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -465,12 +490,12 @@
 
             <brls:BooleanCell
                 id="settings/debugChiakiLog"
-                title="Chiaki Log"
+                title="@i18n/akira/settings/chiaki_log"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Enable chiaki library logging during streaming (CTRL, heartbeats, etc.)"
+                text="@i18n/akira/settings/chiaki_log_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -479,12 +504,12 @@
 
             <brls:BooleanCell
                 id="settings/debugDiscoveryLog"
-                title="Discovery Log"
+                title="@i18n/akira/settings/discovery_log"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Enable verbose discovery logging (host discovery broadcasts, responses)"
+                text="@i18n/akira/settings/discovery_log_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -493,12 +518,12 @@
 
             <brls:BooleanCell
                 id="settings/debugFfmpegLog"
-                title="FFmpeg Log"
+                title="@i18n/akira/settings/ffmpeg_log"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Label
-                text="Enable FFmpeg decoder logging (errors, warnings, codec info)"
+                text="@i18n/akira/settings/ffmpeg_log_desc"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -508,7 +533,7 @@
         </brls:Box>
 
         <brls:Header
-            title="PSN Account"
+            title="@i18n/akira/settings/psn_account"
             marginBottom="10"/>
 
         <brls:Box
@@ -532,19 +557,19 @@
 
                 <brls:InputCell
                     id="settings/psnOnlineId"
-                    title="PSN Online ID"
+                    title="@i18n/akira/settings/psn_online_id"
                     grow="1"/>
 
                 <brls:Button
                     id="settings/lookupBtn"
-                    text="Look Up"
+                    text="@i18n/akira/settings/look_up"
                     style="bordered"
                     marginLeft="10"/>
 
             </brls:Box>
 
             <brls:Label
-                text="Your account name must be publicly visible for this to work"
+                text="@i18n/akira/settings/psn_visible_hint"
                 fontSize="14"
                 textColor="#666666"
                 marginLeft="15"
@@ -553,14 +578,14 @@
 
             <brls:InputCell
                 id="settings/psnAccountId"
-                title="Account ID (Base64)"
+                title="@i18n/akira/settings/psn_account_id"
                 marginLeft="15"
                 marginRight="15"/>
 
         </brls:Box>
 
         <brls:Header
-            title="PSN Credentials (Read-Only)"
+            title="@i18n/akira/settings/psn_credentials"
             marginBottom="10"/>
 
         <brls:Box
@@ -573,7 +598,7 @@
 
             <brls:Button
                 id="settings/revealCredentials"
-                text="Reveal Secrets"
+                text="@i18n/akira/settings/reveal_secrets"
                 marginLeft="15"
                 marginRight="15"
                 marginTop="10"
@@ -626,14 +651,14 @@
 
                 <brls:Button
                     id="settings/clearPsnBtn"
-                    text="Clear All PSN Data"
+                    text="@i18n/akira/settings/clear_psn_data"
                     style="bordered"
                     grow="1"
                     marginRight="10"/>
 
                 <brls:Button
                     id="settings/refreshTokenBtn"
-                    text="Refresh Token"
+                    text="@i18n/akira/settings/refresh_token_btn"
                     style="bordered"
                     grow="1"/>
 
@@ -642,7 +667,7 @@
         </brls:Box>
 
         <brls:Header
-            title="Companion Server"
+            title="@i18n/akira/settings/companion_server"
             marginBottom="10"/>
 
         <brls:Box
@@ -658,19 +683,19 @@
 
             <brls:InputCell
                 id="settings/companionHost"
-                title="Companion Host"
+                title="@i18n/akira/settings/companion_host"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:InputCell
                 id="settings/companionPort"
-                title="Companion Port"
+                title="@i18n/akira/settings/companion_port"
                 marginLeft="15"
                 marginRight="15"/>
 
             <brls:Button
                 id="settings/fetchPsnBtn"
-                text="Fetch PSN Credentials from Companion App"
+                text="@i18n/akira/settings/fetch_psn_btn"
                 style="bordered"
                 grow="1"
                 marginLeft="15"

@@ -11,7 +11,7 @@
     alignItems="center">
 
     <brls:Label
-        text="Add PlayStation Console"
+        text="@i18n/akira/add_host/title"
         fontSize="24"
         marginBottom="30"/>
 
@@ -28,19 +28,19 @@
 
         <brls:InputCell
             id="add/hostName"
-            title="Console Name"
+            title="@i18n/akira/add_host/console_name"
             marginLeft="15"
             marginRight="15"/>
 
         <brls:InputCell
             id="add/hostAddr"
-            title="IP Address"
+            title="@i18n/akira/add_host/ip_address"
             marginLeft="15"
             marginRight="15"/>
 
         <brls:SelectorCell
             id="add/target"
-            title="Console Type"
+            title="@i18n/akira/add_host/console_type"
             marginLeft="15"
             marginRight="15"/>
 
@@ -48,7 +48,7 @@
 
     <brls:Button
         id="add/saveBtn"
-        text="Add Console"
+        text="@i18n/akira/add_host/add_console"
         style="primary"
         width="200"
         marginBottom="15"/>

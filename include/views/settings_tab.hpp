@@ -13,6 +13,7 @@ public:
     static brls::View* create();
 
 private:
+    BRLS_BIND(brls::SelectorCell, languageSelector, "settings/language");
     BRLS_BIND(brls::SelectorCell, localResolutionSelector, "settings/localResolution");
     BRLS_BIND(brls::SelectorCell, remoteResolutionSelector, "settings/remoteResolution");
     BRLS_BIND(brls::SelectorCell, localFpsSelector, "settings/localFps");
@@ -76,6 +77,7 @@ private:
     void updateCredentialsDisplay();
     std::string censorString(const std::string& str);
 
+    void initLanguageSelector();
     void initLocalResolutionSelector();
     void initRemoteResolutionSelector();
     void initLocalFpsSelector();
