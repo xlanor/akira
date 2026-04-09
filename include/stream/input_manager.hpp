@@ -63,6 +63,11 @@ private:
     int m_prev_touch_count = 0;
     uint32_t m_touch_debug_counter = 0;
     int m_border_tap_hold = 0;
+    uint32_t m_border_tap_start_x = 0;
+    uint32_t m_border_tap_start_y = 0;
+    uint32_t m_border_tap_finger_id = 0;
+    static constexpr int BORDER_TAP_HOLD_FRAMES = 5;
+    static constexpr uint32_t BORDER_TAP_MOVE_THRESHOLD = 30;
 
     // Accelerometer zero offset for gyro reset
     float m_accel_zero_x = 0.0f;

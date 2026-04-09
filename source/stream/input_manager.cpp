@@ -172,8 +172,38 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
 {
     if (m_border_tap_hold > 0)
     {
-        chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
-        m_border_tap_hold--;
+        bool fingerStillDown = false;
+        bool fingerMoved = false;
+        HidTouchScreenState peek = {0};
+        if (hidGetTouchScreenStates(&peek, 1) > 0)
+        {
+            for (int i = 0; i < peek.count; i++)
+            {
+                if (peek.touches[i].finger_id == m_border_tap_finger_id)
+                {
+                    fingerStillDown = true;
+                    uint32_t dx = (peek.touches[i].x > m_border_tap_start_x)
+                        ? peek.touches[i].x - m_border_tap_start_x
+                        : m_border_tap_start_x - peek.touches[i].x;
+                    uint32_t dy = (peek.touches[i].y > m_border_tap_start_y)
+                        ? peek.touches[i].y - m_border_tap_start_y
+                        : m_border_tap_start_y - peek.touches[i].y;
+                    if (dx > BORDER_TAP_MOVE_THRESHOLD || dy > BORDER_TAP_MOVE_THRESHOLD)
+                        fingerMoved = true;
+                    break;
+                }
+            }
+        }
+
+        if (fingerMoved)
+        {
+            m_border_tap_hold = 0;
+        }
+        else
+        {
+            chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
+            m_border_tap_hold--;
+        }
     }
 
     HidTouchScreenState sw_state = {0};
@@ -239,7 +269,10 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         if (isBorder && !isTracked)
         {
             chiaki_state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
-            m_border_tap_hold = 1;
+            m_border_tap_hold = BORDER_TAP_HOLD_FRAMES;
+            m_border_tap_start_x = rawX;
+            m_border_tap_start_y = rawY;
+            m_border_tap_finger_id = sw_state.touches[i].finger_id;
             Session::GetInstance()->triggerBorderFlash();
         }
 
