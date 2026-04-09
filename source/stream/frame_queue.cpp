@@ -72,7 +72,8 @@ void FrameQueue::push(AVFrame* frame)
         if (oldest)
         {
             av_frame_free(&oldest);
-            m_frames_dropped++;
+            if (m_limit > 1)
+                m_frames_dropped++;
         }
         m_head = ringIndex(m_head, 1, m_limit);
         m_count--;

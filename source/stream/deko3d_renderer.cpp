@@ -621,17 +621,37 @@ void Deko3dRenderer::renderStatsOverlay()
     auto& wg = WireGuardManager::instance();
     std::string vpnStatus = wg.isConnected() ? wg.getTunnelIP() : "Off";
 
+    std::string renderedSection = std::format(
+        "=== Rendered ===\n"
+        "{}x{} @ {:.0f}fps\n"
+        "Decoder: {} ({})\n",
+        m_stats.video_width,
+        m_stats.video_height,
+        m_stats.fps,
+        m_stats.is_hevc ? "HEVC" : "H.264",
+        m_stats.is_hardware_decoder ? "NVTEGRA" : "SW");
+
+    if (m_stats.low_latency_mode)
+    {
+        renderedSection += "Mode: Low Latency\n";
+    }
+    else
+    {
+        renderedSection += std::format(
+            "Dropped: {}  Faked: {}\n"
+            "Queue: {}\n",
+            m_stats.dropped_frames,
+            m_stats.faked_frames,
+            m_stats.queue_size);
+    }
+
     std::string statsText = std::format(
         "=== Requested ===\n"
         "{}x{} @ {}fps\n"
         "Target: {} kbps\n"
         "Codec: {}\n"
         "\n"
-        "=== Rendered ===\n"
-        "{}x{} @ {:.0f}fps\n"
-        "Decoder: {} ({})\n"
-        "Dropped: {}  Faked: {}\n"
-        "Queue: {}\n"
+        "{}"
         "\n"
         "=== Network ===\n"
         "Packet Loss (Live): {:.1f}%\n"
@@ -645,14 +665,7 @@ void Deko3dRenderer::renderStatsOverlay()
         m_stats.requested_fps,
         m_stats.requested_bitrate,
         m_stats.requested_hevc ? "HEVC" : "H.264",
-        m_stats.video_width,
-        m_stats.video_height,
-        m_stats.fps,
-        m_stats.is_hevc ? "HEVC" : "H.264",
-        m_stats.is_hardware_decoder ? "NVTEGRA" : "SW",
-        m_stats.dropped_frames,
-        m_stats.faked_frames,
-        m_stats.queue_size,
+        renderedSection,
         m_stats.packet_loss_percent,
         m_stats.measured_bitrate_mbps,
         m_stats.network_frames_lost,
