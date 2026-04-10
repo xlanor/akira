@@ -563,7 +563,8 @@ void InputManager::pollThreadFunc()
     {
         update(&state);
 
-        if (!chiaki_controller_state_equals(&state, &prev_state))
+        if (!chiaki_controller_state_equals(&state, &prev_state)
+            || state.touch_id_next != prev_state.touch_id_next)
         {
             {
                 std::lock_guard<std::mutex> lock(m_state_mutex);
