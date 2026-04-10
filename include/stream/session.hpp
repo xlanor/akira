@@ -76,7 +76,6 @@ public:
     bool InitController();
     bool FreeController();
     bool MainLoop();
-    void UpdateControllerState(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
     void SetRumble(uint8_t left, uint8_t right);
     void HapticCB(uint8_t* buf, size_t buf_size);
     void CleanUpHaptic();

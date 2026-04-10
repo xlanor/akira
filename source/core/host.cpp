@@ -513,38 +513,9 @@ void Host::startSession()
     brls::Logger::info("chiaki_session_start returned SUCCESS");
 }
 
-void Host::sendFeedbackState()
+void Host::setControllerStateAndSend(const ChiakiControllerState& state)
 {
-    if (onReadController)
-    {
-        onReadController(&controllerState, &fingerIdTouchId);
-    }
-    static uint32_t prevButtons = 0;
-    if (controllerState.buttons != prevButtons)
-    {
-        brls::Logger::info("Controller buttons changed: 0x{:x} -> 0x{:x}", prevButtons, controllerState.buttons);
-        prevButtons = controllerState.buttons;
-    }
-    static int8_t prevTouchId0 = -1, prevTouchId1 = -1;
-    static uint32_t moveCount = 0;
-    bool idChanged = controllerState.touches[0].id != prevTouchId0 || controllerState.touches[1].id != prevTouchId1;
-    bool anyActive = controllerState.touches[0].id >= 0 || controllerState.touches[1].id >= 0;
-
-    if (idChanged)
-    {
-        if (moveCount > 0)
-            brls::Logger::info("Touch: {} position updates sent to chiaki before release", moveCount);
-        brls::Logger::info("Controller touches: [0] id={} pos=({},{}), [1] id={} pos=({},{})",
-            controllerState.touches[0].id, controllerState.touches[0].x, controllerState.touches[0].y,
-            controllerState.touches[1].id, controllerState.touches[1].x, controllerState.touches[1].y);
-        prevTouchId0 = controllerState.touches[0].id;
-        prevTouchId1 = controllerState.touches[1].id;
-        moveCount = 0;
-    }
-    else if (anyActive)
-    {
-        moveCount++;
-    }
+    controllerState = state;
     chiaki_session_set_controller_state(&session, &controllerState);
 }
 
