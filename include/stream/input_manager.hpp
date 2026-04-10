@@ -4,6 +4,10 @@
 #include <SDL2/SDL.h>
 #include <cstdint>
 #include <map>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <functional>
 #include <chiaki/controller.h>
 #include <chiaki/log.h>
 #include <switch.h>
@@ -24,7 +28,7 @@ struct SyntheticSwipe {
     int16_t dx, dy;
     int frameCounter = 0;
     bool buttonWasPressed = false;
-    static constexpr int SWIPE_FRAMES = 18;
+    static constexpr int SWIPE_FRAMES = 75;
 };
 
 class InputManager
@@ -41,12 +45,17 @@ public:
 
     bool init();
     void cleanup();
-    void update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
+    void update(ChiakiControllerState* state);
+
+    void startPolling(std::function<void(const ChiakiControllerState&)> onStateUpdated);
+    void stopPolling();
+    ChiakiControllerState getLatestState();
 
     PadState* getPad() { return &m_pad; }
 
 private:
-    bool readTouchScreen(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
+    void pollThreadFunc();
+    bool readTouchScreen(ChiakiControllerState* state);
     bool readSixAxis(ChiakiControllerState* state);
     void updateSyntheticSwipes(ChiakiControllerState* state, u64 buttons);
 
@@ -59,6 +68,13 @@ private:
     int m_sixaxis_frame_counter = 0;
 
     SyntheticSwipe m_swipes[4];
+    std::map<uint32_t, int8_t> m_finger_id_touch_id;
+
+    std::thread m_input_thread;
+    std::mutex m_state_mutex;
+    std::atomic<bool> m_running{false};
+    ChiakiControllerState m_latest_state{};
+    std::function<void(const ChiakiControllerState&)> m_on_state_updated;
 
     int m_prev_touch_count = 0;
     uint32_t m_touch_debug_counter = 0;

@@ -93,14 +93,12 @@ private:
     ChiakiRegist regist;
     ChiakiRegistInfo registInfo;
     ChiakiControllerState controllerState;
-    std::map<uint32_t, int8_t> fingerIdTouchId;
 
     // Callbacks
     std::function<void()> onConnected;
     std::function<void(bool)> onLoginPinRequest;
     std::function<void(ChiakiQuitEvent*)> onQuit;
     std::function<void(uint8_t, uint8_t)> onRumble;
-    std::function<void(ChiakiControllerState*, std::map<uint32_t, int8_t>*)> onReadController;
     std::function<void()> onRegistCanceled;
     std::function<void()> onRegistFailed;
     std::function<void()> onRegistSuccess;
@@ -179,7 +177,7 @@ public:
     bool isSessionSocketHealthy() const;
     void gotoBed();
     int finiSession();
-    void sendFeedbackState();
+    void setControllerStateAndSend(const ChiakiControllerState& state);
 
     // Holepunch connection for remote play
     ChiakiErrorCode initHolepunchSession();
@@ -203,9 +201,6 @@ public:
     void setOnLoginPinRequest(std::function<void(bool)> callback) { onLoginPinRequest = std::move(callback); }
     void setOnQuit(std::function<void(ChiakiQuitEvent*)> callback) { onQuit = std::move(callback); }
     void setOnRumble(std::function<void(uint8_t, uint8_t)> callback) { onRumble = std::move(callback); }
-    void setOnReadController(std::function<void(ChiakiControllerState*, std::map<uint32_t, int8_t>*)> callback) {
-        onReadController = std::move(callback);
-    }
     void setOnRegistCanceled(std::function<void()> callback) { onRegistCanceled = std::move(callback); }
     void setOnRegistFailed(std::function<void()> callback) { onRegistFailed = std::move(callback); }
     void setOnRegistSuccess(std::function<void()> callback) { onRegistSuccess = std::move(callback); }

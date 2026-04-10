@@ -2,6 +2,7 @@
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/swipe_direction.hpp"
+#include "core/thread_affinity.h"
 #include <borealis.hpp>
 #include <chiaki/controller.h>
 #include <cmath>
@@ -61,7 +62,7 @@ void InputManager::cleanup()
     hidStopSixAxisSensor(m_sixaxis_handles[3]);
 }
 
-void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
+void InputManager::update(ChiakiControllerState* state)
 {
     padUpdate(&m_pad);
 
@@ -159,16 +160,16 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
         state->right_y = -right.y;
     }
 
-    readTouchScreen(state, finger_id_touch_id);
+    readTouchScreen(state);
     updateSyntheticSwipes(state, buttons);
 
-    if (++m_sixaxis_frame_counter >= 3) {
+    if (++m_sixaxis_frame_counter >= 2) {
         m_sixaxis_frame_counter = 0;
         readSixAxis(state);
     }
 }
 
-bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map<uint32_t, int8_t>* finger_id_touch_id)
+bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state)
 {
     if (m_border_tap_hold > 0)
     {
@@ -211,22 +212,22 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
     size_t got = hidGetTouchScreenStates(&sw_state, 1);
     if (got == 0)
     {
-        if (m_touch_debug_counter % 300 == 0 && !finger_id_touch_id->empty())
-            brls::Logger::warning("Touch: hidGetTouchScreenStates returned 0, preserving {} active touches", finger_id_touch_id->size());
+        if (m_touch_debug_counter % 300 == 0 && !m_finger_id_touch_id.empty())
+            brls::Logger::warning("Touch: hidGetTouchScreenStates returned 0, preserving {} active touches", m_finger_id_touch_id.size());
         m_touch_debug_counter++;
-        return !finger_id_touch_id->empty();
+        return !m_finger_id_touch_id.empty();
     }
 
     if (sw_state.count > 0 && m_prev_touch_count == 0)
         brls::Logger::info("Touch: started, {} point(s), finger_id={}, pos=({},{})",
             sw_state.count, sw_state.touches[0].finger_id, sw_state.touches[0].x, sw_state.touches[0].y);
     else if (sw_state.count == 0 && m_prev_touch_count > 0)
-        brls::Logger::info("Touch: released, had {} tracked finger(s)", finger_id_touch_id->size());
+        brls::Logger::info("Touch: released, had {} tracked finger(s)", m_finger_id_touch_id.size());
     m_prev_touch_count = sw_state.count;
 
     bool ret = false;
 
-    for (auto it = finger_id_touch_id->begin(); it != finger_id_touch_id->end();)
+    for (auto it = m_finger_id_touch_id.begin(); it != m_finger_id_touch_id.end();)
     {
         auto cur = it;
         it++;
@@ -246,7 +247,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
                 brls::Logger::debug("Touch: stop touch_id={} for finger_id={}", cur->second, cur->first);
                 chiaki_controller_state_stop_touch(chiaki_state, (uint8_t)cur->second);
             }
-            finger_id_touch_id->erase(cur);
+            m_finger_id_touch_id.erase(cur);
         }
     }
 
@@ -263,8 +264,8 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         bool isBorder = rawX <= 64 || rawX >= (SWITCH_TOUCHSCREEN_MAX_X - 64) ||
                         rawY <= 64 || rawY >= (SWITCH_TOUCHSCREEN_MAX_Y - 64);
 
-        auto it = finger_id_touch_id->find(sw_state.touches[i].finger_id);
-        bool isTracked = it != finger_id_touch_id->end();
+        auto it = m_finger_id_touch_id.find(sw_state.touches[i].finger_id);
+        bool isTracked = it != m_finger_id_touch_id.end();
 
         if (isBorder && !isTracked)
         {
@@ -279,7 +280,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         if (!isTracked)
         {
             int8_t touch_id = chiaki_controller_state_start_touch(chiaki_state, x, y);
-            (*finger_id_touch_id)[sw_state.touches[i].finger_id] = touch_id;
+            m_finger_id_touch_id[sw_state.touches[i].finger_id] = touch_id;
             brls::Logger::info("Touch: new finger_id={} -> touch_id={}, raw=({},{}) mapped=({},{})",
                 sw_state.touches[i].finger_id, touch_id,
                 sw_state.touches[i].x, sw_state.touches[i].y, x, y);
@@ -523,4 +524,60 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
             }
         }
     }
+}
+
+void InputManager::startPolling(std::function<void(const ChiakiControllerState&)> onStateUpdated)
+{
+    if (m_running)
+        return;
+    m_on_state_updated = std::move(onStateUpdated);
+    m_running = true;
+    m_input_thread = std::thread(&InputManager::pollThreadFunc, this);
+}
+
+void InputManager::stopPolling()
+{
+    m_running = false;
+    if (m_input_thread.joinable())
+        m_input_thread.join();
+}
+
+ChiakiControllerState InputManager::getLatestState()
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return m_latest_state;
+}
+
+void InputManager::pollThreadFunc()
+{
+    akira_thread_set_affinity(AKIRA_THREAD_NAME_INPUT);
+    brls::Logger::info("Input polling thread started at ~250Hz");
+
+    ChiakiControllerState state;
+    chiaki_controller_state_set_idle(&state);
+
+    ChiakiControllerState prev_state;
+    chiaki_controller_state_set_idle(&prev_state);
+
+    while (m_running)
+    {
+        update(&state);
+
+        if (!chiaki_controller_state_equals(&state, &prev_state))
+        {
+            {
+                std::lock_guard<std::mutex> lock(m_state_mutex);
+                m_latest_state = state;
+            }
+
+            if (m_on_state_updated)
+                m_on_state_updated(state);
+
+            prev_state = state;
+        }
+
+        svcSleepThread(4'000'000);
+    }
+
+    brls::Logger::info("Input polling thread stopped");
 }

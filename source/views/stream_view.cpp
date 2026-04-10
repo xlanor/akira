@@ -51,12 +51,6 @@ void StreamView::setupCallbacks()
         }
     });
 
-    host->setOnReadController([weak](ChiakiControllerState* state, std::map<uint32_t, int8_t>* fingerIdTouchId) {
-        if (auto self = weak.lock()) {
-            self->session->UpdateControllerState(state, fingerIdTouchId);
-        }
-    });
-
     session->getInputManager()->setTargetPS5(host->isPS5());
 
     host->setOnMotionReset([weak]() {
@@ -139,6 +133,10 @@ void StreamView::startStream()
             throw Exception("akira/stream/failed_init_controller"_i18n);
         }
 
+        session->getInputManager()->startPolling([this](const ChiakiControllerState& state) {
+            host->setControllerStateAndSend(state);
+        });
+
         if (host->isRemote())
         {
             if (host->getHolepunchSession() != nullptr)
@@ -215,6 +213,9 @@ void StreamView::stopStream()
     brls::Application::forceUnblockInputs();
 
     streamActive = false;
+
+    if (session->getInputManager())
+        session->getInputManager()->stopPolling();
 
     host->stopSession();
     host->finiSession();
@@ -305,8 +306,6 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
                 session->getVideoRenderer()->setTickCallback(nullptr);
                 return false;
             }
-
-            host->sendFeedbackState();
 
             if (!session->MainLoop())
             {
@@ -674,6 +673,9 @@ void StreamView::retryWithWake()
         if (!session->InitController()) {
             throw Exception("akira/stream/failed_init_controller"_i18n);
         }
+        session->getInputManager()->startPolling([this](const ChiakiControllerState& state) {
+            host->setControllerStateAndSend(state);
+        });
         host->initSession(session);
         host->startSession();
         sessionStarted = true;

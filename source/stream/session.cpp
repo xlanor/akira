@@ -218,14 +218,6 @@ bool Session::FreeController()
     return true;
 }
 
-void Session::UpdateControllerState(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
-{
-    if (m_input_manager)
-    {
-        m_input_manager->update(state, finger_id_touch_id);
-    }
-}
-
 bool Session::MainLoop()
 {
     if (m_video_renderer && m_video_renderer->isInitialized() && m_video_decoder)

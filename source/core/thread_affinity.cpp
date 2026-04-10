@@ -77,6 +77,8 @@ static ThreadPurpose get_purpose_for_akira_thread(AkiraThreadName name)
 	{
 		case AKIRA_THREAD_NAME_LWIP_LOOP:
 			return THREAD_PURPOSE_NETWORK;
+		case AKIRA_THREAD_NAME_INPUT:
+			return THREAD_PURPOSE_AUDIO;
 		case AKIRA_THREAD_NAME_MAIN:
 		case AKIRA_THREAD_NAME_BENCHMARK:
 		case AKIRA_THREAD_NAME_CONNECTION:
@@ -144,7 +146,7 @@ void akira_thread_set_affinity(AkiraThreadName name)
 {
 	if(!g_affinity_enabled)
 		return;
-	static const char *names[] = {"main", "lwip_loop", "benchmark", "connection"};
+	static const char *names[] = {"main", "lwip_loop", "benchmark", "connection", "input"};
 	ThreadPurpose purpose = get_purpose_for_akira_thread(name);
 	int core = get_core_for_purpose(purpose);
 	apply_affinity(core, names[name]);
