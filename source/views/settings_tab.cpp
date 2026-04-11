@@ -61,6 +61,8 @@ SettingsTab::SettingsTab() {
     initGyroSourceSelector();
     initSleepOnExitToggle();
     initButtonMappingCell();
+    initEnableDitheringToggle();
+    initDitheringStrengthSlider();
     initEnableThreadAffinityToggle();
     initLowLatencyModeToggle();
     initHolepunchRetryToggle();
@@ -635,6 +637,47 @@ void SettingsTab::initButtonMappingCell() {
         brls::Application::pushActivity(new brls::Activity(remapView), brls::TransitionAnimation::NONE);
         return true;
     });
+}
+
+void SettingsTab::initEnableDitheringToggle() {
+    bool currentValue = settings->getEnableDithering();
+
+    enableDitheringToggle->init(
+        "akira/settings/enable_dithering"_i18n,
+        currentValue,
+        [this](bool isOn) {
+            settings->setEnableDithering(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initDitheringStrengthSlider() {
+    constexpr float MIN_STRENGTH = 1.0f;
+    constexpr float MAX_STRENGTH = 10.0f;
+
+    float current = settings->getDitheringStrength();
+    float normalized = (current - MIN_STRENGTH) / (MAX_STRENGTH - MIN_STRENGTH);
+    normalized = std::max(0.0f, std::min(1.0f, normalized));
+
+    ditheringStrengthSlider->detail->setWidth(100);
+    ditheringStrengthSlider->detail->setShrink(0);
+    ditheringStrengthSlider->slider->setStep(1.0f / (MAX_STRENGTH - MIN_STRENGTH));
+    ditheringStrengthSlider->init(
+        "akira/settings/dithering_strength"_i18n,
+        normalized,
+        [this](float value) {
+            constexpr float MIN_STRENGTH = 1.0f;
+            constexpr float MAX_STRENGTH = 10.0f;
+            float strength = MIN_STRENGTH + value * (MAX_STRENGTH - MIN_STRENGTH);
+            strength = static_cast<float>(static_cast<int>(strength));
+            settings->setDitheringStrength(strength);
+            ditheringStrengthSlider->detail->setText(std::format("{}", static_cast<int>(strength)));
+            settings->writeFile();
+        }
+    );
+
+    ditheringStrengthSlider->detail->setText(std::format("{}", static_cast<int>(current)));
 }
 
 void SettingsTab::initEnableThreadAffinityToggle() {

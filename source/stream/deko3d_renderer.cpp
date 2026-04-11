@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstring>
 #include <format>
+#include <uam.h>
 
 extern "C"
 {
@@ -77,8 +78,29 @@ namespace
     }
 }
 
+static std::string loadShaderSource(const char* path)
+{
+    FILE* f = fopen(path, "rb");
+    if (!f)
+    {
+        brls::Logger::error("Failed to open shader source: {}", path);
+        return "";
+    }
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    rewind(f);
+
+    std::string source(size, '\0');
+    fread(&source[0], 1, size, f);
+    fclose(f);
+    return source;
+}
+
 Deko3dRenderer::Deko3dRenderer()
 {
+    uam_init();
+    m_uam_initialized = true;
 }
 
 Deko3dRenderer::~Deko3dRenderer()
@@ -95,6 +117,12 @@ Deko3dRenderer::~Deko3dRenderer()
     m_fragment_shader.destroy();
     m_text_vertex_shader.destroy();
     m_text_fragment_shader.destroy();
+
+    if (m_uam_initialized)
+    {
+        uam_deinit();
+        m_uam_initialized = false;
+    }
 }
 
 bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* log)
@@ -138,8 +166,12 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
         return false;
     }
 
-    m_vertex_shader.load(*m_pool_code, "romfs:/shaders/video_vsh.dksh");
-    m_fragment_shader.load(*m_pool_code, "romfs:/shaders/video_fsh.dksh");
+    bool dithering = SettingsManager::getInstance()->getEnableDithering();
+    if (!compileVideoShaders(dithering))
+    {
+        brls::Logger::error("Failed to compile video shaders");
+        return false;
+    }
 
     m_vertex_buffer = m_pool_data->allocate(sizeof(QuadVertexData), alignof(Vertex));
     memcpy(m_vertex_buffer.getCpuAddr(), QuadVertexData.data(), m_vertex_buffer.getSize());
@@ -215,6 +247,83 @@ void Deko3dRenderer::recordStaticVideoCommands()
 
     m_video_cmdlist = m_cmdbuf.finishList();
     brls::Logger::info("Deko3dRenderer: static video command list recorded");
+}
+
+bool Deko3dRenderer::compileShaderFromSource(CShader& shader, const std::string& source, bool isVertex)
+{
+    uint8_t* dksh_out = nullptr;
+    uint32_t dksh_size = 0;
+
+    uam_pipeline_stage stage = isVertex ? uam_pipeline_stage_vertex : uam_pipeline_stage_fragment;
+
+    brls::Logger::info("Deko3dRenderer: compiling {} shader ({} bytes)",
+        isVertex ? "vertex" : "fragment", source.size());
+
+    if (!uam_compileDksh(stage, source.c_str(), 3, &dksh_out, &dksh_size))
+    {
+        brls::Logger::error("Deko3dRenderer: failed to compile {} shader",
+            isVertex ? "vertex" : "fragment");
+        return false;
+    }
+
+    brls::Logger::info("Deko3dRenderer: {} shader compiled ({} bytes dksh)",
+        isVertex ? "vertex" : "fragment", dksh_size);
+
+    shader.destroy();
+    bool result = shader.loadFromMemory(*m_pool_code, dksh_out, dksh_size);
+    std::free(dksh_out);
+
+    if (!result)
+        brls::Logger::error("Deko3dRenderer: failed to load compiled {} shader into GPU memory",
+            isVertex ? "vertex" : "fragment");
+
+    return result;
+}
+
+bool Deko3dRenderer::compileVideoShaders(bool dithering)
+{
+    brls::Logger::info("Deko3dRenderer: compiling video shaders (dithering={})", dithering);
+
+    std::string vsh_source = loadShaderSource("romfs:/shaders/video_vsh.glsl");
+    if (vsh_source.empty())
+        return false;
+
+    if (!compileShaderFromSource(m_vertex_shader, vsh_source, true))
+        return false;
+
+    std::string fsh_source = loadShaderSource("romfs:/shaders/video_fsh.glsl");
+    if (fsh_source.empty())
+        return false;
+
+    if (dithering)
+    {
+        float strength = SettingsManager::getInstance()->getDitheringStrength();
+        auto pos = fsh_source.find('\n');
+        if (pos != std::string::npos)
+            fsh_source.insert(pos + 1,
+                std::format("#define DITHER_NOISE\n#define DITHER_STRENGTH {:.1f}\n", strength));
+    }
+
+    if (!compileShaderFromSource(m_fragment_shader, fsh_source, false))
+        return false;
+
+    m_dithering_enabled = dithering;
+    brls::Logger::info("Deko3dRenderer: video shaders compiled successfully");
+    return true;
+}
+
+void Deko3dRenderer::setDithering(bool enabled)
+{
+    if (enabled == m_dithering_enabled)
+        return;
+
+    if (!m_initialized || !m_pool_code)
+        return;
+
+    brls::Logger::info("Deko3dRenderer: switching dithering to {}", enabled);
+
+    if (compileVideoShaders(enabled) && m_textures_initialized)
+        recordStaticVideoCommands();
 }
 
 void Deko3dRenderer::draw(AVFrame* frame)

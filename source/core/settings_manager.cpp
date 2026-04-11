@@ -357,6 +357,12 @@ void SettingsManager::parseTomlFile() {
             debugDiscoveryLog = *val;
         if (auto val = config["debug_ffmpeg_log"].value<bool>())
             debugFfmpegLog = *val;
+        if (auto pictureTable = config["picture_adjustments"].as_table()) {
+            if (auto val = (*pictureTable)["enable_dithering"].value<bool>())
+                enableDithering = *val;
+            if (auto val = (*pictureTable)["dithering_strength"].value<double>())
+                ditheringStrength = std::max(1.0f, std::min(10.0f, static_cast<float>(*val)));
+        }
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
         if (auto val = config["companion_host"].value<std::string>())
@@ -424,7 +430,7 @@ void SettingsManager::parseTomlFile() {
 
             std::string hostName(key.str());
 
-            if (hostName == "button_mapping" || hostName == "rumble") continue;
+            if (hostName == "button_mapping" || hostName == "rumble" || hostName == "picture_adjustments") continue;
 
             auto* table = value.as_table();
 
@@ -731,6 +737,13 @@ int SettingsManager::writeFile() {
         rumbleTable.insert("envelope_decay", static_cast<double>(rumbleEnvelopeDecay));
         rumbleTable.insert("envelope_attack", static_cast<double>(rumbleEnvelopeAttack));
         config.insert("rumble", rumbleTable);
+    }
+
+    {
+        toml::table pictureTable;
+        pictureTable.insert("enable_dithering", enableDithering);
+        pictureTable.insert("dithering_strength", static_cast<double>(ditheringStrength));
+        config.insert("picture_adjustments", pictureTable);
     }
 
     {
@@ -1416,6 +1429,22 @@ bool SettingsManager::getLowLatencyMode() const {
 
 void SettingsManager::setLowLatencyMode(bool enabled) {
     lowLatencyMode = enabled;
+}
+
+bool SettingsManager::getEnableDithering() const {
+    return enableDithering;
+}
+
+void SettingsManager::setEnableDithering(bool enabled) {
+    enableDithering = enabled;
+}
+
+float SettingsManager::getDitheringStrength() const {
+    return ditheringStrength;
+}
+
+void SettingsManager::setDitheringStrength(float value) {
+    ditheringStrength = std::max(1.0f, std::min(10.0f, value));
 }
 
 std::string SettingsManager::getDebugLocale() const {

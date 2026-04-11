@@ -43,3 +43,7 @@
 	path = library/ffmpeg
 	url = https://github.com/xlanor/FFmpeg.git
 	branch = ffmpeg-8.1
+[submodule "library/uam"]
+	path = library/uam
+	url = https://github.com/RSDuck/uam.git
+	branch = library-target

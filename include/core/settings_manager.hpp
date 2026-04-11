@@ -77,6 +77,10 @@ private:
     bool lowLatencyMode = false;
     std::string debugLocale;
 
+    // Picture adjustments
+    bool enableDithering = false;
+    float ditheringStrength = 3.0f;
+
     // Debug logging settings
     bool debugLwipLog = false;
     bool debugWireguardLog = false;
@@ -260,6 +264,12 @@ public:
 
     bool getLowLatencyMode() const;
     void setLowLatencyMode(bool enabled);
+
+    bool getEnableDithering() const;
+    void setEnableDithering(bool enabled);
+
+    float getDitheringStrength() const;
+    void setDitheringStrength(float value);
 
     std::string getDebugLocale() const;
     void setDebugLocale(const std::string& locale);

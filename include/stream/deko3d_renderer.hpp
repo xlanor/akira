@@ -8,6 +8,7 @@
 #include <deko3d.hpp>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <borealis.hpp>
@@ -42,6 +43,8 @@ public:
     void triggerBorderFlash() { m_border_flash_frames = BORDER_FLASH_DURATION; }
 
     void setTickCallback(TickCallback cb) override { m_tick_callback = std::move(cb); }
+
+    void setDithering(bool enabled);
 
 private:
     bool m_paused = false;
@@ -124,6 +127,11 @@ private:
     bool setupTextures(AVFrame* frame);
     void updateFrameBindings(AVFrame* frame);
     void recordStaticVideoCommands();
+
+    bool compileShaderFromSource(CShader& shader, const std::string& source, bool isVertex);
+    bool compileVideoShaders(bool dithering);
+    bool m_dithering_enabled = false;
+    bool m_uam_initialized = false;
 
     bool m_frame_bound = false;
 

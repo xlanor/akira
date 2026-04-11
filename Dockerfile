@@ -4,7 +4,9 @@ RUN apt-get update && apt-get install -y \
     autoconf automake libtool pkg-config \
     protobuf-compiler python3-protobuf \
     python3 python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+    python3-mako ninja-build bison flex \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --break-system-packages meson>=1.3.0
 
 RUN dkp-pacman -Syu --noconfirm && \
     dkp-pacman -S --noconfirm \
@@ -72,5 +74,17 @@ RUN bash -c '\
         --enable-nvtegra && \
     make -j$(nproc) && \
     make install'
+
+WORKDIR /build/uam
+COPY library/uam /build/uam
+
+RUN echo "option('build_as_library', type : 'boolean', value : false)" > meson_options.txt && \
+    sed -i "/static_library/,/^[[:space:]]*)/{s/include_directories: uam_incs$/include_directories: uam_incs, install: true/}" meson.build && \
+    bash -c '\
+    source /opt/devkitpro/switchvars.sh && \
+    /opt/devkitpro/meson-cross.sh switch crossfile_dkp build -Dbuild_as_library=true && \
+    meson compile -C build && \
+    meson install -C build && \
+    cp source/uam.h $PORTLIBS_PREFIX/include/'
 
 WORKDIR /build

@@ -132,7 +132,9 @@ bool Session::InitVideo(int video_width, int video_height)
 
     if (!m_video_renderer->initialize(video_width, video_height, this->log))
     {
-        throw Exception("Failed to initialize video renderer");
+        brls::Logger::error("Failed to initialize video renderer");
+        m_video_renderer.reset();
+        return false;
     }
 
     return true;

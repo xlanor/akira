@@ -197,8 +197,8 @@ void StreamView::startStream()
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
-            brls::Application::forceUnblockInputs();
             dialog->open();
+            brls::Application::forceUnblockInputs();
         });
     }
 }
