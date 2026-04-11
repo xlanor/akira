@@ -327,6 +327,8 @@ void SettingsManager::parseTomlFile() {
             powerUserMenuUnlocked = *val;
         else if (auto val = config["power_user_mode"].value<bool>())
             powerUserMenuUnlocked = *val;
+        if (auto val = config["ipc_stats_enabled"].value<bool>())
+            ipcStatsEnabled = *val;
         if (auto val = config["unlock_bitrate_max"].value<bool>())
             unlockBitrateMax = *val;
         if (auto val = config["auto_reconnect"].value<bool>())
@@ -701,6 +703,8 @@ int SettingsManager::writeFile() {
     config.insert("port_guessing_socks", portGuessingSocks);
     if (powerUserMenuUnlocked)
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
+    if (ipcStatsEnabled)
+        config.insert("ipc_stats_enabled", ipcStatsEnabled);
     if (unlockBitrateMax)
         config.insert("unlock_bitrate_max", unlockBitrateMax);
     if (!autoReconnect)
@@ -1344,6 +1348,14 @@ bool SettingsManager::getPowerUserMenuUnlocked() const {
 
 void SettingsManager::setPowerUserMenuUnlocked(bool unlocked) {
     powerUserMenuUnlocked = unlocked;
+}
+
+bool SettingsManager::getIpcStatsEnabled() const {
+    return ipcStatsEnabled;
+}
+
+void SettingsManager::setIpcStatsEnabled(bool enabled) {
+    ipcStatsEnabled = enabled;
 }
 
 bool SettingsManager::getUnlockBitrateMax() const {

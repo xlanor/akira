@@ -278,6 +278,8 @@
         "power_user": "Power User Settings",
         "unlock_bitrate_max": "Unlock Bitrate Max",
         "unlock_bitrate_max_desc": "Enables higher bitrate limits (720p: 25000, 1080p: 30000) with 5000 minimum",
+        "ipc_stats": "IPC Stats Service",
+        "ipc_stats_desc": "Expose stats over IPC for consumption by a sysmodule. Do not use, developer only",
         "port_guessing": "Port Guessing",
         "port_guessing_desc": "Guess nearby ports for NAT traversal. Helps on mobile hotspots and port-rewriting NATs.",
         "port_guess_count": "Port Guess Count",

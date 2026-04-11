@@ -15,12 +15,12 @@
 #include "core/exception.hpp"
 #include "stream/stream_stats.hpp"
 
-// Forward declarations - full headers included in session.cpp only
 class AudioManager;
 class HapticManager;
 class InputManager;
 class VideoDecoder;
 class IVideoRenderer;
+class IpcStatsService;
 
 class Session
 {
@@ -36,6 +36,7 @@ private:
     std::unique_ptr<InputManager> m_input_manager;
     std::unique_ptr<VideoDecoder> m_video_decoder;
     std::unique_ptr<IVideoRenderer> m_video_renderer;
+    std::unique_ptr<IpcStatsService> m_ipc_service;
 
     bool m_show_stats_overlay = false;
 

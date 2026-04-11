@@ -7,6 +7,7 @@
 #include "stream/input_manager.hpp"
 #include "stream/video_decoder.hpp"
 #include "stream/deko3d_renderer.hpp"
+#include "stream/ipc_service.hpp"
 
 #include <chiaki/packetstats.h>
 
@@ -142,6 +143,9 @@ bool Session::InitVideo(int video_width, int video_height)
 
 bool Session::FreeVideo()
 {
+    if (m_ipc_service)
+        m_ipc_service->SetStreamActive(false);
+
     this->quit = true;
     m_first_frame_received = false;
     SettingsManager::getInstance()->setStreamingActive(false);
@@ -244,6 +248,16 @@ bool Session::MainLoop()
                         updateActualResolution(frame->width, frame->height);
                         SettingsManager::getInstance()->setStreamingActive(true);
                         brls::Logger::info("First video frame received!");
+
+                        if (SettingsManager::getInstance()->getIpcStatsEnabled())
+                        {
+                            if (!m_ipc_service)
+                            {
+                                m_ipc_service = std::make_unique<IpcStatsService>(this);
+                                m_ipc_service->Start();
+                            }
+                            m_ipc_service->SetStreamActive(true);
+                        }
                     }
                     m_video_renderer->draw(frame);
                 }

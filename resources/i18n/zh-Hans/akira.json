@@ -278,6 +278,8 @@
         "power_user": "高级用户设置",
         "unlock_bitrate_max": "解锁最大码率",
         "unlock_bitrate_max_desc": "启用更高码率限制（720p: 25000，1080p: 30000），最低 5000",
+        "ipc_stats": "IPC Stats Service",
+        "ipc_stats_desc": "Expose stats over IPC for consumption by a sysmodule. Do not use, developer only",
         "port_guessing": "端口猜测",
         "port_guessing_desc": "猜测相邻端口以实现 NAT 穿透。适用于移动热点和端口重写型 NAT。",
         "port_guess_count": "端口猜测数量",

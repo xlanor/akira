@@ -66,6 +66,7 @@ private:
     int portGuessingCount = 75;
     int portGuessingSocks = 120;
     bool powerUserMenuUnlocked = false;
+    bool ipcStatsEnabled = false;
     bool unlockBitrateMax = false;
     bool autoReconnect = true;
     GyroSource globalGyroSource = GyroSource::Auto;
@@ -240,6 +241,8 @@ public:
 
     bool getPowerUserMenuUnlocked() const;
     void setPowerUserMenuUnlocked(bool unlocked);
+    bool getIpcStatsEnabled() const;
+    void setIpcStatsEnabled(bool enabled);
     bool getUnlockBitrateMax() const;
     void setUnlockBitrateMax(bool enabled);
     bool getAutoReconnect() const;

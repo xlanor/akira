@@ -151,6 +151,7 @@ endif()
 # Source files
 ###########################################
 file(GLOB_RECURSE MAIN_SRC source/*.cpp)
+list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/source/stream/nxext_ipc_server.c)
 
 # Switch wrapper for libnx initialization
 list(APPEND MAIN_SRC ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
@@ -213,6 +214,8 @@ target_sources(${PROJECT_NAME} PRIVATE ${LWIP_SRCS} ${LWIP_RELAY_SRCS})
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
     include
+    # Shared IPC definitions
+    ${CMAKE_CURRENT_SOURCE_DIR}/overlay/common/include
     # Borealis includes
     ${BOREALIS_LIBRARY}/include
     # Real chiaki headers from chiaki-ng library

@@ -64,6 +64,7 @@ private:
     BRLS_BIND(brls::Label, versionLabel, "settings/version");
     BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
     BRLS_BIND(brls::BooleanCell, unlockBitrateMaxToggle, "settings/unlockBitrateMax");
+    BRLS_BIND(brls::BooleanCell, ipcStatsToggle, "settings/ipcStats");
     BRLS_BIND(brls::BooleanCell, lowLatencyModeToggle, "settings/lowLatencyMode");
     BRLS_BIND(brls::BooleanCell, portGuessingToggle, "settings/portGuessing");
     BRLS_BIND(brls::SliderCell, portGuessingCountSlider, "settings/portGuessingCount");

@@ -1111,6 +1111,16 @@ void SettingsTab::initPowerUserSection() {
         }
     );
 
+    ipcStatsToggle->init(
+        "akira/settings/ipc_stats"_i18n,
+        settings->getIpcStatsEnabled(),
+        [this](bool isOn) {
+            settings->setIpcStatsEnabled(isOn);
+            settings->writeFile();
+            brls::Logger::info("IPC Stats set to {}", isOn ? "true" : "false");
+        }
+    );
+
     autoReconnectToggle->init(
         "akira/settings/auto_reconnect"_i18n,
         settings->getAutoReconnect(),

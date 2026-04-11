@@ -196,6 +196,19 @@
                 marginTop="5"
                 marginBottom="15"/>
 
+            <brls:BooleanCell
+                id="settings/ipcStats"
+                title="@i18n/akira/settings/ipc_stats"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="@i18n/akira/settings/ipc_stats_desc"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="15"/>
 
             <brls:BooleanCell
                 id="settings/portGuessing"
