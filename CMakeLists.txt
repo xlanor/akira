@@ -296,10 +296,7 @@ if (USE_DEKO3D)
 
     execute_process(COMMAND ${NX_UAM_EXE} -s vert -o "${SHADER_OUT_DIR}/text_vsh.dksh" "${SHADER_DIR}/text_vsh.glsl" TIMEOUT 5)
     execute_process(COMMAND ${NX_UAM_EXE} -s frag -o "${SHADER_OUT_DIR}/text_fsh.dksh" "${SHADER_DIR}/text_fsh.glsl" TIMEOUT 5)
-    execute_process(COMMAND ${NX_UAM_EXE} -s frag -o "${SHADER_OUT_DIR}/fsr_easu_fsh.dksh" "${SHADER_DIR}/fsr_easu_fsh.glsl" TIMEOUT 10)
-    execute_process(COMMAND ${NX_UAM_EXE} -s frag -o "${SHADER_OUT_DIR}/fsr_rcas_fsh.dksh" "${SHADER_DIR}/fsr_rcas_fsh.glsl" TIMEOUT 10)
-    execute_process(COMMAND ${NX_UAM_EXE} -s frag -o "${SHADER_OUT_DIR}/fsr_pass_fsh.dksh" "${SHADER_DIR}/fsr_pass_fsh.glsl" TIMEOUT 10)
-    message(STATUS "Compiled text and FSR shaders to ${SHADER_OUT_DIR}")
+    message(STATUS "Compiled text shaders to ${SHADER_OUT_DIR}")
     message(STATUS "Video shaders will be compiled at runtime via uam library")
 endif()
 

@@ -32,6 +32,13 @@ class SettingsManager {
 protected:
     SettingsManager();
 
+public:
+    enum class StreamProfile {
+        Local = 0,
+        Remote = 1,
+        Vpn = 2
+    };
+
 private:
     static constexpr const char* CONFIG_DIR = "sdmc:/switch/akira";
     static constexpr const char* TOML_CONFIG_FILE = "sdmc:/switch/akira/akira.toml";
@@ -82,9 +89,12 @@ private:
     bool enableDithering = false;
     float ditheringStrength = 3.0f;
 
-    bool fsrEnabled = false;
-    float fsrSharpness = 0.2f;
-    int fsrTargetHeight = 1080;
+    bool easuEnabled = false;
+    bool rcasEnabled = false;
+    float rcasSharpness = 0.2f;
+    int localEasuTargetHeight = 1080;
+    int remoteEasuTargetHeight = 1080;
+    int vpnEasuTargetHeight = 1080;
 
     // Debug logging settings
     bool debugLwipLog = false;
@@ -96,6 +106,7 @@ private:
 
     // Runtime state (not persisted)
     bool streamingActive = false;
+    StreamProfile activeStreamProfile = StreamProfile::Local;
 
     // Companion server settings
     std::string companionHost;
@@ -311,12 +322,21 @@ public:
     void setSwipeRightEnabled(bool enabled);
     bool isButtonEnabled(uint32_t chiakiButton) const;
 
-    bool getFsrEnabled() const;
-    void setFsrEnabled(bool enabled);
-    float getFsrSharpness() const;
-    void setFsrSharpness(float sharpness);
-    int getFsrTargetHeight() const;
-    void setFsrTargetHeight(int height);
+    bool getEasuEnabled() const;
+    void setEasuEnabled(bool enabled);
+    bool getRcasEnabled() const;
+    void setRcasEnabled(bool enabled);
+    float getRcasSharpness() const;
+    void setRcasSharpness(float sharpness);
+    int getEasuTargetHeight() const;
+    int getLocalEasuTargetHeight() const;
+    void setLocalEasuTargetHeight(int height);
+    int getRemoteEasuTargetHeight() const;
+    void setRemoteEasuTargetHeight(int height);
+    int getVpnEasuTargetHeight() const;
+    void setVpnEasuTargetHeight(int height);
+    StreamProfile getActiveStreamProfile() const;
+    void setActiveStreamProfile(StreamProfile profile);
 
     bool isStreamingActive() const;
     void setStreamingActive(bool active);

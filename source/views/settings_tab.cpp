@@ -11,6 +11,49 @@
 
 using namespace brls::literals;
 
+namespace {
+
+int maxEasuTargetHeightForResolution(ChiakiVideoResolutionPreset resolution) {
+    switch (resolution) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p:
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p:
+            return 720;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p:
+            return 1080;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p:
+        default:
+            return 1440;
+    }
+}
+
+std::vector<std::string> getEasuTargetOptions(ChiakiVideoResolutionPreset resolution) {
+    int maxHeight = maxEasuTargetHeightForResolution(resolution);
+    if (maxHeight <= 720)
+        return {"720p"};
+    if (maxHeight <= 1080)
+        return {"720p", "1080p"};
+    return {"720p", "1080p", "1440p"};
+}
+
+int easuTargetHeightForIndex(int index) {
+    switch (index) {
+        case 0: return 720;
+        case 1: return 1080;
+        case 2: return 1440;
+        default: return 720;
+    }
+}
+
+int easuTargetIndexForHeight(int height) {
+    if (height <= 720)
+        return 0;
+    if (height <= 1080)
+        return 1;
+    return 2;
+}
+
+}
+
 // Custom button styles with colored backgrounds, no border
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
     .shadowType              = brls::ShadowType::GENERIC,
@@ -63,9 +106,12 @@ SettingsTab::SettingsTab() {
     initButtonMappingCell();
     initEnableDitheringToggle();
     initDitheringStrengthSlider();
-    initFsrEnabledToggle();
-    initFsrTargetSelector();
-    initFsrSharpnessSlider();
+    initEasuEnabledToggle();
+    initLocalEasuTargetSelector();
+    initRemoteEasuTargetSelector();
+    initVpnEasuTargetSelector();
+    initRcasEnabledToggle();
+    initRcasSharpnessSlider();
     initEnableThreadAffinityToggle();
     initLowLatencyModeToggle();
     initHolepunchRetryToggle();
@@ -168,6 +214,7 @@ void SettingsTab::initLocalResolutionSelector() {
             }
             settings->setLocalVideoResolution(preset);
             updateLocalBitrateSlider();
+            initLocalEasuTargetSelector();
             settings->writeFile();
             brls::Logger::info("Local resolution set to {}", SettingsManager::resolutionToString(preset));
         }
@@ -202,6 +249,7 @@ void SettingsTab::initRemoteResolutionSelector() {
             }
             settings->setRemoteVideoResolution(preset);
             updateRemoteBitrateSlider();
+            initRemoteEasuTargetSelector();
             settings->writeFile();
             brls::Logger::info("Remote resolution set to {}", SettingsManager::resolutionToString(preset));
         }
@@ -378,6 +426,7 @@ void SettingsTab::initVpnResolutionSelector() {
                 default: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
             }
             settings->setVpnVideoResolution(preset);
+            initVpnEasuTargetSelector();
             settings->writeFile();
             brls::Logger::info("VPN resolution set to {}", SettingsManager::resolutionToString(preset));
         }
@@ -688,69 +737,105 @@ void SettingsTab::initDitheringStrengthSlider() {
     ditheringStrengthSlider->detail->setText(std::format("{}", static_cast<int>(current)));
 }
 
-void SettingsTab::initFsrEnabledToggle() {
-    bool currentValue = settings->getFsrEnabled();
+void SettingsTab::initEasuEnabledToggle() {
+    bool currentValue = settings->getEasuEnabled();
 
-    fsrEnabledToggle->init(
-        "FSR Upscaling",
+    easuEnabledToggle->init(
+        "EASU (Upscaling)",
         currentValue,
         [this](bool isOn) {
-            settings->setFsrEnabled(isOn);
+            settings->setEasuEnabled(isOn);
             settings->writeFile();
             updateResolutionLabels();
         }
     );
 }
 
-void SettingsTab::initFsrTargetSelector() {
-    std::vector<std::string> options = {"720p", "1080p", "1440p"};
+void SettingsTab::initLocalEasuTargetSelector() {
+    auto options = getEasuTargetOptions(settings->getLocalVideoResolution());
+    int currentIndex = std::min(easuTargetIndexForHeight(settings->getLocalEasuTargetHeight()), static_cast<int>(options.size()) - 1);
 
-    int current = settings->getFsrTargetHeight();
-    int currentIndex = 1;
-    if (current <= 720) currentIndex = 0;
-    else if (current <= 1080) currentIndex = 1;
-    else currentIndex = 2;
-
-    fsrTargetSelector->init(
-        "FSR Target",
+    localEasuTargetSelector->init(
+        "Local EASU Target",
         options,
         currentIndex,
         [](int selected) {},
         [this](int selected) {
-            int height;
-            switch (selected) {
-                case 0: height = 720; break;
-                case 1: height = 1080; break;
-                case 2: height = 1440; break;
-                default: height = 1080; break;
-            }
-            settings->setFsrTargetHeight(height);
+            settings->setLocalEasuTargetHeight(easuTargetHeightForIndex(selected));
             settings->writeFile();
         }
     );
 }
 
-void SettingsTab::initFsrSharpnessSlider() {
-    float current = settings->getFsrSharpness();
+void SettingsTab::initRemoteEasuTargetSelector() {
+    auto options = getEasuTargetOptions(settings->getRemoteVideoResolution());
+    int currentIndex = std::min(easuTargetIndexForHeight(settings->getRemoteEasuTargetHeight()), static_cast<int>(options.size()) - 1);
+
+    remoteEasuTargetSelector->init(
+        "Remote EASU Target",
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            settings->setRemoteEasuTargetHeight(easuTargetHeightForIndex(selected));
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initVpnEasuTargetSelector() {
+    auto options = getEasuTargetOptions(settings->getVpnVideoResolution());
+    int currentIndex = std::min(easuTargetIndexForHeight(settings->getVpnEasuTargetHeight()), static_cast<int>(options.size()) - 1);
+
+    vpnEasuTargetSelector->init(
+        "VPN EASU Target",
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            settings->setVpnEasuTargetHeight(easuTargetHeightForIndex(selected));
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initRcasEnabledToggle() {
+    bool currentValue = settings->getRcasEnabled();
+
+    rcasEnabledToggle->init(
+        "RCAS (Sharpening)",
+        currentValue,
+        [this](bool isOn) {
+            settings->setRcasEnabled(isOn);
+            settings->writeFile();
+        }
+    );
+}
+
+void SettingsTab::initRcasSharpnessSlider() {
+    float current = settings->getRcasSharpness();
     float normalized = 1.0f - (current / 2.0f);
 
-    fsrSharpnessSlider->init(
-        "FSR Sharpness",
+    rcasSharpnessSlider->init(
+        "RCAS Strength",
         normalized,
         [this](float value) {
             float sharpness = (1.0f - value) * 2.0f;
-            settings->setFsrSharpness(sharpness);
+            settings->setRcasSharpness(sharpness);
             int percent = static_cast<int>(value * 100.0f);
-            fsrSharpnessSlider->detail->setText(std::format("{}%", percent));
+            rcasSharpnessSlider->detail->setText(std::format("{}%", percent));
             settings->writeFile();
         }
     );
 
     int percent = static_cast<int>(normalized * 100.0f);
-    fsrSharpnessSlider->detail->setText(std::format("{}%", percent));
+    rcasSharpnessSlider->detail->setText(std::format("{}%", percent));
 }
 
 void SettingsTab::updateResolutionLabels() {
+    initLocalEasuTargetSelector();
+    initRemoteEasuTargetSelector();
+    initVpnEasuTargetSelector();
 }
 
 void SettingsTab::initEnableThreadAffinityToggle() {

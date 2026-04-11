@@ -23,6 +23,16 @@ namespace
 {
     static constexpr unsigned StaticCmdSize = 0x10000;
 
+    int cappedFsrTargetHeight(int inputHeight, int configuredTargetHeight)
+    {
+        int maxTargetHeight = 1440;
+        if (inputHeight <= 540)
+            maxTargetHeight = 720;
+        else if (inputHeight <= 720)
+            maxTargetHeight = 1080;
+        return std::min(configuredTargetHeight, maxTargetHeight);
+    }
+
     struct Vertex
     {
         float position[3];
@@ -97,6 +107,39 @@ static std::string loadShaderSource(const char* path)
     return source;
 }
 
+static std::string injectShaderDefines(const std::string& source, const std::string& defines)
+{
+    if (defines.empty())
+        return source;
+
+    auto pos = source.find('\n');
+    if (pos == std::string::npos)
+        return source + "\n" + defines;
+
+    std::string result = source;
+    result.insert(pos + 1, defines);
+    return result;
+}
+
+static std::string buildVideoFragmentDefines(bool dithering, bool fsrEasu, bool fsrRcas, bool fsrPass)
+{
+    std::string defines;
+
+    if (fsrEasu)
+        defines += "#define FSR_EASU\n";
+    if (fsrRcas)
+        defines += "#define FSR_RCAS\n";
+    if (fsrPass)
+        defines += "#define FSR_PASS\n";
+    if (dithering)
+    {
+        float strength = SettingsManager::getInstance()->getDitheringStrength();
+        defines += std::format("#define DITHER_NOISE\n#define DITHER_STRENGTH {:.1f}\n", strength);
+    }
+
+    return defines;
+}
+
 Deko3dRenderer::Deko3dRenderer()
 {
     uam_init();
@@ -114,7 +157,13 @@ Deko3dRenderer::~Deko3dRenderer()
     m_text_vertex_buffer.destroy();
 
     m_vertex_shader.destroy();
-    m_fragment_shader.destroy();
+    for (auto& variant : m_fragment_shader_cache)
+        variant->shader.destroy();
+    m_fragment_shader_cache.clear();
+    m_fragment_shader = nullptr;
+    m_fsr_easu_shader = nullptr;
+    m_fsr_rcas_shader = nullptr;
+    m_fsr_pass_shader = nullptr;
     m_text_vertex_shader.destroy();
     m_text_fragment_shader.destroy();
 
@@ -221,10 +270,12 @@ bool Deko3dRenderer::setupTextures(AVFrame* frame)
         .setFlags(DkImageFlags_UsageLoadStore | DkImageFlags_Usage2DEngine | DkImageFlags_UsageVideo)
         .initialize(m_chroma_layout);
 
-    bool fsr_setting = SettingsManager::getInstance()->getFsrEnabled();
-    int targetH = SettingsManager::getInstance()->getFsrTargetHeight();
+    bool easuSetting = SettingsManager::getInstance()->getEasuEnabled();
+    bool rcasSetting = SettingsManager::getInstance()->getRcasEnabled();
+    int targetH = cappedFsrTargetHeight(m_frame_height, SettingsManager::getInstance()->getEasuTargetHeight());
     int targetW = (targetH * 16) / 9;
-    m_fsr_pending = fsr_setting && (m_frame_width < targetW || m_frame_height < targetH);
+    bool easuNeeded = easuSetting && (m_frame_width < targetW || m_frame_height < targetH);
+    m_fsr_pending = easuNeeded || rcasSetting;
 
     recordStaticVideoCommands();
 
@@ -246,7 +297,7 @@ void Deko3dRenderer::recordStaticVideoCommands()
     m_cmdbuf.bindColorState(dk::ColorState{});
     m_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
 
-    m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fragment_shader });
+    m_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, *m_fragment_shader });
     m_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_luma_texture_id, 0));
     m_cmdbuf.bindTextures(DkStage_Fragment, 1, dkMakeTextureHandle(m_chroma_texture_id, 0));
 
@@ -291,31 +342,51 @@ bool Deko3dRenderer::compileShaderFromSource(CShader& shader, const std::string&
     return result;
 }
 
-bool Deko3dRenderer::compileVideoShaders(bool dithering)
+bool Deko3dRenderer::ensureVertexShaderCompiled()
 {
-    brls::Logger::info("Deko3dRenderer: compiling video shaders (dithering={})", dithering);
-
     std::string vsh_source = loadShaderSource("romfs:/shaders/video_vsh.glsl");
     if (vsh_source.empty())
         return false;
 
-    if (!compileShaderFromSource(m_vertex_shader, vsh_source, true))
-        return false;
+    return compileShaderFromSource(m_vertex_shader, vsh_source, true);
+}
+
+CShader* Deko3dRenderer::getOrCreateFragmentShader(const ShaderVariantKey& key)
+{
+    for (auto& variant : m_fragment_shader_cache)
+    {
+        if (variant->key == key)
+            return &variant->shader;
+    }
 
     std::string fsh_source = loadShaderSource("romfs:/shaders/video_fsh.glsl");
     if (fsh_source.empty())
+        return nullptr;
+
+    auto variant = std::make_unique<CachedFragmentShader>();
+    variant->key = key;
+
+    if (!compileShaderFromSource(variant->shader,
+        injectShaderDefines(fsh_source,
+            buildVideoFragmentDefines(key.dithering, key.fsrEasu, key.fsrRcas, key.fsrPass)), false))
+        return nullptr;
+
+    CShader* shader = &variant->shader;
+    m_fragment_shader_cache.emplace_back(std::move(variant));
+    return shader;
+}
+
+bool Deko3dRenderer::compileVideoShaders(bool dithering)
+{
+    brls::Logger::info("Deko3dRenderer: compiling video shaders (dithering={})", dithering);
+
+    if (!ensureVertexShaderCompiled())
         return false;
 
-    if (dithering)
-    {
-        float strength = SettingsManager::getInstance()->getDitheringStrength();
-        auto pos = fsh_source.find('\n');
-        if (pos != std::string::npos)
-            fsh_source.insert(pos + 1,
-                std::format("#define DITHER_NOISE\n#define DITHER_STRENGTH {:.1f}\n", strength));
-    }
-
-    if (!compileShaderFromSource(m_fragment_shader, fsh_source, false))
+    m_fragment_shader = getOrCreateFragmentShader(ShaderVariantKey{
+        .dithering = dithering,
+    });
+    if (!m_fragment_shader)
         return false;
 
     m_dithering_enabled = dithering;
@@ -341,28 +412,62 @@ void Deko3dRenderer::initFsr()
 {
     m_queue.waitIdle();
 
-    m_fsr_sharpness = SettingsManager::getInstance()->getFsrSharpness();
+    m_easu_enabled = false;
+    m_rcas_enabled = SettingsManager::getInstance()->getRcasEnabled();
+    m_fsr_sharpness = SettingsManager::getInstance()->getRcasSharpness();
 
-    int targetH = SettingsManager::getInstance()->getFsrTargetHeight();
-    m_fsr_target_height = targetH;
-    m_fsr_target_width = (targetH * 16) / 9;
-    m_fsr_supersampling = (m_fsr_target_width > m_display_width || m_fsr_target_height > m_display_height);
-
-    if (m_fsr_target_width <= m_frame_width && m_fsr_target_height <= m_frame_height)
+    int targetH = cappedFsrTargetHeight(m_frame_height, SettingsManager::getInstance()->getEasuTargetHeight());
+    int targetW = (targetH * 16) / 9;
+    if (SettingsManager::getInstance()->getEasuEnabled() &&
+        (m_frame_width < targetW || m_frame_height < targetH))
     {
-        brls::Logger::info("Deko3dRenderer::initFsr: target {}x{} <= frame {}x{}, skipping",
-            m_fsr_target_width, m_fsr_target_height, m_frame_width, m_frame_height);
-        return;
+        m_easu_enabled = true;
+        m_fsr_target_height = targetH;
+        m_fsr_target_width = targetW;
     }
+    else
+    {
+        m_fsr_target_height = m_display_height;
+        m_fsr_target_width = m_display_width;
+    }
+
+    if (!m_easu_enabled && !m_rcas_enabled)
+        return;
+
+    m_fsr_supersampling = (m_fsr_target_width > m_display_width || m_fsr_target_height > m_display_height);
 
     brls::Logger::info("Deko3dRenderer::initFsr: input={}x{} target={}x{} display={}x{} ss={} ratio={:.2f}x{:.2f}",
         m_frame_width, m_frame_height, m_fsr_target_width, m_fsr_target_height,
         m_display_width, m_display_height, m_fsr_supersampling,
         (float)m_fsr_target_width / m_frame_width, (float)m_fsr_target_height / m_frame_height);
 
-    m_fsr_easu_shader.load(*m_pool_code, "romfs:/shaders/fsr_easu_fsh.dksh");
-    m_fsr_rcas_shader.load(*m_pool_code, "romfs:/shaders/fsr_rcas_fsh.dksh");
-    m_fsr_pass_shader.load(*m_pool_code, "romfs:/shaders/fsr_pass_fsh.dksh");
+    if (!ensureVertexShaderCompiled())
+        return;
+
+    bool dithering = SettingsManager::getInstance()->getEnableDithering();
+
+    if (m_easu_enabled)
+    {
+        m_fsr_easu_shader = getOrCreateFragmentShader(ShaderVariantKey{
+            .dithering = dithering,
+            .fsrEasu = true,
+        });
+        if (!m_fsr_easu_shader)
+            return;
+    }
+    if (m_rcas_enabled)
+    {
+        m_fsr_rcas_shader = getOrCreateFragmentShader(ShaderVariantKey{
+            .fsrRcas = true,
+        });
+        if (!m_fsr_rcas_shader)
+            return;
+    }
+    m_fsr_pass_shader = getOrCreateFragmentShader(ShaderVariantKey{
+        .fsrPass = true,
+    });
+    if (!m_fsr_pass_shader)
+        return;
 
     CMemPool* imagesPool = m_vctx->getImagesPool();
     if (!imagesPool)
@@ -383,7 +488,7 @@ void Deko3dRenderer::initFsr()
     m_rt_easu_desc.initialize(m_rt_easu_image, true);
     m_rt_easu_texture_id = m_vctx->allocateImageIndex();
 
-    if (m_fsr_supersampling)
+    if (m_fsr_supersampling && m_rcas_enabled)
     {
         m_rt_rcas_handle = imagesPool->allocate(m_rt_easu_layout.getSize(), m_rt_easu_layout.getAlignment());
         m_rt_rcas_image.initialize(m_rt_easu_layout, m_rt_rcas_handle.getMemBlock(), m_rt_rcas_handle.getOffset());
@@ -490,11 +595,20 @@ void Deko3dRenderer::recordFsrCommands()
     m_fsr_static_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
 
     m_image_descriptor_set->bindForImages(m_fsr_static_cmdbuf);
-    m_fsr_static_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fsr_easu_shader });
-    m_fsr_static_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_luma_texture_id, 0));
-    m_fsr_static_cmdbuf.bindTextures(DkStage_Fragment, 1, dkMakeTextureHandle(m_chroma_texture_id, 0));
-    m_fsr_static_cmdbuf.bindUniformBuffer(DkStage_Fragment, 0,
-        m_fsr_uniform_buffer.getGpuAddr(), 64);
+    if (m_easu_enabled)
+    {
+        m_fsr_static_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, *m_fsr_easu_shader });
+        m_fsr_static_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_luma_texture_id, 0));
+        m_fsr_static_cmdbuf.bindTextures(DkStage_Fragment, 1, dkMakeTextureHandle(m_chroma_texture_id, 0));
+        m_fsr_static_cmdbuf.bindUniformBuffer(DkStage_Fragment, 0,
+            m_fsr_uniform_buffer.getGpuAddr(), 64);
+    }
+    else
+    {
+        m_fsr_static_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, *m_fragment_shader });
+        m_fsr_static_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_luma_texture_id, 0));
+        m_fsr_static_cmdbuf.bindTextures(DkStage_Fragment, 1, dkMakeTextureHandle(m_chroma_texture_id, 0));
+    }
     m_fsr_static_cmdbuf.bindVtxBuffer(0, m_vertex_buffer.getGpuAddr(), m_vertex_buffer.getSize());
     m_fsr_static_cmdbuf.bindVtxAttribState(VertexAttribState);
     m_fsr_static_cmdbuf.bindVtxBufferState(VertexBufferState);
@@ -531,9 +645,11 @@ void Deko3dRenderer::cleanupFsr()
     m_rt_rcas_handle.destroy();
     m_rt_easu_image = dk::Image{};
 
-    m_fsr_easu_shader.destroy();
-    m_fsr_rcas_shader.destroy();
-    m_fsr_pass_shader.destroy();
+    m_fsr_easu_shader = nullptr;
+    m_fsr_rcas_shader = nullptr;
+    m_fsr_pass_shader = nullptr;
+    m_easu_enabled = false;
+    m_rcas_enabled = false;
 
     m_fsr_enabled = false;
 }
@@ -620,15 +736,23 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
 
             m_image_descriptor_set->bindForImages(m_fsr_rcas_cmdbuf);
 
-            m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fsr_rcas_shader });
-            m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_easu_texture_id, 0));
-            m_fsr_rcas_cmdbuf.bindUniformBuffer(DkStage_Fragment, 0,
-                m_fsr_uniform_buffer.getGpuAddr() + 256, 16);
+            if (m_rcas_enabled)
+            {
+                m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, *m_fsr_rcas_shader });
+                m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_easu_texture_id, 0));
+                m_fsr_rcas_cmdbuf.bindUniformBuffer(DkStage_Fragment, 0,
+                    m_fsr_uniform_buffer.getGpuAddr() + 256, 16);
+            }
+            else
+            {
+                m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, *m_fsr_pass_shader });
+                m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_easu_texture_id, 0));
+            }
             m_fsr_rcas_cmdbuf.bindVtxBuffer(0, m_vertex_buffer.getGpuAddr(), m_vertex_buffer.getSize());
             m_fsr_rcas_cmdbuf.bindVtxAttribState(VertexAttribState);
             m_fsr_rcas_cmdbuf.bindVtxBufferState(VertexBufferState);
 
-            if (m_fsr_supersampling)
+            if (m_fsr_supersampling && m_rcas_enabled)
             {
                 dk::ImageView rcasTarget{m_rt_rcas_image};
                 m_fsr_rcas_cmdbuf.bindRenderTargets(&rcasTarget);
@@ -640,7 +764,7 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
                 m_fsr_rcas_cmdbuf.bindRenderTargets(&finalTarget);
                 m_fsr_rcas_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)m_display_width, (float)m_display_height, 0.0f, 1.0f }});
                 m_fsr_rcas_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)m_display_width, (uint32_t)m_display_height }});
-                m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, m_fsr_pass_shader });
+                m_fsr_rcas_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, *m_fsr_pass_shader });
                 m_fsr_rcas_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_rt_rcas_texture_id, 0));
                 m_fsr_rcas_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
             }

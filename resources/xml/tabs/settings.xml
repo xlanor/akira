@@ -401,6 +401,42 @@
                 marginTop="5"
                 marginBottom="10"/>
 
+            <brls:BooleanCell
+                id="settings/easuEnabled"
+                title="EASU (Upscaling)"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SelectorCell
+                id="settings/localEasuTarget"
+                title="Local EASU Target"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SelectorCell
+                id="settings/remoteEasuTarget"
+                title="Remote EASU Target"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SelectorCell
+                id="settings/vpnEasuTarget"
+                title="VPN EASU Target"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:BooleanCell
+                id="settings/rcasEnabled"
+                title="RCAS (Sharpening)"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SliderCell
+                id="settings/rcasSharpness"
+                title="RCAS Strength"
+                marginLeft="15"
+                marginRight="15"/>
+
         </brls:Box>
 
         <brls:Header
@@ -415,24 +451,6 @@
             backgroundColor="@theme/color/card"
             cornerRadius="8"
             marginBottom="30">
-
-            <brls:BooleanCell
-                id="settings/fsrEnabled"
-                title="FSR Upscaling"
-                marginLeft="15"
-                marginRight="15"/>
-
-            <brls:SelectorCell
-                id="settings/fsrTarget"
-                title="FSR Target"
-                marginLeft="15"
-                marginRight="15"/>
-
-            <brls:SliderCell
-                id="settings/fsrSharpness"
-                title="FSR Sharpness"
-                marginLeft="15"
-                marginRight="15"/>
 
             <brls:BooleanCell
                 id="settings/enableThreadAffinity"

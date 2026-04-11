@@ -21,6 +21,29 @@
 
 namespace {
 
+int clampFsrTargetHeight(int height) {
+    if (height <= 720) return 720;
+    if (height <= 1080) return 1080;
+    return 1440;
+}
+
+int maxEasuTargetHeightForResolution(ChiakiVideoResolutionPreset resolution) {
+    switch (resolution) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p:
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p:
+            return 720;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p:
+            return 1080;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p:
+        default:
+            return 1440;
+    }
+}
+
+int clampEasuTargetHeightForResolution(ChiakiVideoResolutionPreset resolution, int height) {
+    return std::min(clampFsrTargetHeight(height), maxEasuTargetHeightForResolution(resolution));
+}
+
 std::string hidButtonToConfigString(uint64_t button) {
     switch (button) {
         case HidNpadButton_A: return "A";
@@ -347,12 +370,36 @@ void SettingsManager::parseTomlFile() {
             lowLatencyMode = *val;
         if (auto val = config["debug_locale"].value<std::string>())
             debugLocale = *val;
-        if (auto val = config["fsr_enabled"].value<bool>())
-            fsrEnabled = *val;
-        if (auto val = config["fsr_sharpness"].value<double>())
-            fsrSharpness = static_cast<float>(*val);
-        if (auto val = config["fsr_target_height"].value<int64_t>())
-            fsrTargetHeight = static_cast<int>(*val);
+        if (auto val = config["easu_enabled"].value<bool>())
+            easuEnabled = *val;
+        else if (auto val = config["fsr_enabled"].value<bool>())
+            easuEnabled = *val;
+        if (auto val = config["rcas_enabled"].value<bool>())
+            rcasEnabled = *val;
+        else if (auto val = config["fsr_enabled"].value<bool>())
+            rcasEnabled = *val;
+        if (auto val = config["rcas_sharpness"].value<double>())
+            rcasSharpness = static_cast<float>(*val);
+        else if (auto val = config["fsr_sharpness"].value<double>())
+            rcasSharpness = static_cast<float>(*val);
+        if (auto val = config["fsr_target_height"].value<int64_t>()) {
+            int height = clampFsrTargetHeight(static_cast<int>(*val));
+            localEasuTargetHeight = clampEasuTargetHeightForResolution(localVideoResolution, height);
+            remoteEasuTargetHeight = clampEasuTargetHeightForResolution(remoteVideoResolution, height);
+            vpnEasuTargetHeight = clampEasuTargetHeightForResolution(vpnVideoResolution, height);
+        }
+        if (auto val = config["local_easu_target_height"].value<int64_t>())
+            localEasuTargetHeight = clampEasuTargetHeightForResolution(localVideoResolution, static_cast<int>(*val));
+        else if (auto val = config["local_fsr_target_height"].value<int64_t>())
+            localEasuTargetHeight = clampEasuTargetHeightForResolution(localVideoResolution, static_cast<int>(*val));
+        if (auto val = config["remote_easu_target_height"].value<int64_t>())
+            remoteEasuTargetHeight = clampEasuTargetHeightForResolution(remoteVideoResolution, static_cast<int>(*val));
+        else if (auto val = config["remote_fsr_target_height"].value<int64_t>())
+            remoteEasuTargetHeight = clampEasuTargetHeightForResolution(remoteVideoResolution, static_cast<int>(*val));
+        if (auto val = config["vpn_easu_target_height"].value<int64_t>())
+            vpnEasuTargetHeight = clampEasuTargetHeightForResolution(vpnVideoResolution, static_cast<int>(*val));
+        else if (auto val = config["vpn_fsr_target_height"].value<int64_t>())
+            vpnEasuTargetHeight = clampEasuTargetHeightForResolution(vpnVideoResolution, static_cast<int>(*val));
         if (auto val = config["debug_lwip_log"].value<bool>())
             debugLwipLog = *val;
         if (auto val = config["debug_wireguard_log"].value<bool>())
@@ -399,6 +446,10 @@ void SettingsManager::parseTomlFile() {
 
         if (auto val = config["vpn_video_fps"].value<int64_t>())
             vpnVideoFPS = (*val == 30) ? CHIAKI_VIDEO_FPS_PRESET_30 : CHIAKI_VIDEO_FPS_PRESET_60;
+
+        localEasuTargetHeight = clampEasuTargetHeightForResolution(localVideoResolution, localEasuTargetHeight);
+        remoteEasuTargetHeight = clampEasuTargetHeightForResolution(remoteVideoResolution, remoteEasuTargetHeight);
+        vpnEasuTargetHeight = clampEasuTargetHeightForResolution(vpnVideoResolution, vpnEasuTargetHeight);
 
         if (auto mappingTable = config["button_mapping"].as_table()) {
             for (auto& [key, value] : *mappingTable) {
@@ -720,12 +771,18 @@ int SettingsManager::writeFile() {
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
     config.insert("packet_loss_max", static_cast<double>(packetLossMax));
     config.insert("enable_file_logging", enableFileLogging);
-    if (fsrEnabled)
-        config.insert("fsr_enabled", fsrEnabled);
-    if (fsrSharpness != 0.2f)
-        config.insert("fsr_sharpness", static_cast<double>(fsrSharpness));
-    if (fsrTargetHeight != 1080)
-        config.insert("fsr_target_height", static_cast<int64_t>(fsrTargetHeight));
+    if (easuEnabled)
+        config.insert("easu_enabled", easuEnabled);
+    if (rcasEnabled)
+        config.insert("rcas_enabled", rcasEnabled);
+    if (rcasSharpness != 0.2f)
+        config.insert("rcas_sharpness", static_cast<double>(rcasSharpness));
+    if (localEasuTargetHeight != clampEasuTargetHeightForResolution(localVideoResolution, 1080))
+        config.insert("local_easu_target_height", static_cast<int64_t>(localEasuTargetHeight));
+    if (remoteEasuTargetHeight != clampEasuTargetHeightForResolution(remoteVideoResolution, 1080))
+        config.insert("remote_easu_target_height", static_cast<int64_t>(remoteEasuTargetHeight));
+    if (vpnEasuTargetHeight != clampEasuTargetHeightForResolution(vpnVideoResolution, 1080))
+        config.insert("vpn_easu_target_height", static_cast<int64_t>(vpnEasuTargetHeight));
     if (enableThreadAffinity)
         config.insert("enable_thread_affinity", enableThreadAffinity);
     if (lowLatencyMode)
@@ -1032,6 +1089,7 @@ ChiakiVideoResolutionPreset SettingsManager::getLocalVideoResolution() const {
 
 void SettingsManager::setLocalVideoResolution(ChiakiVideoResolutionPreset value) {
     localVideoResolution = value;
+    localEasuTargetHeight = clampEasuTargetHeightForResolution(localVideoResolution, localEasuTargetHeight);
 }
 
 ChiakiVideoResolutionPreset SettingsManager::getRemoteVideoResolution() const {
@@ -1040,6 +1098,7 @@ ChiakiVideoResolutionPreset SettingsManager::getRemoteVideoResolution() const {
 
 void SettingsManager::setRemoteVideoResolution(ChiakiVideoResolutionPreset value) {
     remoteVideoResolution = value;
+    remoteEasuTargetHeight = clampEasuTargetHeightForResolution(remoteVideoResolution, remoteEasuTargetHeight);
 }
 
 ChiakiVideoFPSPreset SettingsManager::getVideoFPS(Host* host) {
@@ -1098,6 +1157,7 @@ ChiakiVideoResolutionPreset SettingsManager::getVpnVideoResolution() const {
 
 void SettingsManager::setVpnVideoResolution(ChiakiVideoResolutionPreset value) {
     vpnVideoResolution = value;
+    vpnEasuTargetHeight = clampEasuTargetHeightForResolution(vpnVideoResolution, vpnEasuTargetHeight);
 }
 
 ChiakiVideoFPSPreset SettingsManager::getVpnVideoFPS() const {
@@ -1431,28 +1491,69 @@ void SettingsManager::setPacketLossMax(float value) {
     packetLossMax = value;
 }
 
-bool SettingsManager::getFsrEnabled() const {
-    return fsrEnabled;
+bool SettingsManager::getEasuEnabled() const {
+    return easuEnabled;
 }
 
-void SettingsManager::setFsrEnabled(bool enabled) {
-    fsrEnabled = enabled;
+void SettingsManager::setEasuEnabled(bool enabled) {
+    easuEnabled = enabled;
 }
 
-float SettingsManager::getFsrSharpness() const {
-    return fsrSharpness;
+bool SettingsManager::getRcasEnabled() const {
+    return rcasEnabled;
 }
 
-void SettingsManager::setFsrSharpness(float sharpness) {
-    fsrSharpness = sharpness;
+void SettingsManager::setRcasEnabled(bool enabled) {
+    rcasEnabled = enabled;
 }
 
-int SettingsManager::getFsrTargetHeight() const {
-    return fsrTargetHeight;
+float SettingsManager::getRcasSharpness() const {
+    return rcasSharpness;
 }
 
-void SettingsManager::setFsrTargetHeight(int height) {
-    fsrTargetHeight = height;
+void SettingsManager::setRcasSharpness(float sharpness) {
+    rcasSharpness = sharpness;
+}
+
+int SettingsManager::getEasuTargetHeight() const {
+    switch (activeStreamProfile) {
+        case StreamProfile::Remote: return remoteEasuTargetHeight;
+        case StreamProfile::Vpn: return vpnEasuTargetHeight;
+        case StreamProfile::Local:
+        default: return localEasuTargetHeight;
+    }
+}
+
+int SettingsManager::getLocalEasuTargetHeight() const {
+    return localEasuTargetHeight;
+}
+
+void SettingsManager::setLocalEasuTargetHeight(int height) {
+    localEasuTargetHeight = clampEasuTargetHeightForResolution(localVideoResolution, height);
+}
+
+int SettingsManager::getRemoteEasuTargetHeight() const {
+    return remoteEasuTargetHeight;
+}
+
+void SettingsManager::setRemoteEasuTargetHeight(int height) {
+    remoteEasuTargetHeight = clampEasuTargetHeightForResolution(remoteVideoResolution, height);
+}
+
+int SettingsManager::getVpnEasuTargetHeight() const {
+    return vpnEasuTargetHeight;
+}
+
+void SettingsManager::setVpnEasuTargetHeight(int height) {
+    vpnEasuTargetHeight = clampEasuTargetHeightForResolution(vpnVideoResolution, height);
+}
+
+SettingsManager::StreamProfile SettingsManager::getActiveStreamProfile() const {
+    return activeStreamProfile;
+}
+
+void SettingsManager::setActiveStreamProfile(StreamProfile profile) {
+    activeStreamProfile = profile;
 }
 
 bool SettingsManager::getEnableFileLogging() const {
