@@ -11,49 +11,6 @@
 
 using namespace brls::literals;
 
-namespace {
-
-int maxEasuTargetHeightForResolution(ChiakiVideoResolutionPreset resolution) {
-    switch (resolution) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p:
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p:
-            return 720;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p:
-            return 1080;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p:
-        default:
-            return 1440;
-    }
-}
-
-std::vector<std::string> getEasuTargetOptions(ChiakiVideoResolutionPreset resolution) {
-    int maxHeight = maxEasuTargetHeightForResolution(resolution);
-    if (maxHeight <= 720)
-        return {"720p"};
-    if (maxHeight <= 1080)
-        return {"720p", "1080p"};
-    return {"720p", "1080p", "1440p"};
-}
-
-int easuTargetHeightForIndex(int index) {
-    switch (index) {
-        case 0: return 720;
-        case 1: return 1080;
-        case 2: return 1440;
-        default: return 720;
-    }
-}
-
-int easuTargetIndexForHeight(int height) {
-    if (height <= 720)
-        return 0;
-    if (height <= 1080)
-        return 1;
-    return 2;
-}
-
-}
-
 // Custom button styles with colored backgrounds, no border
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
     .shadowType              = brls::ShadowType::GENERIC,
@@ -106,10 +63,6 @@ SettingsTab::SettingsTab() {
     initButtonMappingCell();
     initEnableDitheringToggle();
     initDitheringStrengthSlider();
-    initEasuEnabledToggle();
-    initLocalEasuTargetSelector();
-    initRemoteEasuTargetSelector();
-    initVpnEasuTargetSelector();
     initRcasEnabledToggle();
     initRcasSharpnessSlider();
     initEnableThreadAffinityToggle();
@@ -187,15 +140,24 @@ void SettingsTab::initLocalResolutionSelector() {
         "akira/settings/res_540p"_i18n,
         "akira/settings/res_720p"_i18n,
         "akira/settings/res_1080p"_i18n,
+        "720p (FSR)",
+        "1080p (FSR)",
     };
 
     int currentIndex = 2;
     auto current = settings->getLocalVideoResolution();
-    switch (current) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: currentIndex = 0; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: currentIndex = 1; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: currentIndex = 2; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: currentIndex = 3; break;
+    bool fsrOn = settings->getLocalFsrEnabled();
+    if (fsrOn && current == CHIAKI_VIDEO_RESOLUTION_PRESET_540p) {
+        currentIndex = 4;
+    } else if (fsrOn && current == CHIAKI_VIDEO_RESOLUTION_PRESET_720p) {
+        currentIndex = 5;
+    } else {
+        switch (current) {
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: currentIndex = 0; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: currentIndex = 1; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: currentIndex = 2; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: currentIndex = 3; break;
+        }
     }
 
     localResolutionSelector->init(
@@ -205,32 +167,49 @@ void SettingsTab::initLocalResolutionSelector() {
         [](int selected) {},
         [this](int selected) {
             ChiakiVideoResolutionPreset preset;
+            bool fsr = false;
             switch (selected) {
                 case 0: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_360p; break;
                 case 1: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_540p; break;
                 case 2: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
                 case 3: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_1080p; break;
+                case 4: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_540p; fsr = true; break;
+                case 5: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; fsr = true; break;
                 default: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
             }
             settings->setLocalVideoResolution(preset);
+            settings->setLocalFsrEnabled(fsr);
             updateLocalBitrateSlider();
-            initLocalEasuTargetSelector();
             settings->writeFile();
-            brls::Logger::info("Local resolution set to {}", SettingsManager::resolutionToString(preset));
+            brls::Logger::info("Local resolution set to {}{}", SettingsManager::resolutionToString(preset), fsr ? " (FSR)" : "");
         }
     );
 }
 
 void SettingsTab::initRemoteResolutionSelector() {
-    std::vector<std::string> options = {"akira/settings/res_360p"_i18n, "akira/settings/res_540p"_i18n, "akira/settings/res_720p"_i18n, "akira/settings/res_1080p"_i18n};
+    std::vector<std::string> options = {
+        "akira/settings/res_360p"_i18n,
+        "akira/settings/res_540p"_i18n,
+        "akira/settings/res_720p"_i18n,
+        "akira/settings/res_1080p"_i18n,
+        "720p (FSR)",
+        "1080p (FSR)",
+    };
 
     int currentIndex = 2;
     auto current = settings->getRemoteVideoResolution();
-    switch (current) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: currentIndex = 0; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: currentIndex = 1; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: currentIndex = 2; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: currentIndex = 3; break;
+    bool fsrOn = settings->getRemoteFsrEnabled();
+    if (fsrOn && current == CHIAKI_VIDEO_RESOLUTION_PRESET_540p) {
+        currentIndex = 4;
+    } else if (fsrOn && current == CHIAKI_VIDEO_RESOLUTION_PRESET_720p) {
+        currentIndex = 5;
+    } else {
+        switch (current) {
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: currentIndex = 0; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: currentIndex = 1; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: currentIndex = 2; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: currentIndex = 3; break;
+        }
     }
 
     remoteResolutionSelector->init(
@@ -240,18 +219,21 @@ void SettingsTab::initRemoteResolutionSelector() {
         [](int selected) {},
         [this](int selected) {
             ChiakiVideoResolutionPreset preset;
+            bool fsr = false;
             switch (selected) {
                 case 0: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_360p; break;
                 case 1: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_540p; break;
                 case 2: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
                 case 3: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_1080p; break;
+                case 4: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_540p; fsr = true; break;
+                case 5: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; fsr = true; break;
                 default: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
             }
             settings->setRemoteVideoResolution(preset);
+            settings->setRemoteFsrEnabled(fsr);
             updateRemoteBitrateSlider();
-            initRemoteEasuTargetSelector();
             settings->writeFile();
-            brls::Logger::info("Remote resolution set to {}", SettingsManager::resolutionToString(preset));
+            brls::Logger::info("Remote resolution set to {}{}", SettingsManager::resolutionToString(preset), fsr ? " (FSR)" : "");
         }
     );
 }
@@ -401,15 +383,28 @@ void SettingsTab::updateRemoteBitrateSlider() {
 }
 
 void SettingsTab::initVpnResolutionSelector() {
-    std::vector<std::string> options = {"akira/settings/res_360p"_i18n, "akira/settings/res_540p"_i18n, "akira/settings/res_720p"_i18n};
+    std::vector<std::string> options = {
+        "akira/settings/res_360p"_i18n,
+        "akira/settings/res_540p"_i18n,
+        "akira/settings/res_720p"_i18n,
+        "720p (FSR)",
+        "1080p (FSR)",
+    };
 
     int currentIndex = 2;
     auto current = settings->getVpnVideoResolution();
-    switch (current) {
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: currentIndex = 0; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: currentIndex = 1; break;
-        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: currentIndex = 2; break;
-        default: currentIndex = 2; break;
+    bool fsrOn = settings->getVpnFsrEnabled();
+    if (fsrOn && current == CHIAKI_VIDEO_RESOLUTION_PRESET_540p) {
+        currentIndex = 3;
+    } else if (fsrOn && current == CHIAKI_VIDEO_RESOLUTION_PRESET_720p) {
+        currentIndex = 4;
+    } else {
+        switch (current) {
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_360p: currentIndex = 0; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: currentIndex = 1; break;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: currentIndex = 2; break;
+            default: currentIndex = 2; break;
+        }
     }
 
     vpnResolutionSelector->init(
@@ -419,16 +414,19 @@ void SettingsTab::initVpnResolutionSelector() {
         [](int selected) {},
         [this](int selected) {
             ChiakiVideoResolutionPreset preset;
+            bool fsr = false;
             switch (selected) {
                 case 0: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_360p; break;
                 case 1: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_540p; break;
                 case 2: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
+                case 3: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_540p; fsr = true; break;
+                case 4: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; fsr = true; break;
                 default: preset = CHIAKI_VIDEO_RESOLUTION_PRESET_720p; break;
             }
             settings->setVpnVideoResolution(preset);
-            initVpnEasuTargetSelector();
+            settings->setVpnFsrEnabled(fsr);
             settings->writeFile();
-            brls::Logger::info("VPN resolution set to {}", SettingsManager::resolutionToString(preset));
+            brls::Logger::info("VPN resolution set to {}{}", SettingsManager::resolutionToString(preset), fsr ? " (FSR)" : "");
         }
     );
 }
@@ -737,68 +735,6 @@ void SettingsTab::initDitheringStrengthSlider() {
     ditheringStrengthSlider->detail->setText(std::format("{}", static_cast<int>(current)));
 }
 
-void SettingsTab::initEasuEnabledToggle() {
-    bool currentValue = settings->getEasuEnabled();
-
-    easuEnabledToggle->init(
-        "EASU (Upscaling)",
-        currentValue,
-        [this](bool isOn) {
-            settings->setEasuEnabled(isOn);
-            settings->writeFile();
-            updateResolutionLabels();
-        }
-    );
-}
-
-void SettingsTab::initLocalEasuTargetSelector() {
-    auto options = getEasuTargetOptions(settings->getLocalVideoResolution());
-    int currentIndex = std::min(easuTargetIndexForHeight(settings->getLocalEasuTargetHeight()), static_cast<int>(options.size()) - 1);
-
-    localEasuTargetSelector->init(
-        "Local EASU Target",
-        options,
-        currentIndex,
-        [](int selected) {},
-        [this](int selected) {
-            settings->setLocalEasuTargetHeight(easuTargetHeightForIndex(selected));
-            settings->writeFile();
-        }
-    );
-}
-
-void SettingsTab::initRemoteEasuTargetSelector() {
-    auto options = getEasuTargetOptions(settings->getRemoteVideoResolution());
-    int currentIndex = std::min(easuTargetIndexForHeight(settings->getRemoteEasuTargetHeight()), static_cast<int>(options.size()) - 1);
-
-    remoteEasuTargetSelector->init(
-        "Remote EASU Target",
-        options,
-        currentIndex,
-        [](int selected) {},
-        [this](int selected) {
-            settings->setRemoteEasuTargetHeight(easuTargetHeightForIndex(selected));
-            settings->writeFile();
-        }
-    );
-}
-
-void SettingsTab::initVpnEasuTargetSelector() {
-    auto options = getEasuTargetOptions(settings->getVpnVideoResolution());
-    int currentIndex = std::min(easuTargetIndexForHeight(settings->getVpnEasuTargetHeight()), static_cast<int>(options.size()) - 1);
-
-    vpnEasuTargetSelector->init(
-        "VPN EASU Target",
-        options,
-        currentIndex,
-        [](int selected) {},
-        [this](int selected) {
-            settings->setVpnEasuTargetHeight(easuTargetHeightForIndex(selected));
-            settings->writeFile();
-        }
-    );
-}
-
 void SettingsTab::initRcasEnabledToggle() {
     bool currentValue = settings->getRcasEnabled();
 
@@ -830,12 +766,6 @@ void SettingsTab::initRcasSharpnessSlider() {
 
     int percent = static_cast<int>(normalized * 100.0f);
     rcasSharpnessSlider->detail->setText(std::format("{}%", percent));
-}
-
-void SettingsTab::updateResolutionLabels() {
-    initLocalEasuTargetSelector();
-    initRemoteEasuTargetSelector();
-    initVpnEasuTargetSelector();
 }
 
 void SettingsTab::initEnableThreadAffinityToggle() {

@@ -89,12 +89,11 @@ private:
     bool enableDithering = false;
     float ditheringStrength = 3.0f;
 
-    bool easuEnabled = false;
+    bool localFsrEnabled = false;
+    bool remoteFsrEnabled = false;
+    bool vpnFsrEnabled = false;
     bool rcasEnabled = false;
     float rcasSharpness = 0.2f;
-    int localEasuTargetHeight = 1080;
-    int remoteEasuTargetHeight = 1080;
-    int vpnEasuTargetHeight = 1080;
 
     // Debug logging settings
     bool debugLwipLog = false;
@@ -323,18 +322,17 @@ public:
     bool isButtonEnabled(uint32_t chiakiButton) const;
 
     bool getEasuEnabled() const;
-    void setEasuEnabled(bool enabled);
+    int getEasuTargetHeight() const;
+    bool getLocalFsrEnabled() const;
+    void setLocalFsrEnabled(bool enabled);
+    bool getRemoteFsrEnabled() const;
+    void setRemoteFsrEnabled(bool enabled);
+    bool getVpnFsrEnabled() const;
+    void setVpnFsrEnabled(bool enabled);
     bool getRcasEnabled() const;
     void setRcasEnabled(bool enabled);
     float getRcasSharpness() const;
     void setRcasSharpness(float sharpness);
-    int getEasuTargetHeight() const;
-    int getLocalEasuTargetHeight() const;
-    void setLocalEasuTargetHeight(int height);
-    int getRemoteEasuTargetHeight() const;
-    void setRemoteEasuTargetHeight(int height);
-    int getVpnEasuTargetHeight() const;
-    void setVpnEasuTargetHeight(int height);
     StreamProfile getActiveStreamProfile() const;
     void setActiveStreamProfile(StreamProfile profile);
 

@@ -23,16 +23,6 @@ namespace
 {
     static constexpr unsigned StaticCmdSize = 0x10000;
 
-    int cappedFsrTargetHeight(int inputHeight, int configuredTargetHeight)
-    {
-        int maxTargetHeight = 1440;
-        if (inputHeight <= 540)
-            maxTargetHeight = 720;
-        else if (inputHeight <= 720)
-            maxTargetHeight = 1080;
-        return std::min(configuredTargetHeight, maxTargetHeight);
-    }
-
     struct Vertex
     {
         float position[3];
@@ -272,9 +262,9 @@ bool Deko3dRenderer::setupTextures(AVFrame* frame)
 
     bool easuSetting = SettingsManager::getInstance()->getEasuEnabled();
     bool rcasSetting = SettingsManager::getInstance()->getRcasEnabled();
-    int targetH = cappedFsrTargetHeight(m_frame_height, SettingsManager::getInstance()->getEasuTargetHeight());
+    int targetH = SettingsManager::getInstance()->getEasuTargetHeight();
     int targetW = (targetH * 16) / 9;
-    bool easuNeeded = easuSetting && (m_frame_width < targetW || m_frame_height < targetH);
+    bool easuNeeded = easuSetting && targetH > 0 && (m_frame_width < targetW || m_frame_height < targetH);
     m_fsr_pending = easuNeeded || rcasSetting;
 
     recordStaticVideoCommands();
@@ -416,9 +406,9 @@ void Deko3dRenderer::initFsr()
     m_rcas_enabled = SettingsManager::getInstance()->getRcasEnabled();
     m_fsr_sharpness = SettingsManager::getInstance()->getRcasSharpness();
 
-    int targetH = cappedFsrTargetHeight(m_frame_height, SettingsManager::getInstance()->getEasuTargetHeight());
+    int targetH = SettingsManager::getInstance()->getEasuTargetHeight();
     int targetW = (targetH * 16) / 9;
-    if (SettingsManager::getInstance()->getEasuEnabled() &&
+    if (SettingsManager::getInstance()->getEasuEnabled() && targetH > 0 &&
         (m_frame_width < targetW || m_frame_height < targetH))
     {
         m_easu_enabled = true;

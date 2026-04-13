@@ -33,10 +33,6 @@ private:
     BRLS_BIND(brls::DetailCell, buttonMappingCell, "settings/buttonMapping");
     BRLS_BIND(brls::BooleanCell, enableDitheringToggle, "settings/enableDithering");
     BRLS_BIND(brls::SliderCell, ditheringStrengthSlider, "settings/ditheringStrength");
-    BRLS_BIND(brls::BooleanCell, easuEnabledToggle, "settings/easuEnabled");
-    BRLS_BIND(brls::SelectorCell, localEasuTargetSelector, "settings/localEasuTarget");
-    BRLS_BIND(brls::SelectorCell, remoteEasuTargetSelector, "settings/remoteEasuTarget");
-    BRLS_BIND(brls::SelectorCell, vpnEasuTargetSelector, "settings/vpnEasuTarget");
     BRLS_BIND(brls::BooleanCell, rcasEnabledToggle, "settings/rcasEnabled");
     BRLS_BIND(brls::SliderCell, rcasSharpnessSlider, "settings/rcasSharpness");
     BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
@@ -109,13 +105,8 @@ private:
     void initButtonMappingCell();
     void initEnableDitheringToggle();
     void initDitheringStrengthSlider();
-    void initEasuEnabledToggle();
-    void initLocalEasuTargetSelector();
-    void initRemoteEasuTargetSelector();
-    void initVpnEasuTargetSelector();
     void initRcasEnabledToggle();
     void initRcasSharpnessSlider();
-    void updateResolutionLabels();
     void initEnableThreadAffinityToggle();
     void initLowLatencyModeToggle();
     void initHolepunchRetryToggle();
