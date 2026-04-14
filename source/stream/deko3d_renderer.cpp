@@ -102,12 +102,26 @@ static std::string injectShaderDefines(const std::string& source, const std::str
     if (defines.empty())
         return source;
 
-    auto pos = source.find('\n');
-    if (pos == std::string::npos)
+    // Find #version directive if it exists
+    size_t version_pos = source.find("#version");
+    if (version_pos == std::string::npos)
+    {
+        // No #version, insert at first newline
+        auto pos = source.find('\n');
+        if (pos == std::string::npos)
+            return source + "\n" + defines;
+        std::string result = source;
+        result.insert(pos + 1, defines);
+        return result;
+    }
+
+    // Found #version, insert after the #version line
+    size_t insert_pos = source.find('\n', version_pos);
+    if (insert_pos == std::string::npos)
         return source + "\n" + defines;
 
     std::string result = source;
-    result.insert(pos + 1, defines);
+    result.insert(insert_pos + 1, defines);
     return result;
 }
 
