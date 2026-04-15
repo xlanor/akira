@@ -5,6 +5,7 @@
 #include "views/controller_remap_view.hpp"
 #include <format>
 #include "core/exception.hpp"
+#include "core/wireguard_manager.hpp"
 #include "stream/input_manager.hpp"
 #include "core/discovery_manager.hpp"
 #include "util/shared_view_holder.hpp"
@@ -133,6 +134,13 @@ void StreamView::startStream()
 
     try
     {
+        auto profile = SettingsManager::StreamProfile::Local;
+        if (host->isRemote())
+            profile = SettingsManager::StreamProfile::Remote;
+        else if (WireGuardManager::instance().isConnected())
+            profile = SettingsManager::StreamProfile::Vpn;
+        settings->setActiveStreamProfile(profile);
+
         if (!session->InitController())
         {
             brls::Logger::error("Failed to initialize controller");

@@ -165,6 +165,61 @@
 
         </brls:Box>
 
+        <brls:Header
+            title="@i18n/akira/settings/picture_adjustments"
+            marginBottom="10"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            marginBottom="30">
+
+            <brls:BooleanCell
+                id="settings/enableDithering"
+                title="@i18n/akira/settings/enable_dithering"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="@i18n/akira/settings/enable_dithering_desc"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:SliderCell
+                id="settings/ditheringStrength"
+                title="@i18n/akira/settings/dithering_strength"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:Label
+                text="@i18n/akira/settings/dithering_strength_desc"
+                fontSize="14"
+                textColor="#666666"
+                marginLeft="15"
+                marginTop="5"
+                marginBottom="10"/>
+
+            <brls:BooleanCell
+                id="settings/rcasEnabled"
+                title="RCAS (Sharpening)"
+                marginLeft="15"
+                marginRight="15"/>
+
+            <brls:SliderCell
+                id="settings/rcasSharpness"
+                title="RCAS Strength"
+                marginLeft="15"
+                marginRight="15"/>
+
+        </brls:Box>
+
         <brls:Box
             id="settings/powerUserSection"
             width="auto"
@@ -357,49 +412,6 @@
                 title="@i18n/akira/settings/button_mapping"
                 marginLeft="15"
                 marginRight="15"/>
-
-        </brls:Box>
-
-        <brls:Header
-            title="@i18n/akira/settings/picture_adjustments"
-            marginBottom="10"/>
-
-        <brls:Box
-            width="auto"
-            height="auto"
-            axis="column"
-            grow="1.0"
-            backgroundColor="@theme/color/card"
-            cornerRadius="8"
-            marginBottom="30">
-
-            <brls:BooleanCell
-                id="settings/enableDithering"
-                title="@i18n/akira/settings/enable_dithering"
-                marginLeft="15"
-                marginRight="15"/>
-
-            <brls:Label
-                text="@i18n/akira/settings/enable_dithering_desc"
-                fontSize="14"
-                textColor="#666666"
-                marginLeft="15"
-                marginTop="5"
-                marginBottom="10"/>
-
-            <brls:SliderCell
-                id="settings/ditheringStrength"
-                title="@i18n/akira/settings/dithering_strength"
-                marginLeft="15"
-                marginRight="15"/>
-
-            <brls:Label
-                text="@i18n/akira/settings/dithering_strength_desc"
-                fontSize="14"
-                textColor="#666666"
-                marginLeft="15"
-                marginTop="5"
-                marginBottom="10"/>
 
         </brls:Box>
 

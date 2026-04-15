@@ -97,7 +97,22 @@ private:
     CDescriptorSet<4096U>* m_image_descriptor_set = nullptr;
 
     CShader m_vertex_shader;
-    CShader m_fragment_shader;
+
+    struct ShaderVariantKey {
+        bool dithering = false;
+        bool fsrEasu = false;
+        bool fsrRcas = false;
+        bool fsrPass = false;
+
+        bool operator==(const ShaderVariantKey& other) const = default;
+    };
+
+    struct CachedFragmentShader {
+        ShaderVariantKey key;
+        CShader shader;
+    };
+
+    CShader* m_fragment_shader = nullptr;
 
     CMemPool::Handle m_vertex_buffer;
 
@@ -129,9 +144,53 @@ private:
     void recordStaticVideoCommands();
 
     bool compileShaderFromSource(CShader& shader, const std::string& source, bool isVertex);
+    bool ensureVertexShaderCompiled();
+    CShader* getOrCreateFragmentShader(const ShaderVariantKey& key);
     bool compileVideoShaders(bool dithering);
     bool m_dithering_enabled = false;
     bool m_uam_initialized = false;
+    bool m_fsr_enabled = false;
+    bool m_fsr_pending = false;
+    bool m_easu_enabled = false;
+    bool m_rcas_enabled = false;
+    bool m_fsr_supersampling = false;
+    float m_fsr_sharpness = 0.2f;
+    int m_display_width = 0;
+    int m_display_height = 0;
+    int m_fsr_target_width = 0;
+    int m_fsr_target_height = 0;
+
+    CShader* m_fsr_easu_shader = nullptr;
+    CShader* m_fsr_rcas_shader = nullptr;
+    CShader* m_fsr_pass_shader = nullptr;
+    std::vector<std::unique_ptr<CachedFragmentShader>> m_fragment_shader_cache;
+
+    CMemPool::Handle m_rt_easu_handle;
+    dk::Image m_rt_easu_image;
+    dk::ImageLayout m_rt_easu_layout;
+    dk::ImageDescriptor m_rt_easu_desc;
+    int m_rt_easu_texture_id = 0;
+
+    CMemPool::Handle m_rt_rcas_handle;
+    dk::Image m_rt_rcas_image;
+    dk::ImageDescriptor m_rt_rcas_desc;
+    int m_rt_rcas_texture_id = 0;
+
+    dk::UniqueCmdBuf m_fsr_static_cmdbuf;
+    CMemPool::Handle m_fsr_static_cmdmem;
+    static constexpr unsigned FsrStaticCmdSize = 0x10000;
+    DkCmdList m_fsr_easu_cmdlist = 0;
+
+    dk::UniqueCmdBuf m_fsr_rcas_cmdbuf;
+    CMemPool::Handle m_fsr_rcas_cmdmem;
+    static constexpr unsigned FsrRcasCmdSize = 0x4000;
+
+    CMemPool::Handle m_fsr_uniform_buffer;
+
+    void initFsr();
+    void cleanupFsr();
+    void recordFsrCommands();
+    void computeFsrConstants();
 
     bool m_frame_bound = false;
 

@@ -32,6 +32,13 @@ class SettingsManager {
 protected:
     SettingsManager();
 
+public:
+    enum class StreamProfile {
+        Local = 0,
+        Remote = 1,
+        Vpn = 2
+    };
+
 private:
     static constexpr const char* CONFIG_DIR = "sdmc:/switch/akira";
     static constexpr const char* TOML_CONFIG_FILE = "sdmc:/switch/akira/akira.toml";
@@ -82,6 +89,12 @@ private:
     bool enableDithering = false;
     float ditheringStrength = 3.0f;
 
+    bool localFsrEnabled = false;
+    bool remoteFsrEnabled = false;
+    bool vpnFsrEnabled = false;
+    bool rcasEnabled = false;
+    float rcasSharpness = 0.2f;
+
     // Debug logging settings
     bool debugLwipLog = false;
     bool debugWireguardLog = false;
@@ -92,6 +105,7 @@ private:
 
     // Runtime state (not persisted)
     bool streamingActive = false;
+    StreamProfile activeStreamProfile = StreamProfile::Local;
 
     // Companion server settings
     std::string companionHost;
@@ -307,7 +321,21 @@ public:
     void setSwipeRightEnabled(bool enabled);
     bool isButtonEnabled(uint32_t chiakiButton) const;
 
-    // Runtime state (not persisted)
+    bool getEasuEnabled() const;
+    int getEasuTargetHeight() const;
+    bool getLocalFsrEnabled() const;
+    void setLocalFsrEnabled(bool enabled);
+    bool getRemoteFsrEnabled() const;
+    void setRemoteFsrEnabled(bool enabled);
+    bool getVpnFsrEnabled() const;
+    void setVpnFsrEnabled(bool enabled);
+    bool getRcasEnabled() const;
+    void setRcasEnabled(bool enabled);
+    float getRcasSharpness() const;
+    void setRcasSharpness(float sharpness);
+    StreamProfile getActiveStreamProfile() const;
+    void setActiveStreamProfile(StreamProfile profile);
+
     bool isStreamingActive() const;
     void setStreamingActive(bool active);
 

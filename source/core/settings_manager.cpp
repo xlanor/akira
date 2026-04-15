@@ -21,6 +21,17 @@
 
 namespace {
 
+int fsrTargetHeightForResolution(ChiakiVideoResolutionPreset resolution) {
+    switch (resolution) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_540p:
+            return 720;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_720p:
+            return 1080;
+        default:
+            return 0;
+    }
+}
+
 std::string hidButtonToConfigString(uint64_t button) {
     switch (button) {
         case HidNpadButton_A: return "A";
@@ -347,6 +358,34 @@ void SettingsManager::parseTomlFile() {
             lowLatencyMode = *val;
         if (auto val = config["debug_locale"].value<std::string>())
             debugLocale = *val;
+        if (auto val = config["local_fsr_enabled"].value<bool>())
+            localFsrEnabled = *val;
+        if (auto val = config["remote_fsr_enabled"].value<bool>())
+            remoteFsrEnabled = *val;
+        if (auto val = config["vpn_fsr_enabled"].value<bool>())
+            vpnFsrEnabled = *val;
+        if (!config["local_fsr_enabled"].value<bool>() &&
+            !config["remote_fsr_enabled"].value<bool>() &&
+            !config["vpn_fsr_enabled"].value<bool>()) {
+            bool legacyEasu = false;
+            if (auto val = config["easu_enabled"].value<bool>())
+                legacyEasu = *val;
+            else if (auto val = config["fsr_enabled"].value<bool>())
+                legacyEasu = *val;
+            if (legacyEasu) {
+                localFsrEnabled = true;
+                remoteFsrEnabled = true;
+                vpnFsrEnabled = true;
+            }
+        }
+        if (auto val = config["rcas_enabled"].value<bool>())
+            rcasEnabled = *val;
+        else if (auto val = config["fsr_enabled"].value<bool>())
+            rcasEnabled = *val;
+        if (auto val = config["rcas_sharpness"].value<double>())
+            rcasSharpness = static_cast<float>(*val);
+        else if (auto val = config["fsr_sharpness"].value<double>())
+            rcasSharpness = static_cast<float>(*val);
         if (auto val = config["debug_lwip_log"].value<bool>())
             debugLwipLog = *val;
         if (auto val = config["debug_wireguard_log"].value<bool>())
@@ -714,6 +753,16 @@ int SettingsManager::writeFile() {
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
     config.insert("packet_loss_max", static_cast<double>(packetLossMax));
     config.insert("enable_file_logging", enableFileLogging);
+    if (localFsrEnabled)
+        config.insert("local_fsr_enabled", localFsrEnabled);
+    if (remoteFsrEnabled)
+        config.insert("remote_fsr_enabled", remoteFsrEnabled);
+    if (vpnFsrEnabled)
+        config.insert("vpn_fsr_enabled", vpnFsrEnabled);
+    if (rcasEnabled)
+        config.insert("rcas_enabled", rcasEnabled);
+    if (rcasSharpness != 0.2f)
+        config.insert("rcas_sharpness", static_cast<double>(rcasSharpness));
     if (enableThreadAffinity)
         config.insert("enable_thread_affinity", enableThreadAffinity);
     if (lowLatencyMode)
@@ -1417,6 +1466,74 @@ float SettingsManager::getPacketLossMax() const {
 
 void SettingsManager::setPacketLossMax(float value) {
     packetLossMax = value;
+}
+
+bool SettingsManager::getEasuEnabled() const {
+    switch (activeStreamProfile) {
+        case StreamProfile::Remote: return remoteFsrEnabled;
+        case StreamProfile::Vpn: return vpnFsrEnabled;
+        case StreamProfile::Local:
+        default: return localFsrEnabled;
+    }
+}
+
+int SettingsManager::getEasuTargetHeight() const {
+    ChiakiVideoResolutionPreset res;
+    switch (activeStreamProfile) {
+        case StreamProfile::Remote: res = remoteVideoResolution; break;
+        case StreamProfile::Vpn: res = vpnVideoResolution; break;
+        case StreamProfile::Local:
+        default: res = localVideoResolution; break;
+    }
+    return fsrTargetHeightForResolution(res);
+}
+
+bool SettingsManager::getLocalFsrEnabled() const {
+    return localFsrEnabled;
+}
+
+void SettingsManager::setLocalFsrEnabled(bool enabled) {
+    localFsrEnabled = enabled;
+}
+
+bool SettingsManager::getRemoteFsrEnabled() const {
+    return remoteFsrEnabled;
+}
+
+void SettingsManager::setRemoteFsrEnabled(bool enabled) {
+    remoteFsrEnabled = enabled;
+}
+
+bool SettingsManager::getVpnFsrEnabled() const {
+    return vpnFsrEnabled;
+}
+
+void SettingsManager::setVpnFsrEnabled(bool enabled) {
+    vpnFsrEnabled = enabled;
+}
+
+bool SettingsManager::getRcasEnabled() const {
+    return rcasEnabled;
+}
+
+void SettingsManager::setRcasEnabled(bool enabled) {
+    rcasEnabled = enabled;
+}
+
+float SettingsManager::getRcasSharpness() const {
+    return rcasSharpness;
+}
+
+void SettingsManager::setRcasSharpness(float sharpness) {
+    rcasSharpness = sharpness;
+}
+
+SettingsManager::StreamProfile SettingsManager::getActiveStreamProfile() const {
+    return activeStreamProfile;
+}
+
+void SettingsManager::setActiveStreamProfile(StreamProfile profile) {
+    activeStreamProfile = profile;
 }
 
 bool SettingsManager::getEnableFileLogging() const {
