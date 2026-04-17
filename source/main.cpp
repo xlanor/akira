@@ -262,9 +262,9 @@ int main(int argc, char* argv[])
 
     brls::Logger::setAsyncLogging(true);
     brls::Application::getRunLoopEvent()->subscribe([]() {
-        brls::ThreadPool::global()->async([]() {
+        brls::async([]() {
             brls::Logger::flushAsyncLogs();
-        });
+        }, true);
     });
     brls::Logger::info("Async logging enabled via thread pool");
 

@@ -94,8 +94,6 @@ private:
     CMemPool::Handle m_overlay_cmdmem;
     static constexpr unsigned OverlayCmdSize = 0x10000;
 
-    CDescriptorSet<4096U>* m_image_descriptor_set = nullptr;
-
     CShader m_vertex_shader;
 
     struct ShaderVariantKey {

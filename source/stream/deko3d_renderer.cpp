@@ -214,13 +214,6 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
     m_overlay_cmdbuf = dk::CmdBufMaker{m_device}.create();
     m_overlay_cmdmem = m_pool_data->allocate(OverlayCmdSize);
 
-    m_image_descriptor_set = m_vctx->getImageDescriptor();
-    if (!m_image_descriptor_set)
-    {
-        brls::Logger::error("Failed to get image descriptor set from borealis");
-        return false;
-    }
-
     bool dithering = SettingsManager::getInstance()->getEnableDithering();
     if (!compileVideoShaders(dithering))
     {
@@ -515,9 +508,14 @@ void Deko3dRenderer::initFsr()
         m_update_cmdmem.getMemBlock(),
         m_update_cmdmem.getOffset(),
         UpdateCmdSliceSize);
-    m_image_descriptor_set->update(m_update_cmdbuf, m_rt_easu_texture_id, m_rt_easu_desc);
+    if (!m_vctx->updateImageDescriptor(m_update_cmdbuf, m_rt_easu_texture_id, m_rt_easu_desc))
+        brls::Logger::error("Deko3dRenderer::initFsr: failed to bind EASU descriptor (id={})", m_rt_easu_texture_id);
     if (m_rt_rcas_texture_id)
-        m_image_descriptor_set->update(m_update_cmdbuf, m_rt_rcas_texture_id, m_rt_rcas_desc);
+    {
+        if (!m_vctx->updateImageDescriptor(m_update_cmdbuf, m_rt_rcas_texture_id, m_rt_rcas_desc))
+            brls::Logger::error("Deko3dRenderer::initFsr: failed to bind RCAS descriptor (id={})", m_rt_rcas_texture_id);
+    }
+    m_vctx->invalidateImageDescriptors(m_update_cmdbuf);
     m_queue.submitCommands(m_update_cmdbuf.finishList());
     m_queue.waitIdle();
 
@@ -598,7 +596,6 @@ void Deko3dRenderer::recordFsrCommands()
     m_fsr_static_cmdbuf.bindColorState(dk::ColorState{});
     m_fsr_static_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
 
-    m_image_descriptor_set->bindForImages(m_fsr_static_cmdbuf);
     if (m_easu_enabled)
     {
         m_fsr_static_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_vertex_shader, *m_fsr_easu_shader });
@@ -737,8 +734,6 @@ void Deko3dRenderer::renderVideo(AVFrame* frame)
                 .setStencilTestEnable(false));
             m_fsr_rcas_cmdbuf.bindColorState(dk::ColorState{});
             m_fsr_rcas_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
-
-            m_image_descriptor_set->bindForImages(m_fsr_rcas_cmdbuf);
 
             if (m_rcas_enabled)
             {
@@ -881,11 +876,21 @@ void Deko3dRenderer::updateFrameBindings(AVFrame* frame)
     m_update_cmdmem_slice = (m_update_cmdmem_slice + 1) % brls::FRAMEBUFFERS_COUNT;
 
     auto& active = m_frame_mappings[mappingIndex];
-    m_image_descriptor_set->update(m_update_cmdbuf, m_luma_texture_id, active.lumaDesc);
-    m_image_descriptor_set->update(m_update_cmdbuf, m_chroma_texture_id, active.chromaDesc);
+    const bool updatedLuma = m_vctx->updateImageDescriptor(m_update_cmdbuf, m_luma_texture_id, active.lumaDesc);
+    const bool updatedChroma = m_vctx->updateImageDescriptor(m_update_cmdbuf, m_chroma_texture_id, active.chromaDesc);
+
+    if (!updatedLuma || !updatedChroma)
+    {
+        brls::Logger::error("Deko3dRenderer::updateFrameMapping: failed to bind luma/chroma descriptors (luma={}, chroma={})",
+                            updatedLuma, updatedChroma);
+    }
+    else
+    {
+        m_vctx->invalidateImageDescriptors(m_update_cmdbuf);
+        m_current_mapping_index = mappingIndex;
+    }
 
     m_queue.submitCommands(m_update_cmdbuf.finishList());
-    m_current_mapping_index = mappingIndex;
 }
 
 void Deko3dRenderer::cleanup()
@@ -1066,7 +1071,9 @@ void Deko3dRenderer::initTextRendering()
 
         // Update descriptor
         m_cmdbuf.clear();
-        m_image_descriptor_set->update(m_cmdbuf, m_font_texture_id, m_font_desc);
+        if (!m_vctx->updateImageDescriptor(m_cmdbuf, m_font_texture_id, m_font_desc))
+            brls::Logger::error("Deko3dRenderer: failed to bind font descriptor (id={})", m_font_texture_id);
+        m_vctx->invalidateImageDescriptors(m_cmdbuf);
         list = m_cmdbuf.finishList();
         if (list)
         {
@@ -1347,8 +1354,6 @@ void Deko3dRenderer::renderStatsOverlay()
 
     m_overlay_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
 
-    m_image_descriptor_set->bindForImages(m_overlay_cmdbuf);
-
     m_overlay_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
 
     m_overlay_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
@@ -1440,7 +1445,6 @@ void Deko3dRenderer::renderBorderFlash()
         .setDstAlphaBlendFactor(DkBlendFactor_InvSrcAlpha));
 
     m_overlay_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
-    m_image_descriptor_set->bindForImages(m_overlay_cmdbuf);
     m_overlay_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
     m_overlay_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
     m_overlay_cmdbuf.bindVtxAttribState(TextVertexAttribState);
