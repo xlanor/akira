@@ -31,7 +31,6 @@ public:
     uint16_t startUdpRelay(const std::string& targetIp, uint16_t targetPort, uint16_t localPort = 0);
     void stopRelays();
     bool isRelayRunning() const;
-    void routeIncomingPacket(const void* data, size_t len);
     int sendUdpPacket(const std::string& targetIp, uint16_t targetPort, const void* data, size_t len);
 
 private:

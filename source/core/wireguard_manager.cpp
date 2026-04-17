@@ -1,5 +1,6 @@
 #include "core/wireguard_manager.hpp"
 #include "core/settings_manager.hpp"
+#include "core/thread_affinity.h"
 #include <format>
 #include <wg_lwip_relay.hpp>
 #include <borealis.hpp>
@@ -18,11 +19,6 @@ WireGuardManager& WireGuardManager::instance() {
 static void wg_lib_log_callback(const char* msg) {
     if (SettingsManager::getInstance()->getDebugWireguardLog())
         brls::Logger::info("WG-LIB: {}", msg);
-}
-
-static void wg_relay_recv_callback(void* user, const void* data, size_t len) {
-    WireGuardManager* mgr = static_cast<WireGuardManager*>(user);
-    mgr->routeIncomingPacket(data, len);
 }
 
 WireGuardManager::WireGuardManager() {
@@ -269,13 +265,6 @@ std::string WireGuardManager::getLastError() const {
     return lastError;
 }
 
-void WireGuardManager::routeIncomingPacket(const void* data, size_t len) {
-    wgnx::LwipRelay* relay = lwipRelay_.get();
-    if (relay) {
-        relay->handleIncomingPacket(data, len);
-    }
-}
-
 uint16_t WireGuardManager::startTcpRelay(const std::string& targetIp, uint16_t targetPort, uint16_t localPort) {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -292,6 +281,9 @@ uint16_t WireGuardManager::startTcpRelay(const std::string& targetIp, uint16_t t
             }
         };
         config.debug_logging = SettingsManager::getInstance()->getDebugLwipLog();
+        config.thread_affinity_callback = []() {
+            akira_thread_set_affinity(AKIRA_THREAD_NAME_LWIP_LOOP);
+        };
 
         lwipRelay_ = std::make_unique<wgnx::LwipRelay>(tunnel, config);
         if (!lwipRelay_->start(tunnelIP, targetIp)) {
@@ -300,7 +292,6 @@ uint16_t WireGuardManager::startTcpRelay(const std::string& targetIp, uint16_t t
             return 0;
         }
         targetIp_ = targetIp;
-        wg_set_recv_callback(tunnel, wg_relay_recv_callback, this);
         relayRunning = true;
     }
 
@@ -323,6 +314,9 @@ uint16_t WireGuardManager::startUdpRelay(const std::string& targetIp, uint16_t t
             }
         };
         config.debug_logging = SettingsManager::getInstance()->getDebugLwipLog();
+        config.thread_affinity_callback = []() {
+            akira_thread_set_affinity(AKIRA_THREAD_NAME_LWIP_LOOP);
+        };
 
         lwipRelay_ = std::make_unique<wgnx::LwipRelay>(tunnel, config);
         if (!lwipRelay_->start(tunnelIP, targetIp)) {
@@ -331,7 +325,6 @@ uint16_t WireGuardManager::startUdpRelay(const std::string& targetIp, uint16_t t
             return 0;
         }
         targetIp_ = targetIp;
-        wg_set_recv_callback(tunnel, wg_relay_recv_callback, this);
         relayRunning = true;
     }
 
@@ -339,9 +332,6 @@ uint16_t WireGuardManager::startUdpRelay(const std::string& targetIp, uint16_t t
 }
 
 void WireGuardManager::stopRelays() {
-    if (tunnel) {
-        wg_set_recv_callback(tunnel, nullptr, nullptr);
-    }
     if (lwipRelay_) {
         lwipRelay_->stop();
         lwipRelay_.reset();

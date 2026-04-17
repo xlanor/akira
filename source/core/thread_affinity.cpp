@@ -76,7 +76,7 @@ static ThreadPurpose get_purpose_for_akira_thread(AkiraThreadName name)
 	switch(name)
 	{
 		case AKIRA_THREAD_NAME_LWIP_LOOP:
-			return THREAD_PURPOSE_NETWORK;
+			return THREAD_PURPOSE_AUDIO;
 		case AKIRA_THREAD_NAME_MAIN:
 		case AKIRA_THREAD_NAME_BENCHMARK:
 		case AKIRA_THREAD_NAME_CONNECTION:
