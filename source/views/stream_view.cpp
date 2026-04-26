@@ -439,6 +439,9 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             brls::Application::popActivity();
         } else {
             auto* dialog = new brls::Dialog(brls::getStr("akira/stream/session_ended", reasonStr));
+            dialog->setCloseCallback([]() {
+                brls::Application::popActivity();
+            });
             dialog->addButton("OK", []() {
                 brls::Application::popActivity();
             });
