@@ -18,7 +18,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          fetch-depth: 0
           submodules: recursive
+
+      - name: Detect builder image changes
+        id: builder
+        run: |
+          BASE_SHA=${{ github.event.pull_request.base.sha }}
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          MATCHES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -E '^(Dockerfile|library/(ffmpeg|uam)(/|$))' || true)
+
+          if [ -n "$MATCHES" ]; then
+            IMAGE_TAG="akira-builder:pr-${{ github.event.pull_request.number }}-${{ steps.sha.outputs.short }}"
+            echo "rebuild=true" >> "$GITHUB_OUTPUT"
+            echo "image=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+            {
+              echo "changed_files<<EOF"
+              echo "$MATCHES"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "rebuild=false" >> "$GITHUB_OUTPUT"
+            echo "image=ghcr.io/${{ github.repository_owner }}/akira-builder:latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Stamp PR version
         run: |
@@ -36,12 +58,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Rebuild builder image for this PR
+        if: steps.builder.outputs.rebuild == 'true'
+        run: |
+          echo "Rebuilding builder image because these files changed:"
+          printf '%s\n' "${{ steps.builder.outputs.changed_files }}"
+          docker build -t "${{ steps.builder.outputs.image }}" .
+
       - name: Build Akira
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/build" \
             -w /build \
-            ghcr.io/${{ github.repository_owner }}/akira-builder:latest \
+            "${{ steps.builder.outputs.image }}" \
             bash -c "
               set -e
               git config --global --add safe.directory /build
