@@ -532,18 +532,11 @@ void Host::sendFeedbackState()
 
     if (idChanged)
     {
-        if (moveCount > 0)
-            brls::Logger::info("Touch: {} position updates sent to chiaki before release", moveCount);
         brls::Logger::info("Controller touches: [0] id={} pos=({},{}), [1] id={} pos=({},{})",
             controllerState.touches[0].id, controllerState.touches[0].x, controllerState.touches[0].y,
             controllerState.touches[1].id, controllerState.touches[1].x, controllerState.touches[1].y);
         prevTouchId0 = controllerState.touches[0].id;
         prevTouchId1 = controllerState.touches[1].id;
-        moveCount = 0;
-    }
-    else if (anyActive)
-    {
-        moveCount++;
     }
     chiaki_session_set_controller_state(&session, &controllerState);
 }
