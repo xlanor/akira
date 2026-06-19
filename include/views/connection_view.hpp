@@ -33,6 +33,7 @@ private:
     std::deque<std::string> logLines;
     std::mutex logMutex;
     static constexpr size_t MAX_LOG_LINES = 100;
+    static constexpr int WAKEUP_WAIT_SECONDS = 20;
 
     brls::Event<brls::Logger::TimePoint, brls::LogLevel, std::string>::Subscription logSubscription;
 

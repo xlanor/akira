@@ -237,7 +237,6 @@ void* ConnectionView::connectionThreadFunc(void* user)
         // When PS5 wakes from rest mode it shows "press PS button" and needs time
         // before it can accept the DATA holepunch channel. Without this wait the
         // DATA holepunch times out (~15 s) and the session never establishes.
-        static constexpr int WAKEUP_WAIT_SECONDS = 20;
         for (int i = WAKEUP_WAIT_SECONDS; i > 0; i--)
         {
             if (auto view = weak.lock()) {
