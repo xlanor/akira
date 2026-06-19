@@ -67,15 +67,7 @@ void AddHostTab::onSaveClicked() {
         return;
     }
 
-    auto* hostsMap = settings->getHostsMap();
-    if (hostsMap->find(name) != hostsMap->end()) {
-        statusLabel->setText("akira/add_host/error_duplicate_name"_i18n);
-        statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
-        return;
-    }
-
-    Host* host = settings->getOrCreateHost(name);
-    host->setHostType(HostType::Manual);
+    Host* host = settings->createManualHost(name);
     settings->setHostAddr(host, addr);
     settings->setDiscovered(host, true);
 

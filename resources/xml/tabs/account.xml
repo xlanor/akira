@@ -1,0 +1,76 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    grow="1.0"
+    paddingTop="@style/brls/tab_frame/content_padding_top_bottom"
+    paddingLeft="@style/brls/tab_frame/content_padding_sides"
+    paddingRight="@style/brls/tab_frame/content_padding_sides"
+    paddingBottom="@style/brls/tab_frame/content_padding_top_bottom">
+
+    <brls:ScrollingFrame
+        id="account/scroll"
+        width="auto"
+        height="auto"
+        grow="1.0">
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0">
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="row"
+                justifyContent="spaceBetween"
+                alignItems="center"
+                marginBottom="12">
+
+                <brls:Label
+                    text="@i18n/akira/account/title"
+                    fontSize="24"/>
+
+                <brls:Button
+                    id="account/addBtn"
+                    text="@i18n/akira/account/add_account"
+                    style="bordered"/>
+
+            </brls:Box>
+
+            <brls:Box
+                id="account/container"
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"/>
+
+        </brls:Box>
+
+    </brls:ScrollingFrame>
+
+    <brls:Box
+        id="account/empty"
+        width="auto"
+        height="auto"
+        axis="column"
+        grow="1.0"
+        justifyContent="center"
+        alignItems="center"
+        paddingBottom="80"
+        visibility="gone">
+
+        <brls:Label
+            text="@i18n/akira/account/no_accounts"
+            fontSize="20"
+            textColor="#888888"
+            marginBottom="10"/>
+
+        <brls:Label
+            text="@i18n/akira/account/no_accounts_hint"
+            fontSize="14"
+            textColor="#666666"/>
+    </brls:Box>
+
+</brls:Box>

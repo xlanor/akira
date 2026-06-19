@@ -40,34 +40,6 @@
             marginRight="15"/>
 
         <brls:InputCell
-            id="host_settings/psnAccountId"
-            title="PSN Account ID"
-            marginLeft="15"
-            marginRight="15"/>
-
-        <brls:Box
-            width="auto"
-            height="auto"
-            axis="row"
-            alignItems="center"
-            marginLeft="15"
-            marginRight="15">
-
-            <brls:InputCell
-                id="host_settings/psnOnlineId"
-                title="Look up by Online ID"
-                grow="1"/>
-
-            <brls:Button
-                id="host_settings/lookupBtn"
-                text="@i18n/akira/host_settings/look_up"
-                style="bordered"
-                width="120"
-                marginLeft="10"/>
-
-        </brls:Box>
-
-        <brls:InputCell
             id="host_settings/consolePIN"
             title="Console PIN"
             marginLeft="15"

@@ -74,6 +74,36 @@ bool Host::isPS5() const
     return target >= CHIAKI_TARGET_PS5_UNKNOWN;
 }
 
+std::string Host::normalizeMac(const std::string& m)
+{
+    std::string lower = m;
+    for (auto& c : lower)
+        if (c >= 'A' && c <= 'F') c = c - 'A' + 'a';
+
+    if (lower.size() != 12)
+        return "";
+
+    bool allZero = true;
+    for (char c : lower)
+    {
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+            return "";
+        if (c != '0') allZero = false;
+    }
+    return allZero ? "" : lower;
+}
+
+void Host::setMac(const std::string& m)
+{
+    mac = normalizeMac(m);
+}
+
+void Host::updateMacFromServerMac()
+{
+    setMac(std::format("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        serverMac[0], serverMac[1], serverMac[2], serverMac[3], serverMac[4], serverMac[5]));
+}
+
 void Host::setLoginPIN(const std::string& pin)
 {
     brls::Logger::info("Host::setLoginPIN called with pin length={}", pin.length());
@@ -194,6 +224,7 @@ void Host::applyRegistrationData(ChiakiRegisteredHost* regHost)
     apKey = regHost->ap_key;
     apName = regHost->ap_name;
     memcpy(serverMac, regHost->server_mac, sizeof(serverMac));
+    updateMacFromServerMac();
     serverNickname = regHost->server_nickname;
     memcpy(rpRegistKey, regHost->rp_regist_key, sizeof(rpRegistKey));
     rpKeyType = regHost->rp_key_type;
@@ -203,7 +234,107 @@ void Host::applyRegistrationData(ChiakiRegisteredHost* regHost)
     registered = true;
     rpKeyData = true;
 
+    HostProfile profile;
+    profile.psnAccountId = psnAccountId;
+    profile.psnOnlineId = psnOnlineId;
+    profile.consolePIN = consolePIN;
+    memcpy(profile.rpRegistKey, rpRegistKey, sizeof(profile.rpRegistKey));
+    profile.rpKeyType = rpKeyType;
+    memcpy(profile.rpKey, rpKey, sizeof(profile.rpKey));
+    profile.hasRpKey = true;
+    upsertProfile(profile);
+
     brls::Logger::info("Applied registration data for {}", hostName);
+}
+
+int Host::findProfileByAccount(const std::string& accountId) const
+{
+    for (size_t i = 0; i < profiles.size(); i++)
+    {
+        if (profiles[i].psnAccountId == accountId)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+int Host::upsertProfile(const HostProfile& profile)
+{
+    int idx = findProfileByAccount(profile.psnAccountId);
+    if (idx >= 0)
+        profiles[idx] = profile;
+    else
+    {
+        profiles.push_back(profile);
+        idx = static_cast<int>(profiles.size()) - 1;
+    }
+    activeProfile = idx;
+    return idx;
+}
+
+void Host::applyActiveProfile()
+{
+    if (activeProfile < 0 || activeProfile >= static_cast<int>(profiles.size()))
+    {
+        rpKeyData = false;
+        registered = false;
+        return;
+    }
+
+    const HostProfile& p = profiles[activeProfile];
+    psnAccountId = p.psnAccountId;
+    if (!p.psnOnlineId.empty())
+        psnOnlineId = p.psnOnlineId;
+    consolePIN = p.consolePIN;
+    memcpy(rpRegistKey, p.rpRegistKey, sizeof(rpRegistKey));
+    rpKeyType = p.rpKeyType;
+    memcpy(rpKey, p.rpKey, sizeof(rpKey));
+    rpKeyData = p.hasRpKey;
+    registered = p.hasRpKey;
+}
+
+void Host::setActiveProfile(int index)
+{
+    if (index < 0 || index >= static_cast<int>(profiles.size()))
+        return;
+    activeProfile = index;
+    applyActiveProfile();
+}
+
+void Host::setActiveProfileConsolePin(const std::string& pin)
+{
+    if (activeProfile >= 0 && activeProfile < static_cast<int>(profiles.size()))
+        profiles[activeProfile].consolePIN = pin;
+}
+
+int Host::registeredProfileCount() const
+{
+    int count = 0;
+    for (const auto& p : profiles)
+    {
+        if (p.hasRpKey)
+            count++;
+    }
+    return count;
+}
+
+void Host::removeProfile(int index)
+{
+    if (index < 0 || index >= static_cast<int>(profiles.size()))
+        return;
+
+    profiles.erase(profiles.begin() + index);
+    if (profiles.empty())
+    {
+        activeProfile = -1;
+        rpKeyData = false;
+        registered = false;
+    }
+    else
+    {
+        if (activeProfile >= static_cast<int>(profiles.size()))
+            activeProfile = static_cast<int>(profiles.size()) - 1;
+        applyActiveProfile();
+    }
 }
 
 void Host::copyRegistrationFrom(const Host* other)
@@ -211,6 +342,8 @@ void Host::copyRegistrationFrom(const Host* other)
     if (!other || !other->rpKeyData) return;
 
     memcpy(serverMac, other->serverMac, sizeof(serverMac));
+    if (!other->mac.empty())
+        mac = other->mac;
     memcpy(rpRegistKey, other->rpRegistKey, sizeof(rpRegistKey));
     rpKeyType = other->rpKeyType;
     memcpy(rpKey, other->rpKey, sizeof(rpKey));
@@ -222,13 +355,56 @@ void Host::copyRegistrationFrom(const Host* other)
     registered = true;
     rpKeyData = true;
 
+    HostProfile profile;
+    profile.psnAccountId = psnAccountId;
+    profile.psnOnlineId = psnOnlineId;
+    profile.consolePIN = consolePIN;
+    memcpy(profile.rpRegistKey, rpRegistKey, sizeof(profile.rpRegistKey));
+    profile.rpKeyType = rpKeyType;
+    memcpy(profile.rpKey, rpKey, sizeof(profile.rpKey));
+    profile.hasRpKey = true;
+    upsertProfile(profile);
+
     brls::Logger::info("Copied registration data from '{}' to '{}'", other->hostName, hostName);
+}
+
+void Host::copyRegistrationFrom(const Host* other, const std::string& accountId)
+{
+    if (!other) return;
+
+    int idx = other->findProfileByAccount(accountId);
+    if (accountId.empty() || idx < 0 || !other->profiles[idx].hasRpKey)
+    {
+        copyRegistrationFrom(other);
+        return;
+    }
+
+    const HostProfile& p = other->profiles[idx];
+    memcpy(serverMac, other->serverMac, sizeof(serverMac));
+    if (!other->mac.empty())
+        mac = other->mac;
+    memcpy(rpRegistKey, p.rpRegistKey, sizeof(rpRegistKey));
+    rpKeyType = p.rpKeyType;
+    memcpy(rpKey, p.rpKey, sizeof(rpKey));
+
+    psnAccountId = p.psnAccountId;
+    psnOnlineId = p.psnOnlineId;
+    consolePIN = p.consolePIN;
+
+    registered = true;
+    rpKeyData = true;
+
+    HostProfile profile = p;
+    upsertProfile(profile);
+
+    brls::Logger::info("Copied registration (account {}) from '{}' to '{}'", accountId, other->hostName, hostName);
 }
 
 int Host::registerHost(int pin)
 {
     std::string accountId = settings->getPsnAccountId(this);
     std::string onlineId = settings->getPsnOnlineId(this);
+    lastRegistAccountId = accountId;
     size_t accountIdSize = sizeof(uint8_t[CHIAKI_PSN_ACCOUNT_ID_SIZE]);
 
     registInfo.target = target;
@@ -350,6 +526,11 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
     if (holepunch)
     {
         std::string accountId = settings->getPsnAccountId(this);
+        if (isRemote())
+        {
+            if (Account* a = settings->getAccountForHost(this); a && !a->accountId.empty())
+                accountId = a->accountId;
+        }
         if (!accountId.empty())
         {
             size_t accountIdSize = CHIAKI_PSN_ACCOUNT_ID_SIZE;
@@ -622,6 +803,7 @@ void Host::registCallback(ChiakiRegistEvent* event)
             apKey = rHost->ap_key;
             apName = rHost->ap_name;
             memcpy(serverMac, rHost->server_mac, sizeof(serverMac));
+            updateMacFromServerMac();
             serverNickname = rHost->server_nickname;
             memcpy(rpRegistKey, rHost->rp_regist_key, sizeof(rpRegistKey));
             rpKeyType = rHost->rp_key_type;
@@ -629,6 +811,16 @@ void Host::registCallback(ChiakiRegistEvent* event)
 
             registered = true;
             rpKeyData = true;
+
+            HostProfile profile;
+            profile.psnAccountId = lastRegistAccountId.empty() ? psnAccountId : lastRegistAccountId;
+            profile.psnOnlineId = psnOnlineId;
+            profile.consolePIN = consolePIN;
+            memcpy(profile.rpRegistKey, rpRegistKey, sizeof(profile.rpRegistKey));
+            profile.rpKeyType = rpKeyType;
+            memcpy(profile.rpKey, rpKey, sizeof(profile.rpKey));
+            profile.hasRpKey = true;
+            upsertProfile(profile);
 
             brls::Logger::info("Register Success {}", hostName);
 
@@ -652,7 +844,11 @@ ChiakiErrorCode Host::initHolepunchSession()
         return CHIAKI_ERR_SUCCESS;
     }
 
-    std::string accessToken = settings->getPsnAccessToken();
+    std::string accessToken;
+    if (Account* acc = settings->getAccountForHost(this))
+        accessToken = acc->accessToken;
+    if (accessToken.empty())
+        accessToken = settings->getPsnAccessToken();
     if (accessToken.empty())
     {
         brls::Logger::error("No PSN access token available for holepunch");

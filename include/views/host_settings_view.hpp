@@ -22,9 +22,6 @@ private:
     BRLS_BIND(brls::Label, titleLabel, "host_settings/title");
     BRLS_BIND(brls::InputCell, hostNameInput, "host_settings/hostName");
     BRLS_BIND(brls::InputCell, hostAddrInput, "host_settings/hostAddr");
-    BRLS_BIND(brls::InputCell, psnAccountIdInput, "host_settings/psnAccountId");
-    BRLS_BIND(brls::InputCell, psnOnlineIdInput, "host_settings/psnOnlineId");
-    BRLS_BIND(brls::Button, lookupBtn, "host_settings/lookupBtn");
     BRLS_BIND(brls::InputCell, consolePINInput, "host_settings/consolePIN");
     BRLS_BIND(brls::SelectorCell, hapticSelector, "host_settings/haptic");
     BRLS_BIND(brls::Button, cancelBtn, "host_settings/cancelBtn");
@@ -39,8 +36,6 @@ private:
 
     void initHostNameInput();
     void initHostAddrInput();
-    void initPsnAccountIdInput();
-    void initLookupButton();
     void initConsolePINInput();
     void initHapticSelector();
     void onSaveClicked();

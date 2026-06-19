@@ -147,6 +147,7 @@ public:
         buttonBox->setAxis(brls::Axis::ROW);
         buttonBox->setShrink(0);
 
+        createAccountButton();
         createConnectButton();
         createWakeButton();
         createRegisterButton();
@@ -172,17 +173,50 @@ public:
         manualBadge->setVisibility(host->isManual() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
         if (host->isRemote()) {
-            addrLabel->setText("akira/hosts/psn_remote_play"_i18n);
+            std::string text = "akira/hosts/psn_remote_play"_i18n;
+            std::string acctId = host->getRemoteAccountId();
+            if (!acctId.empty()) {
+                Account* a = SettingsManager::getInstance()->findAccount(acctId);
+                std::string label = (a && !a->onlineId.empty()) ? a->onlineId : acctId;
+                text += "  ·  " + brls::getStr("akira/hosts/account_label", label);
+            }
+            addrLabel->setText(text);
         } else {
             addrLabel->setText(host->getHostAddr());
         }
 
+        int usableCount = 0;
+        bool activeUsable = false;
+        auto& profiles = host->getProfiles();
+        for (size_t i = 0; i < profiles.size(); i++) {
+            if (!profileUsable(profiles[i])) continue;
+            usableCount++;
+            if ((int)i == host->getActiveProfileIndex()) activeUsable = true;
+        }
+        bool accountsAvailable = !SettingsManager::getInstance()->getAccounts().empty();
+        bool connectable = host->isRemote() ? host->hasRpKey() : activeUsable;
+
         bool showLink = host->isRemote() && host->needsLink();
-        bool showConnect = host->hasRpKey() && !host->isStandby() && !host->needsLink();
-        bool showWake = host->isStandby() && host->hasRpKey() && !host->isRemote();
-        bool showRegister = host->isDiscovered() && !host->hasRpKey() && !host->isRemote();
-        bool showSettings = host->hasRpKey() && !host->needsLink();
+        bool showConnect = connectable && !host->isStandby() && !host->needsLink();
+        bool showWake = host->isStandby() && connectable && !host->isRemote();
+        bool showRegister = !host->isRemote() && usableCount == 0 && accountsAvailable && !host->needsLink();
+        bool showSettings = (host->isRemote() ? host->hasRpKey() : usableCount >= 1) && !host->needsLink();
         bool showDelete = host->isInConfig() && !host->needsLink();
+        bool showAccount = usableCount >= 1 && !host->isRemote() && !host->needsLink();
+
+        if (showAccount) {
+            std::string accountLabel;
+            int activeIdx = host->getActiveProfileIndex();
+            if (activeIdx >= 0 && activeIdx < (int)profiles.size() && profileUsable(profiles[activeIdx])) {
+                accountLabel = profiles[activeIdx].psnOnlineId.empty()
+                    ? profiles[activeIdx].psnAccountId
+                    : profiles[activeIdx].psnOnlineId;
+            } else {
+                accountLabel = "akira/hosts/select_account"_i18n;
+            }
+            if (accountLabel.empty()) accountLabel = "akira/account/unnamed"_i18n;
+            accountBtn->setText(brls::getStr("akira/hosts/account_label", accountLabel));
+        }
 
         linkBtn->setVisibility(showLink ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         connectBtn->setVisibility(showConnect ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
@@ -190,6 +224,7 @@ public:
         registerBtn->setVisibility(showRegister ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         settingsBtn->setVisibility(showSettings ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         deleteBtn->setVisibility(showDelete ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        accountBtn->setVisibility(showAccount ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
 
     Host* getHost() { return host; }
@@ -211,6 +246,7 @@ private:
     brls::Button* linkBtn;
     brls::Button* settingsBtn;
     brls::Button* deleteBtn;
+    brls::Button* accountBtn;
 
     void createConnectButton() {
         connectBtn = new brls::Button();
@@ -294,9 +330,27 @@ private:
         buttonBox->addView(wakeBtn);
     }
 
+    static bool profileUsable(const HostProfile& p) {
+        if (!p.hasRpKey) return false;
+        if (p.psnAccountId.empty()) return true;
+        return SettingsManager::getInstance()->findAccount(p.psnAccountId) != nullptr;
+    }
+
+    void createAccountButton() {
+        accountBtn = new brls::Button();
+        accountBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
+        accountBtn->setShrink(0);
+        accountBtn->setMarginRight(10);
+        accountBtn->registerClickAction([this](brls::View* view) {
+            showAccountMenu(host);
+            return true;
+        });
+        buttonBox->addView(accountBtn);
+    }
+
     void createRegisterButton() {
         registerBtn = new brls::Button();
-        registerBtn->setText("akira/hosts/register"_i18n);
+        registerBtn->setText("akira/hosts/add_account"_i18n);
         registerBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
         registerBtn->setShrink(0);
         registerBtn->setMarginRight(10);
@@ -304,98 +358,209 @@ private:
             if (HostListTab::isRegistering) {
                 return true;
             }
-
-            brls::Logger::info("Register button clicked for {}", host->getHostName());
-
-            auto* settings = SettingsManager::getInstance();
-            bool isPS5 = host->isPS5();
-            bool needsAccountId = isPS5 || host->getChiakiTarget() >= CHIAKI_TARGET_PS4_9;
-            std::string accountId = settings->getPsnAccountId(host);
-            std::string onlineId = settings->getPsnOnlineId(host);
-
-            if (needsAccountId && accountId.empty()) {
-                auto* dialog = new brls::Dialog("akira/hosts/psn_account_id_required_register"_i18n);
-                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
-                    dialog->close();
-                });
-                dialog->open();
-                return true;
-            }
-
-            if (!needsAccountId && onlineId.empty()) {
-                auto* dialog = new brls::Dialog("akira/hosts/psn_online_id_required_register"_i18n);
-                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
-                    dialog->close();
-                });
-                dialog->open();
-                return true;
-            }
-
-            HostListTab::isRegistering = true;
-
-            Host* hostPtr = host;
-
-            host->setOnRegistSuccess([hostPtr]() {
-                brls::Logger::info("onRegistSuccess callback fired, queuing sync...");
-                brls::sync([hostPtr]() {
-                    brls::Logger::info("onRegistSuccess: inside brls::sync");
-                    HostListTab::isRegistering = false;
-                    brls::Application::notify("akira/hosts/registration_success"_i18n);
-                    SettingsManager::getInstance()->writeFile();
-                    if (HostListTab::currentInstance) {
-                        HostListTab::currentInstance->updateHostItem(hostPtr);
-                    }
-                });
-            });
-
-            host->setOnRegistFailed([]() {
-                brls::sync([]() {
-                    HostListTab::isRegistering = false;
-                    brls::Application::notify("akira/hosts/registration_failed"_i18n);
-                });
-            });
-
-            host->setOnRegistCanceled([]() {
-                brls::sync([]() {
-                    HostListTab::isRegistering = false;
-                    brls::Application::notify("akira/hosts/registration_canceled"_i18n);
-                });
-            });
-
-            auto* pinView = new EnterPinView(host, PinViewType::Registration);
-            pinView->setOnCancel([]() {
-                brls::Logger::info("PIN entry cancelled");
-            });
-            pinView->setOnPinEntered([hostPtr](const std::string& pin) {
-                brls::Logger::info("PIN entered, starting registration");
-                int pinValue = std::atoi(pin.c_str());
-                int result = hostPtr->registerHost(pinValue);
-                if (result != HOST_REGISTER_OK) {
-                    std::string errorMsg;
-                    switch (result) {
-                        case HOST_REGISTER_ERROR_SETTING_PSNACCOUNTID:
-                            errorMsg = "akira/hosts/error_psn_account_id"_i18n;
-                            break;
-                        case HOST_REGISTER_ERROR_SETTING_PSNONLINEID:
-                            errorMsg = "akira/hosts/error_psn_online_id"_i18n;
-                            break;
-                        case HOST_REGISTER_ERROR_UNDEFINED_TARGET:
-                            errorMsg = "akira/hosts/error_console_type"_i18n;
-                            break;
-                        default:
-                            errorMsg = "akira/hosts/error_registration_failed"_i18n;
-                            break;
-                    }
-                    brls::Logger::error("Registration failed: {}", errorMsg);
-                    brls::Application::notify(errorMsg);
-                }
-            });
-
-            brls::Application::pushActivity(new brls::Activity(pinView));
-
+            startAddAccount(host);
             return true;
         });
         buttonBox->addView(registerBtn);
+    }
+
+    static void beginPinRegistration(Host* host) {
+        if (HostListTab::isRegistering) {
+            return;
+        }
+
+        HostListTab::isRegistering = true;
+        Host* hostPtr = host;
+
+        host->setOnRegistSuccess([hostPtr]() {
+            brls::sync([hostPtr]() {
+                HostListTab::isRegistering = false;
+                brls::Application::notify("akira/hosts/registration_success"_i18n);
+                SettingsManager::getInstance()->writeFile();
+                if (HostListTab::currentInstance) {
+                    HostListTab::currentInstance->updateHostItem(hostPtr);
+                }
+            });
+        });
+
+        host->setOnRegistFailed([]() {
+            brls::sync([]() {
+                HostListTab::isRegistering = false;
+                brls::Application::notify("akira/hosts/registration_failed"_i18n);
+            });
+        });
+
+        host->setOnRegistCanceled([]() {
+            brls::sync([]() {
+                HostListTab::isRegistering = false;
+                brls::Application::notify("akira/hosts/registration_canceled"_i18n);
+            });
+        });
+
+        auto* pinView = new EnterPinView(host, PinViewType::Registration);
+        pinView->setOnCancel([]() {
+            HostListTab::isRegistering = false;
+        });
+        pinView->setOnPinEntered([hostPtr](const std::string& pin) {
+            int pinValue = std::atoi(pin.c_str());
+            int result = hostPtr->registerHost(pinValue);
+            if (result != HOST_REGISTER_OK) {
+                std::string errorMsg;
+                switch (result) {
+                    case HOST_REGISTER_ERROR_SETTING_PSNACCOUNTID:
+                        errorMsg = "akira/hosts/error_psn_account_id"_i18n;
+                        break;
+                    case HOST_REGISTER_ERROR_SETTING_PSNONLINEID:
+                        errorMsg = "akira/hosts/error_psn_online_id"_i18n;
+                        break;
+                    case HOST_REGISTER_ERROR_UNDEFINED_TARGET:
+                        errorMsg = "akira/hosts/error_console_type"_i18n;
+                        break;
+                    default:
+                        errorMsg = "akira/hosts/error_registration_failed"_i18n;
+                        break;
+                }
+                brls::Logger::error("Registration failed: {}", errorMsg);
+                brls::Application::notify(errorMsg);
+            }
+        });
+
+        brls::Application::pushActivity(new brls::Activity(pinView));
+    }
+
+    static void startRegistration(Host* host, const Account& account) {
+        auto* settings = SettingsManager::getInstance();
+        settings->setPsnOnlineId(host, account.onlineId);
+        settings->setPsnAccountId(host, account.accountId);
+        beginPinRegistration(host);
+    }
+
+    static void startAddAccount(Host* host) {
+        auto* settings = SettingsManager::getInstance();
+        auto& accounts = settings->getAccounts();
+
+        if (accounts.empty()) {
+            brls::Application::notify("akira/hosts/no_accounts_configured"_i18n);
+            return;
+        }
+
+        std::vector<Account> candidates;
+        for (const auto& account : accounts) {
+            int idx = host->findProfileByAccount(account.accountId);
+            bool alreadyRegistered = (idx >= 0 && host->getProfiles()[idx].hasRpKey);
+            if (!alreadyRegistered) {
+                candidates.push_back(account);
+            }
+        }
+
+        if (candidates.empty()) {
+            brls::Application::notify("akira/hosts/all_accounts_registered"_i18n);
+            return;
+        }
+
+        if (candidates.size() == 1) {
+            startRegistration(host, candidates[0]);
+            return;
+        }
+
+        std::vector<std::string> labels;
+        for (const auto& account : candidates) {
+            std::string label = account.label();
+            if (label.empty()) label = "akira/account/unnamed"_i18n;
+            labels.push_back(label);
+        }
+
+        auto* dropdown = new brls::Dropdown(
+            "akira/hosts/select_account_register"_i18n,
+            labels,
+            [host, candidates](int selected) {
+                if (selected < 0 || selected >= (int)candidates.size()) return;
+                startRegistration(host, candidates[selected]);
+            }
+        );
+        brls::Application::pushActivity(new brls::Activity(dropdown));
+    }
+
+    static void showAccountMenu(Host* host) {
+        std::vector<std::string> options;
+        std::vector<int> mapping;
+
+        auto& profiles = host->getProfiles();
+        for (size_t i = 0; i < profiles.size(); i++) {
+            if (!profileUsable(profiles[i])) continue;
+            std::string label = profiles[i].psnOnlineId.empty()
+                ? profiles[i].psnAccountId
+                : profiles[i].psnOnlineId;
+            if (label.empty()) label = "akira/account/unnamed"_i18n;
+            if ((int)i == host->getActiveProfileIndex()) label += " *";
+            options.push_back(label);
+            mapping.push_back((int)i);
+        }
+
+        options.push_back("akira/hosts/register_another"_i18n);
+        mapping.push_back(-1);
+        options.push_back("akira/hosts/remove_account"_i18n);
+        mapping.push_back(-2);
+
+        auto* dropdown = new brls::Dropdown(
+            "akira/hosts/select_account"_i18n,
+            options,
+            [host, mapping](int selected) {
+                if (selected < 0 || selected >= (int)mapping.size()) return;
+                int idx = mapping[selected];
+                if (idx >= 0) {
+                    host->setActiveProfile(idx);
+                    SettingsManager::getInstance()->writeFile();
+                    if (HostListTab::currentInstance) {
+                        HostListTab::currentInstance->updateHostItem(host);
+                    }
+                } else if (idx == -1) {
+                    startAddAccount(host);
+                } else {
+                    showRemoveAccountMenu(host);
+                }
+            }
+        );
+        brls::Application::pushActivity(new brls::Activity(dropdown));
+    }
+
+    static void showRemoveAccountMenu(Host* host) {
+        std::vector<std::string> labels;
+        std::vector<std::string> accountIds;
+        auto& profiles = host->getProfiles();
+        for (size_t i = 0; i < profiles.size(); i++) {
+            if (!profileUsable(profiles[i])) continue;
+            std::string label = profiles[i].psnOnlineId.empty()
+                ? profiles[i].psnAccountId
+                : profiles[i].psnOnlineId;
+            if (label.empty()) label = "akira/account/unnamed"_i18n;
+            labels.push_back(label);
+            accountIds.push_back(profiles[i].psnAccountId);
+        }
+        if (labels.empty()) return;
+
+        auto* dropdown = new brls::Dropdown(
+            "akira/hosts/remove_account"_i18n,
+            labels,
+            [host, accountIds, labels](int selected) {
+                if (selected < 0 || selected >= (int)accountIds.size()) return;
+                std::string accountId = accountIds[selected];
+                std::string label = labels[selected];
+                auto* dialog = new brls::Dialog(brls::getStr("akira/hosts/remove_account_confirm", label));
+                dialog->addButton("akira/common/cancel"_i18n, []() {});
+                dialog->addButton("akira/common/delete"_i18n, [host, accountId]() {
+                    int idx = host->findProfileByAccount(accountId);
+                    if (idx >= 0) host->removeProfile(idx);
+                    SettingsManager::getInstance()->writeFile();
+                    brls::Application::notify("akira/hosts/account_removed"_i18n);
+                    if (HostListTab::currentInstance) {
+                        HostListTab::currentInstance->updateHostItem(host);
+                    }
+                });
+                dialog->open();
+            }
+        );
+        brls::Application::pushActivity(new brls::Activity(dropdown));
     }
 
     void createLinkButton() {
@@ -415,7 +580,7 @@ private:
             std::vector<Host*> hostPtrs;
             for (auto& [name, h] : *hostsMap) {
                 if (h && h->hasRpKey() && !h->isRemote()) {
-                    hostNames.push_back(name);
+                    hostNames.push_back(h->getHostName());
                     hostPtrs.push_back(h.get());
                 }
             }
@@ -429,11 +594,10 @@ private:
             auto* dropdown = new brls::Dropdown(
                 "akira/hosts/select_host_to_link"_i18n,
                 hostNames,
-                [remoteHost, hostPtrs, hostNames](int selected) {
+                [remoteHost, hostPtrs](int selected) {
                     if (selected < 0 || selected >= (int)hostPtrs.size()) return;
 
                     Host* localHost = hostPtrs[selected];
-                    std::string oldName = hostNames[selected];
                     auto* settings = SettingsManager::getInstance();
 
                     std::string remoteName = remoteHost->getHostName();
@@ -441,10 +605,8 @@ private:
                         remoteName = remoteName.substr(0, remoteName.length() - 9);
                     }
 
-                    if (oldName != remoteName) {
-                        settings->renameHost(oldName, remoteName);
-                    }
-                    remoteHost->copyRegistrationFrom(localHost);
+                    settings->setHostNickname(localHost, remoteName);
+                    remoteHost->copyRegistrationFrom(localHost, remoteHost->getRemoteAccountId());
                     remoteHost->setNeedsLink(false);
                     localHost->setRemoteDuid(remoteHost->getRemoteDuid());
                     settings->writeFile();
@@ -501,14 +663,15 @@ private:
         deleteBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
         deleteBtn->setShrink(0);
         std::string hostName = host->getHostName();
-        deleteBtn->registerClickAction([hostName](brls::View* view) {
+        Host* hostPtr = host;
+        deleteBtn->registerClickAction([hostName, hostPtr](brls::View* view) {
             brls::Logger::info("Delete button clicked for {}", hostName);
 
             auto* dialog = new brls::Dialog(brls::getStr("akira/hosts/delete_confirm", hostName));
             dialog->addButton("akira/common/cancel"_i18n, []() {});
-            dialog->addButton("akira/common/delete"_i18n, [hostName]() {
+            dialog->addButton("akira/common/delete"_i18n, [hostPtr]() {
                 auto* settings = SettingsManager::getInstance();
-                settings->removeHost(hostName);
+                settings->removeHost(hostPtr);
                 settings->writeFile();
                 brls::Application::notify("akira/hosts/host_deleted"_i18n);
                 if (HostListTab::currentInstance) {
@@ -570,15 +733,10 @@ void HostListTab::initFindRemoteButton() {
     findRemoteBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
 
     findRemoteBtn->registerClickAction([this](brls::View* view) {
-        std::string refreshToken = settings->getPsnRefreshToken();
-
-        if (refreshToken.empty()) {
+        if (!settings->hasAnyRemoteAccount()) {
             brls::Application::notify("akira/hosts/no_psn_token"_i18n);
             return true;
         }
-
-        int64_t expiresAt = settings->getPsnTokenExpiresAt();
-        int64_t now = std::time(nullptr);
 
         auto onComplete = [this]() {
             syncHostList();
@@ -587,25 +745,8 @@ void HostListTab::initFindRemoteButton() {
             }
         };
 
-        if (expiresAt > 0 && now > expiresAt) {
-            brls::Application::notify("akira/hosts/token_expired_refreshing"_i18n);
-            discovery->refreshPsnToken(
-                [this, onComplete]() {
-                    brls::sync([this, onComplete]() {
-                        brls::Application::notify("akira/hosts/finding_remote"_i18n);
-                        discovery->refreshRemoteDevices(onComplete);
-                    });
-                },
-                [](const std::string& error) {
-                    brls::sync([error]() {
-                        brls::Application::notify(brls::getStr("akira/hosts/token_refresh_failed", error));
-                    });
-                }
-            );
-        } else {
-            brls::Application::notify("akira/hosts/finding_remote"_i18n);
-            discovery->refreshRemoteDevices(onComplete);
-        }
+        brls::Application::notify("akira/hosts/finding_remote"_i18n);
+        discovery->refreshRemoteDevices(onComplete);
 
         return true;
     });

@@ -40,7 +40,7 @@ private:
     NetworkAddresses getIPv4BroadcastAddr();
 
     void fetchRemoteDevicesFromPsn(std::function<void()> onComplete);
-    void processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType);
+    void processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType, const std::string& accountId);
 
     ChiakiThread remoteDiscoveryThread;
     ChiakiBoolPredCond remoteStopCond;
@@ -98,7 +98,14 @@ public:
         std::function<void(const std::string&)> onError
     );
 
+    void refreshPsnTokenForAccount(
+        const std::string& accountId,
+        std::function<void()> onSuccess,
+        std::function<void(const std::string&)> onError
+    );
+
     bool isPsnTokenValid() const;
+    bool ensureValidTokenForHost(Host* host);
 
     void refreshRemoteDevices(std::function<void()> onComplete = nullptr);
 };

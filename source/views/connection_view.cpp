@@ -205,7 +205,7 @@ void* ConnectionView::connectionThreadFunc(void* user)
 
     if (host->isRemote()) {
         auto* dm = DiscoveryManager::getInstance();
-        if (!dm->isPsnTokenValid()) {
+        if (!dm->ensureValidTokenForHost(host)) {
             if (auto view = weak.lock()) {
                 view->connectionError = "akira/connection/psn_token_expired"_i18n;
                 brls::Logger::error("{}", view->connectionError);

@@ -303,16 +303,7 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
     brls::Logger::info("--");
 
     brls::sync([this, data, target]() {
-        auto* hostsMap = settings->getHostsMap();
-        auto it = hostsMap->find(data->hostName);
-
-        Host* host;
-        if (it != hostsMap->end()) {
-            host = it->second.get();
-        } else {
-            host = settings->getOrCreateHost(data->hostName);
-            host->setHostType(HostType::Auto);
-        }
+        Host* host = settings->getOrCreateDiscoveredHost(data->hostId, data->hostName);
 
         host->state = data->state;
         host->discovered = true;
@@ -325,11 +316,6 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
         if (!data->hostAddr.empty())
         {
             host->hostAddr = data->hostAddr;
-        }
-
-        if (!data->hostId.empty())
-        {
-            host->hostId = data->hostId;
         }
 
         if (onHostDiscovered)
@@ -580,7 +566,29 @@ void DiscoveryManager::refreshPsnToken(
     std::function<void()> onSuccess,
     std::function<void(const std::string&)> onError)
 {
-    std::string refreshToken = settings->getPsnRefreshToken();
+    std::string id = settings->getDefaultAccountId();
+    if (id.empty() && !settings->getAccounts().empty())
+        id = settings->getAccounts().front().accountId;
+    if (id.empty())
+    {
+        onError("No account configured");
+        return;
+    }
+    refreshPsnTokenForAccount(id, onSuccess, onError);
+}
+
+void DiscoveryManager::refreshPsnTokenForAccount(
+    const std::string& accountId,
+    std::function<void()> onSuccess,
+    std::function<void(const std::string&)> onError)
+{
+    Account* acc = settings->findAccount(accountId);
+    if (!acc)
+    {
+        onError("Account not found");
+        return;
+    }
+    std::string refreshToken = acc->refreshToken;
     if (refreshToken.empty())
     {
         onError("No refresh token stored");
@@ -711,18 +719,17 @@ void DiscoveryManager::refreshPsnToken(
         return;
     }
 
-    settings->setPsnAccessToken(newAccessToken);
-    settings->setPsnRefreshToken(newRefreshToken);
-
-    if (expiresIn > 0)
+    if (Account* a = settings->findAccount(accountId))
     {
-        int64_t expiresAt = static_cast<int64_t>(std::time(nullptr)) + expiresIn;
-        settings->setPsnTokenExpiresAt(expiresAt);
+        a->accessToken = newAccessToken;
+        a->refreshToken = newRefreshToken;
+        if (expiresIn > 0)
+            a->tokenExpiresAt = static_cast<int64_t>(std::time(nullptr)) + expiresIn;
     }
 
     settings->writeFile();
 
-    brls::Logger::info("PSN token refreshed successfully");
+    brls::Logger::info("PSN token refreshed successfully for account {}", accountId);
     onSuccess();
 }
 
@@ -744,100 +751,106 @@ bool DiscoveryManager::isPsnTokenValid() const
     return (expiresAt - 60) > now;
 }
 
+bool DiscoveryManager::ensureValidTokenForHost(Host* host)
+{
+    Account* a = settings->getAccountForHost(host);
+    if (!a)
+        return false;
+
+    bool valid = !a->accessToken.empty() && a->tokenExpiresAt > 0 &&
+                 (a->tokenExpiresAt - 60) > static_cast<int64_t>(std::time(nullptr));
+    if (valid)
+        return true;
+
+    if (a->refreshToken.empty())
+        return false;
+
+    bool ok = false;
+    refreshPsnTokenForAccount(a->accountId,
+        [&ok]() { ok = true; },
+        [](const std::string& error) {
+            brls::Logger::error("Token refresh failed: {}", error);
+        });
+    return ok;
+}
+
 void DiscoveryManager::refreshRemoteDevices(std::function<void()> onComplete)
 {
     brls::Logger::info("DiscoveryManager::refreshRemoteDevices() called");
 
-    if (!isPsnTokenValid())
+    if (!settings->hasAnyRemoteAccount())
     {
-        brls::Logger::info("PSN token not valid, attempting to refresh...");
-
-        std::string refreshToken = settings->getPsnRefreshToken();
-        if (refreshToken.empty())
-        {
-            brls::Logger::warning("No PSN refresh token available, cannot discover remote devices");
-            if (onComplete) onComplete();
-            return;
-        }
-
-        refreshPsnToken(
-            [this, onComplete]() {
-                brls::Logger::info("Token refresh successful, now fetching remote devices");
-                fetchRemoteDevicesFromPsn(onComplete);
-            },
-            [this, onComplete](const std::string& error) {
-                brls::Logger::error("Failed to refresh PSN token: {}", error);
-                brls::Logger::info("Clearing invalid PSN token data from config");
-                settings->clearPsnTokenData();
-                settings->writeFile();
-                if (onComplete) onComplete();
-            }
-        );
+        brls::Logger::info("No remote accounts configured, skipping remote discovery");
+        if (onComplete) onComplete();
         return;
     }
 
-    brls::Logger::info("PSN token is valid, fetching remote devices");
     fetchRemoteDevicesFromPsn(onComplete);
 }
 
 void DiscoveryManager::fetchRemoteDevicesFromPsn(std::function<void()> onComplete)
 {
-    std::string accessToken = settings->getPsnAccessToken();
-    if (accessToken.empty())
+    auto& accounts = settings->getAccounts();
+
+    for (auto& account : accounts)
     {
-        brls::Logger::error("No access token available for remote device discovery");
-        if (onComplete) onComplete();
-        return;
-    }
+        if (account.refreshToken.empty())
+            continue;
 
-    brls::Logger::info("Querying PSN for remote devices...");
+        std::string accountId = account.accountId;
 
-    ChiakiHolepunchDeviceInfo* ps5Devices = nullptr;
-    size_t ps5Count = 0;
-    ChiakiErrorCode ps5Err = chiaki_holepunch_list_devices(
-        accessToken.c_str(),
-        CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5,
-        &ps5Devices,
-        &ps5Count,
-        log
-    );
-
-    if (ps5Err == CHIAKI_ERR_SUCCESS)
-    {
-        brls::Logger::info("Found {} PS5 remote device(s)", ps5Count);
-        for (size_t i = 0; i < ps5Count; i++)
+        bool valid = !account.accessToken.empty() && account.tokenExpiresAt > 0 &&
+                     (account.tokenExpiresAt - 60) > static_cast<int64_t>(std::time(nullptr));
+        if (!valid)
         {
-            processRemoteDevice(&ps5Devices[i], CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5);
+            bool refreshed = false;
+            refreshPsnTokenForAccount(accountId,
+                [&refreshed]() { refreshed = true; },
+                [accountId](const std::string& error) {
+                    brls::Logger::error("Token refresh failed for account {}: {}", accountId, error);
+                });
+            if (!refreshed)
+                continue;
         }
-        chiaki_holepunch_free_device_list(&ps5Devices);
-    }
-    else
-    {
-        brls::Logger::error("Failed to list PS5 devices: {}", chiaki_error_string(ps5Err));
-    }
 
-    ChiakiHolepunchDeviceInfo* ps4Devices = nullptr;
-    size_t ps4Count = 0;
-    ChiakiErrorCode ps4Err = chiaki_holepunch_list_devices(
-        accessToken.c_str(),
-        CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4,
-        &ps4Devices,
-        &ps4Count,
-        log
-    );
+        Account* a = settings->findAccount(accountId);
+        if (!a || a->accessToken.empty())
+            continue;
+        std::string accessToken = a->accessToken;
 
-    if (ps4Err == CHIAKI_ERR_SUCCESS)
-    {
-        brls::Logger::info("Found {} PS4 remote device(s)", ps4Count);
-        for (size_t i = 0; i < ps4Count; i++)
+        brls::Logger::info("Querying PSN for remote devices (account {})...", accountId);
+
+        ChiakiHolepunchDeviceInfo* ps5Devices = nullptr;
+        size_t ps5Count = 0;
+        ChiakiErrorCode ps5Err = chiaki_holepunch_list_devices(
+            accessToken.c_str(), CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5, &ps5Devices, &ps5Count, log);
+        if (ps5Err == CHIAKI_ERR_SUCCESS)
         {
-            processRemoteDevice(&ps4Devices[i], CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4);
+            brls::Logger::info("Found {} PS5 remote device(s)", ps5Count);
+            for (size_t i = 0; i < ps5Count; i++)
+                processRemoteDevice(&ps5Devices[i], CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5, accountId);
+            chiaki_holepunch_free_device_list(&ps5Devices);
         }
-        chiaki_holepunch_free_device_list(&ps4Devices);
-    }
-    else
-    {
-        brls::Logger::error("Failed to list PS4 devices: {}", chiaki_error_string(ps4Err));
+        else
+        {
+            brls::Logger::error("Failed to list PS5 devices: {}", chiaki_error_string(ps5Err));
+        }
+
+        ChiakiHolepunchDeviceInfo* ps4Devices = nullptr;
+        size_t ps4Count = 0;
+        ChiakiErrorCode ps4Err = chiaki_holepunch_list_devices(
+            accessToken.c_str(), CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4, &ps4Devices, &ps4Count, log);
+        if (ps4Err == CHIAKI_ERR_SUCCESS)
+        {
+            brls::Logger::info("Found {} PS4 remote device(s)", ps4Count);
+            for (size_t i = 0; i < ps4Count; i++)
+                processRemoteDevice(&ps4Devices[i], CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4, accountId);
+            chiaki_holepunch_free_device_list(&ps4Devices);
+        }
+        else
+        {
+            brls::Logger::error("Failed to list PS4 devices: {}", chiaki_error_string(ps4Err));
+        }
     }
 
     if (onComplete)
@@ -848,7 +861,7 @@ void DiscoveryManager::fetchRemoteDevicesFromPsn(std::function<void()> onComplet
     }
 }
 
-void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType)
+void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType, const std::string& accountId)
 {
     if (!device)
         return;
@@ -874,19 +887,27 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         return;
     }
 
-    brls::sync([this, deviceName, deviceUid, consoleType]() {
+    brls::sync([this, deviceName, deviceUid, consoleType, accountId]() {
         auto* hostsMap = settings->getHostsMap();
-        Host* localHost = nullptr;
+        Host* exact = nullptr;
+        Host* anyMatch = nullptr;
 
-        auto it = hostsMap->find(deviceName);
-        if (it != hostsMap->end() && it->second->hasRpKey() && !it->second->isRemote())
+        for (auto& [key, h] : *hostsMap)
         {
-            localHost = it->second.get();
-            if (localHost->getRemoteDuid().empty())
+            if (!h || h->isRemote() || h->getHostName() != deviceName) continue;
+            int pi = h->findProfileByAccount(accountId);
+            if (!accountId.empty() && pi >= 0 && h->getProfiles()[pi].hasRpKey)
             {
-                localHost->setRemoteDuid(deviceUid);
-                brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
+                exact = h.get();
+                break;
             }
+            if (!anyMatch && h->hasRpKey()) anyMatch = h.get();
+        }
+        Host* localHost = exact ? exact : anyMatch;
+        if (localHost && localHost->getRemoteDuid().empty())
+        {
+            localHost->setRemoteDuid(deviceUid);
+            brls::Logger::info("Updated local host '{}' with remote DUID", deviceName);
         }
 
         std::string remoteName = deviceName + " (Remote)";
@@ -895,6 +916,7 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
         host->setHostType(HostType::Remote);
         host->discovered = true;
         host->setRemoteDuid(deviceUid);
+        host->setRemoteAccountId(accountId);
 
         if (consoleType == CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5)
             host->setChiakiTarget(CHIAKI_TARGET_PS5_1);
@@ -903,7 +925,7 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
 
         if (localHost)
         {
-            host->copyRegistrationFrom(localHost);
+            host->copyRegistrationFrom(localHost, accountId);
             host->setNeedsLink(false);
         }
         else
@@ -946,8 +968,7 @@ void DiscoveryManager::runRemoteDiscoveryLoop()
 
     while (err == CHIAKI_ERR_TIMEOUT && remoteDiscoveryEnabled.load())
     {
-        std::string refreshToken = settings->getPsnRefreshToken();
-        if (!refreshToken.empty())
+        if (settings->hasAnyRemoteAccount())
         {
             brls::Logger::debug("Remote discovery: checking PSN devices...");
             refreshRemoteDevices();

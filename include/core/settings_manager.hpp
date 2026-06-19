@@ -11,6 +11,8 @@
 #include <chiaki/session.h>
 #include <chiaki/log.h>
 
+#include "account.hpp"
+
 // Forward declaration
 class Host;
 
@@ -52,12 +54,10 @@ private:
     ChiakiVideoResolutionPreset remoteVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     ChiakiVideoFPSPreset localVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
     ChiakiVideoFPSPreset remoteVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
-    std::string globalPsnOnlineId;
-    std::string globalPsnAccountId;
-    std::string globalPsnRefreshToken;
-    std::string globalPsnAccessToken;
-    int64_t globalPsnTokenExpiresAt = 0;
-    std::string globalDuid;
+    std::vector<Account> accounts;
+    std::string defaultAccountId;
+    bool legacyConfigDetected = false;
+    int manualHostNextId = 0;
     HapticPreset globalHaptic = HapticPreset::Disabled;
     float rumbleFreqLow = 140.0f;
     float rumbleFreqHigh = 185.0f;
@@ -122,6 +122,10 @@ private:
     void parseTomlFile();
     void parseLegacyFile();
     void removeLegacyConfig();
+    void migrateConfigToMultiAccount();
+    const Account* getDefaultAccount() const;
+    Account* getDefaultAccount();
+    Account& ensureDefaultAccount();
     static size_t getB64EncodeSize(size_t inputSize);
     static bool fileExists(const char* path);
 
@@ -139,9 +143,13 @@ public:
 
     std::map<std::string, std::unique_ptr<Host>>* getHostsMap();
     Host* getOrCreateHost(const std::string& hostName);
+    Host* getOrCreateDiscoveredHost(const std::string& hostId, const std::string& name);
+    Host* createManualHost(const std::string& nickname);
     Host* findHostByDuid(const std::string& duid);
     void removeHost(const std::string& hostName);
+    void removeHost(Host* host);
     void renameHost(const std::string& oldName, const std::string& newName);
+    void setHostNickname(Host* host, const std::string& nickname);
 
     static std::string resolutionToString(ChiakiVideoResolutionPreset resolution);
     static int resolutionToInt(ChiakiVideoResolutionPreset resolution);
@@ -181,6 +189,15 @@ public:
 
     std::string getGlobalDuid() const;
     void setGlobalDuid(const std::string& duid);
+
+    std::vector<Account>& getAccounts();
+    Account* findAccount(const std::string& accountId);
+    Account* getAccountForHost(Host* host);
+    bool hasAnyRemoteAccount() const;
+    void upsertAccount(const Account& account);
+    void removeAccount(const std::string& accountId);
+    std::string getDefaultAccountId() const;
+    void setDefaultAccountId(const std::string& accountId);
 
     std::string getConsolePIN(Host* host);
     void setConsolePIN(Host* host, const std::string& pin);

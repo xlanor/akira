@@ -50,6 +50,3 @@
 [submodule "references/FidelityFX-FSR"]
 	path = references/FidelityFX-FSR
 	url = https://github.com/atyuwen/FidelityFX-FSR
-[submodule "reference/peasyo"]
-	path = reference/peasyo
-	url = https://github.com/Geocld/PeaSyo.git

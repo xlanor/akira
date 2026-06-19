@@ -46,23 +46,6 @@ private:
     BRLS_BIND(brls::BooleanCell, debugChiakiLogToggle, "settings/debugChiakiLog");
     BRLS_BIND(brls::BooleanCell, debugDiscoveryLogToggle, "settings/debugDiscoveryLog");
     BRLS_BIND(brls::BooleanCell, debugFfmpegLogToggle, "settings/debugFfmpegLog");
-    BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
-    BRLS_BIND(brls::Button, lookupBtn, "settings/lookupBtn");
-    BRLS_BIND(brls::InputCell, psnAccountIdInput, "settings/psnAccountId");
-    BRLS_BIND(brls::InputCell, companionHostInput, "settings/companionHost");
-    BRLS_BIND(brls::InputCell, companionPortInput, "settings/companionPort");
-    BRLS_BIND(brls::Button, fetchPsnBtn, "settings/fetchPsnBtn");
-    BRLS_BIND(brls::Button, refreshTokenBtn, "settings/refreshTokenBtn");
-    BRLS_BIND(brls::Button, clearPsnBtn, "settings/clearPsnBtn");
-
-    BRLS_BIND(brls::DetailCell, credOnlineIdCell, "settings/credOnlineId");
-    BRLS_BIND(brls::DetailCell, credAccountIdCell, "settings/credAccountId");
-    BRLS_BIND(brls::DetailCell, credAccessTokenCell, "settings/credAccessToken");
-    BRLS_BIND(brls::DetailCell, credRefreshTokenCell, "settings/credRefreshToken");
-    BRLS_BIND(brls::DetailCell, credTokenExpiryCell, "settings/credTokenExpiry");
-    BRLS_BIND(brls::DetailCell, credDuidCell, "settings/credDuid");
-    BRLS_BIND(brls::Button, revealCredentialsBtn, "settings/revealCredentials");
-
     BRLS_BIND(brls::Label, versionLabel, "settings/version");
     BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
     BRLS_BIND(brls::BooleanCell, unlockBitrateMaxToggle, "settings/unlockBitrateMax");
@@ -77,11 +60,6 @@ private:
     SettingsManager* settings = nullptr;
     int powerUserClickCount = 0;
     std::chrono::steady_clock::time_point lastPowerUserClick;
-    bool credentialsRevealed = false;
-
-    void updateCredentialsDisplay();
-    std::string censorString(const std::string& str);
-
     void initLanguageSelector();
     void initLocalResolutionSelector();
     void initRemoteResolutionSelector();
@@ -119,8 +97,6 @@ private:
     void initDebugChiakiLogToggle();
     void initDebugDiscoveryLogToggle();
     void initDebugFfmpegLogToggle();
-    void initPsnAccountSection();
-    void initCompanionSection();
     void initPortGuessingToggle();
     void initPortGuessingCountSlider();
     void initPortGuessingSocksSlider();

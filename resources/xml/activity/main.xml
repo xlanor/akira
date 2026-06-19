@@ -8,6 +8,10 @@
             <HostListTab/>
         </brls:Tab>
 
+        <brls:Tab label="@i18n/akira/tabs/account">
+            <AccountTab/>
+        </brls:Tab>
+
         <brls:Tab label="@i18n/akira/tabs/settings">
             <SettingsTab/>
         </brls:Tab>

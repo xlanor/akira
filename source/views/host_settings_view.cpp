@@ -31,8 +31,6 @@ HostSettingsView::HostSettingsView(Host* host)
 
     initHostNameInput();
     initHostAddrInput();
-    initPsnAccountIdInput();
-    initLookupButton();
     initConsolePINInput();
     initHapticSelector();
 
@@ -90,64 +88,6 @@ void HostSettingsView::initHostAddrInput()
     if (host->isRemote()) {
         hostAddrInput->setVisibility(brls::Visibility::GONE);
     }
-}
-
-void HostSettingsView::initPsnAccountIdInput()
-{
-    std::string currentId = host->getPerHostPsnAccountId();
-
-    psnAccountIdInput->init(
-        "akira/host_settings/psn_account_id"_i18n,
-        currentId,
-        [](std::string text) {},
-        "akira/host_settings/psn_account_id_placeholder"_i18n,
-        "akira/host_settings/psn_account_id_hint"_i18n
-    );
-}
-
-void HostSettingsView::initLookupButton()
-{
-    psnOnlineIdInput->init(
-        "akira/host_settings/lookup_by_online_id"_i18n,
-        "",
-        [](std::string text) {},
-        "akira/host_settings/lookup_online_id_placeholder"_i18n,
-        "akira/host_settings/lookup_online_id_hint"_i18n
-    );
-
-    // Style lookup button with blue
-    lookupBtn->setStyle(&BUTTONSTYLE_BLUE);
-    lookupBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
-
-    lookupBtn->registerClickAction([this](brls::View* view) {
-        std::string onlineId = psnOnlineIdInput->getValue();
-        if (onlineId.empty()) {
-            brls::Application::notify("akira/host_settings/enter_online_id_first"_i18n);
-            return true;
-        }
-
-        brls::Application::notify("akira/host_settings/looking_up"_i18n);
-
-        DiscoveryManager::getInstance()->lookupPsnAccountId(
-            onlineId,
-            [this](const std::string& accountId) {
-                brls::sync([this, accountId]() {
-                    psnAccountIdInput->setValue(accountId);
-                    psnOnlineIdInput->setValue("");
-                    brls::Application::notify("akira/host_settings/account_id_found"_i18n);
-                    brls::Logger::info("Found account ID for PSN user");
-                });
-            },
-            [](const std::string& error) {
-                brls::sync([error]() {
-                    brls::Application::notify(brls::getStr("akira/host_settings/lookup_failed", error));
-                    brls::Logger::error("PSN account lookup failed: {}", error);
-                });
-            }
-        );
-
-        return true;
-    });
 }
 
 void HostSettingsView::initConsolePINInput()
@@ -212,7 +152,6 @@ void HostSettingsView::onSaveClicked()
 {
     std::string newHostName = hostNameInput->getValue();
     std::string newHostAddr = hostAddrInput->getValue();
-    std::string psnAccountId = psnAccountIdInput->getValue();
     std::string consolePIN = consolePINInput->getValue();
 
     if (newHostName.empty()) {
@@ -249,25 +188,18 @@ void HostSettingsView::onSaveClicked()
     }
 
     if (newHostName != originalHostName) {
-        auto* hostsMap = settings->getHostsMap();
-        if (hostsMap->find(newHostName) != hostsMap->end()) {
-            brls::Application::notify("akira/host_settings/error_duplicate_name"_i18n);
-            return;
-        }
-        settings->renameHost(originalHostName, newHostName);
+        settings->setHostNickname(host, newHostName);
     }
 
     if (!host->isRemote()) {
         settings->setHostAddr(host, newHostAddr);
     }
-    settings->setPsnAccountId(host, psnAccountId);
     settings->setConsolePIN(host, consolePIN);
     host->setHapticRaw(selectedHaptic);
     settings->writeFile();
 
-    brls::Logger::info("Saved settings for {}: psnAccountId={}, consolePIN={}, haptic={}",
+    brls::Logger::info("Saved settings for {}: consolePIN={}, haptic={}",
         host->getHostName(),
-        psnAccountId.empty() ? "(global)" : psnAccountId,
         consolePIN.empty() ? "(none)" : "****",
         selectedHaptic);
 

@@ -1,0 +1,130 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    grow="1.0"
+    paddingTop="@style/brls/tab_frame/content_padding_top_bottom"
+    paddingLeft="@style/brls/tab_frame/content_padding_sides"
+    paddingRight="@style/brls/tab_frame/content_padding_sides"
+    paddingBottom="@style/brls/tab_frame/content_padding_top_bottom"
+    justifyContent="flexStart"
+    alignItems="center">
+
+    <brls:Label
+        id="account_edit/title"
+        text="@i18n/akira/account/edit_title"
+        fontSize="24"
+        marginBottom="20"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="column"
+        grow="1.0"
+        backgroundColor="@theme/color/card"
+        cornerRadius="8"
+        marginBottom="20"
+        paddingTop="15"
+        paddingBottom="15">
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            alignItems="center"
+            marginLeft="15"
+            marginRight="15">
+
+            <brls:InputCell
+                id="account_edit/onlineId"
+                title="@i18n/akira/account/online_id"
+                grow="1"/>
+
+            <brls:Button
+                id="account_edit/lookupBtn"
+                text="@i18n/akira/account/look_up"
+                style="bordered"
+                width="120"
+                marginLeft="10"/>
+
+        </brls:Box>
+
+        <brls:InputCell
+            id="account_edit/accountId"
+            title="@i18n/akira/account/account_id"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:InputCell
+            id="account_edit/companionHost"
+            title="@i18n/akira/account/companion_host"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:InputCell
+            id="account_edit/companionPort"
+            title="@i18n/akira/account/companion_port"
+            marginLeft="15"
+            marginRight="15"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            marginLeft="15"
+            marginRight="15"
+            marginTop="10">
+
+            <brls:Button
+                id="account_edit/fetchBtn"
+                text="@i18n/akira/account/fetch_companion"
+                style="bordered"
+                grow="1"
+                marginRight="10"/>
+
+            <brls:Button
+                id="account_edit/refreshBtn"
+                text="@i18n/akira/account/refresh_token"
+                style="bordered"
+                grow="1"/>
+
+        </brls:Box>
+
+    </brls:Box>
+
+    <brls:Label
+        id="account_edit/info"
+        text=""
+        fontSize="14"
+        textColor="#888888"
+        marginBottom="20"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="row"
+        justifyContent="center">
+
+        <brls:Button
+            id="account_edit/cancelBtn"
+            text="@i18n/akira/common/cancel"
+            style="bordered"
+            width="150"
+            marginRight="15"/>
+
+        <brls:Button
+            id="account_edit/deleteBtn"
+            text="@i18n/akira/common/delete"
+            style="bordered"
+            width="150"
+            marginRight="15"/>
+
+        <brls:Button
+            id="account_edit/saveBtn"
+            text="@i18n/akira/common/save"
+            style="primary"
+            width="150"/>
+
+    </brls:Box>
+
+</brls:Box>

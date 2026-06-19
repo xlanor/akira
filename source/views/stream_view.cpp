@@ -158,7 +158,7 @@ void StreamView::startStream()
                 brls::Logger::info("Remote host detected, initiating holepunch connection...");
 
                 auto* dm = DiscoveryManager::getInstance();
-                if (!dm->isPsnTokenValid())
+                if (!dm->ensureValidTokenForHost(host))
                 {
                     brls::Logger::error("PSN token not valid for remote connection");
                     throw Exception("akira/stream/psn_token_expired"_i18n);

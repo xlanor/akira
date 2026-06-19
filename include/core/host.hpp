@@ -4,6 +4,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <vector>
 
 #include <chiaki/common.h>
 #include <chiaki/discovery.h>
@@ -34,6 +35,16 @@ enum class HostType {
     Remote = 3
 };
 
+struct HostProfile {
+    std::string psnAccountId;
+    std::string psnOnlineId;
+    std::string consolePIN;
+    char rpRegistKey[CHIAKI_SESSION_AUTH_SIZE] = {0};
+    uint32_t rpKeyType = 0;
+    uint8_t rpKey[0x10] = {0};
+    bool hasRpKey = false;
+};
+
 class Host {
     friend class SettingsManager;
     friend class DiscoveryManager;
@@ -56,6 +67,8 @@ private:
     // Host identification
     std::string hostName;
     std::string hostId;
+    std::string mac;  // canonical console MAC (lowercase hex), empty if unknown
+    std::string consoleKey;  // the stable key under which this host lives in the hosts map
     std::string hostAddr;
     std::string serverNickname;
 
@@ -66,6 +79,7 @@ private:
 
     // Remote connection info
     std::string remoteDuid;  // DUID for matching remote hosts
+    std::string remoteAccountId;  // account whose PSN token discovered this remote host
 
     // Target console type
     ChiakiTarget target = CHIAKI_TARGET_PS4_UNKNOWN;
@@ -76,6 +90,10 @@ private:
     char rpRegistKey[CHIAKI_SESSION_AUTH_SIZE] = {0};
     uint32_t rpKeyType = 0;
     uint8_t rpKey[0x10] = {0};
+
+    std::vector<HostProfile> profiles;
+    int activeProfile = -1;
+    std::string lastRegistAccountId;
 
     bool discovered = false;
     bool registered = false;
@@ -118,6 +136,11 @@ public:
     std::string getHostName() const { return hostName; }
     std::string getHostAddr() const { return hostAddr; }
     std::string getHostId() const { return hostId; }
+    std::string getMac() const { return mac; }
+    void setMac(const std::string& m);
+    void updateMacFromServerMac();
+    std::string getConsoleKey() const { return consoleKey; }
+    static std::string normalizeMac(const std::string& m);
     ChiakiTarget getChiakiTarget() const { return target; }
     ChiakiDiscoveryHostState getState() const { return state; }
 
@@ -153,6 +176,9 @@ public:
     // Remote DUID for matching remote hosts
     std::string getRemoteDuid() const { return remoteDuid; }
     void setRemoteDuid(const std::string& duid) { remoteDuid = duid; }
+
+    std::string getRemoteAccountId() const { return remoteAccountId; }
+    void setRemoteAccountId(const std::string& id) { remoteAccountId = id; }
 
     // Per-host PSN Account ID (returns empty if not set, doesn't fall back to global)
     std::string getPerHostPsnAccountId() const { return psnAccountId; }
@@ -193,6 +219,17 @@ public:
     int registerHost(int pin);
     void applyRegistrationData(ChiakiRegisteredHost* regHost);
     void copyRegistrationFrom(const Host* other);
+    void copyRegistrationFrom(const Host* other, const std::string& accountId);
+
+    std::vector<HostProfile>& getProfiles() { return profiles; }
+    int getActiveProfileIndex() const { return activeProfile; }
+    int findProfileByAccount(const std::string& accountId) const;
+    int upsertProfile(const HostProfile& profile);
+    void setActiveProfile(int index);
+    void applyActiveProfile();
+    void removeProfile(int index);
+    void setActiveProfileConsolePin(const std::string& pin);
+    int registeredProfileCount() const;
 
     // Event callbacks from chiaki
     void connectionEventCallback(ChiakiEvent* event);

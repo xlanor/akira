@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <dirent.h>
 #include <fstream>
@@ -144,6 +145,30 @@ uint32_t configKeyToChiakiButton(const std::string& key) {
     return 0;
 }
 
+bool decodeRpKey(const std::string& b64, uint8_t out[0x10]) {
+    size_t sz = 0x10;
+    return chiaki_base64_decode(b64.c_str(), b64.length(), out, &sz) == CHIAKI_ERR_SUCCESS;
+}
+
+bool decodeRpRegistKey(const std::string& b64, char out[CHIAKI_SESSION_AUTH_SIZE]) {
+    size_t sz = CHIAKI_SESSION_AUTH_SIZE;
+    return chiaki_base64_decode(b64.c_str(), b64.length(), reinterpret_cast<uint8_t*>(out), &sz) == CHIAKI_ERR_SUCCESS;
+}
+
+std::string encodeRpKey(const uint8_t in[0x10]) {
+    char b64[64] = {0};
+    if (chiaki_base64_encode(in, 0x10, b64, sizeof(b64)) == CHIAKI_ERR_SUCCESS)
+        return std::string(b64);
+    return "";
+}
+
+std::string encodeRpRegistKey(const char in[CHIAKI_SESSION_AUTH_SIZE]) {
+    char b64[64] = {0};
+    if (chiaki_base64_encode(reinterpret_cast<const uint8_t*>(in), CHIAKI_SESSION_AUTH_SIZE, b64, sizeof(b64)) == CHIAKI_ERR_SUCCESS)
+        return std::string(b64);
+    return "";
+}
+
 } // anonymous namespace
 
 
@@ -198,17 +223,66 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
     }
 
     Host* host = hosts.at(hostName).get();
+    host->consoleKey = hostName;
 
     if (created) {
-        setPsnOnlineId(host, globalPsnOnlineId);
-        setPsnAccountId(host, globalPsnAccountId);
+        if (const Account* a = getDefaultAccount()) {
+            setPsnOnlineId(host, a->onlineId);
+            setPsnAccountId(host, a->accountId);
+        }
     }
 
     return host;
 }
 
+Host* SettingsManager::getOrCreateDiscoveredHost(const std::string& hostId, const std::string& name) {
+    std::string mac = Host::normalizeMac(hostId);
+
+    if (!mac.empty()) {
+        for (auto& [key, h] : hosts) {
+            if (h && !h->isRemote() && h->mac == mac) {
+                h->hostId = hostId;
+                return h.get();
+            }
+        }
+    }
+
+    for (auto& [key, h] : hosts) {
+        if (h && !h->isRemote() && h->mac.empty() && h->hostName == name) {
+            h->setMac(hostId);
+            h->hostId = hostId;
+            return h.get();
+        }
+    }
+
+    std::string key = mac.empty() ? name : mac;
+    Host* host = getOrCreateHost(key);
+    host->setMac(hostId);
+    host->hostId = hostId;
+    host->hostName = name;
+    host->setHostType(HostType::Auto);
+    return host;
+}
+
+Host* SettingsManager::createManualHost(const std::string& nickname) {
+    std::string key = "manual:" + std::to_string(manualHostNextId++);
+    Host* host = getOrCreateHost(key);
+    host->hostName = nickname;
+    host->setHostType(HostType::Manual);
+    return host;
+}
+
+void SettingsManager::setHostNickname(Host* host, const std::string& nickname) {
+    if (host) host->hostName = nickname;
+}
+
 void SettingsManager::removeHost(const std::string& hostName) {
     hosts.erase(hostName);
+}
+
+void SettingsManager::removeHost(Host* host) {
+    if (!host) return;
+    hosts.erase(host->consoleKey);
 }
 
 void SettingsManager::renameHost(const std::string& oldName, const std::string& newName) {
@@ -236,10 +310,24 @@ Host* SettingsManager::findHostByDuid(const std::string& duid) {
 void SettingsManager::parseFile() {
     if (fileExists(TOML_CONFIG_FILE)) {
         parseTomlFile();
+        migrateConfigToMultiAccount();
+        if (legacyConfigDetected) {
+            std::string backupPath = std::string(TOML_CONFIG_FILE) + ".bak";
+            std::ifstream src(TOML_CONFIG_FILE, std::ios::binary);
+            std::ofstream dst(backupPath, std::ios::binary | std::ios::trunc);
+            if (src && dst) {
+                dst << src.rdbuf();
+            }
+            src.close();
+            dst.close();
+            brls::Logger::info("Migrating config to multi-account format; backup at {}", backupPath);
+            writeFile();
+        }
         removeLegacyConfig();
     } else if (fileExists(LEGACY_CONFIG_FILE)) {
         brls::Logger::info("Migrating from legacy config format");
         parseLegacyFile();
+        migrateConfigToMultiAccount();
         writeFile();
     } else {
         brls::Logger::info("No config file found, using defaults");
@@ -314,18 +402,38 @@ void SettingsManager::parseTomlFile() {
             if (auto val = (*rumbleTable)["envelope_attack"].value<double>())
                 rumbleEnvelopeAttack = std::max(0.20f, std::min(1.00f, static_cast<float>(*val)));
         }
-        if (auto val = config["psn_online_id"].value<std::string>())
-            globalPsnOnlineId = *val;
-        if (auto val = config["psn_account_id"].value<std::string>())
-            globalPsnAccountId = *val;
-        if (auto val = config["psn_refresh_token"].value<std::string>())
-            globalPsnRefreshToken = *val;
-        if (auto val = config["psn_access_token"].value<std::string>())
-            globalPsnAccessToken = *val;
-        if (auto val = config["psn_token_expires_at"].value<int64_t>())
-            globalPsnTokenExpiresAt = *val;
-        if (auto val = config["global_duid"].value<std::string>())
-            globalDuid = *val;
+        if (auto accountsArr = config["accounts"].as_array()) {
+            for (auto& elem : *accountsArr) {
+                auto* at = elem.as_table();
+                if (!at) continue;
+                Account acc;
+                if (auto v = (*at)["online_id"].value<std::string>()) acc.onlineId = *v;
+                if (auto v = (*at)["account_id"].value<std::string>()) acc.accountId = *v;
+                if (auto v = (*at)["refresh_token"].value<std::string>()) acc.refreshToken = *v;
+                if (auto v = (*at)["access_token"].value<std::string>()) acc.accessToken = *v;
+                if (auto v = (*at)["token_expires_at"].value<int64_t>()) acc.tokenExpiresAt = *v;
+                if (auto v = (*at)["duid"].value<std::string>()) acc.duid = *v;
+                accounts.push_back(acc);
+            }
+        }
+        if (auto val = config["default_account"].value<std::string>())
+            defaultAccountId = *val;
+
+        {
+            Account legacy;
+            bool hasLegacy = false;
+            if (auto v = config["psn_online_id"].value<std::string>()) { legacy.onlineId = *v; hasLegacy = true; }
+            if (auto v = config["psn_account_id"].value<std::string>()) { legacy.accountId = *v; hasLegacy = true; }
+            if (auto v = config["psn_refresh_token"].value<std::string>()) { legacy.refreshToken = *v; hasLegacy = true; }
+            if (auto v = config["psn_access_token"].value<std::string>()) { legacy.accessToken = *v; hasLegacy = true; }
+            if (auto v = config["psn_token_expires_at"].value<int64_t>()) { legacy.tokenExpiresAt = *v; hasLegacy = true; }
+            if (auto v = config["global_duid"].value<std::string>()) { legacy.duid = *v; hasLegacy = true; }
+            if (hasLegacy) {
+                legacyConfigDetected = true;
+                upsertAccount(legacy);
+                if (defaultAccountId.empty()) defaultAccountId = legacy.accountId;
+            }
+        }
         if (auto val = config["holepunch_retry"].value<bool>())
             holepunchRetry = *val;
         if (auto val = config["port_guessing"].value<bool>())
@@ -410,6 +518,8 @@ void SettingsManager::parseTomlFile() {
             companionHost = *val;
         if (auto val = config["companion_port"].value<int64_t>())
             companionPort = static_cast<int>(*val);
+        if (auto val = config["manual_host_next_id"].value<int64_t>())
+            manualHostNextId = static_cast<int>(*val);
         if (auto val = config["local_video_bitrate"].value<int64_t>())
             localVideoBitrate = static_cast<int>(*val);
         else if (auto val = config["video_bitrate"].value<int64_t>())
@@ -509,8 +619,17 @@ void SettingsManager::parseTomlFile() {
             host->hostType = migratedType;
             host->hostName = cleanName;
 
+            if (auto val = (*table)["nickname"].value<std::string>())
+                host->hostName = *val;
+            if (cleanName.rfind("manual:", 0) == 0) {
+                int n = std::atoi(cleanName.c_str() + 7);
+                if (n >= manualHostNextId) manualHostNextId = n + 1;
+            }
+
             if (auto val = (*table)["host_addr"].value<std::string>())
                 host->hostAddr = *val;
+            if (auto val = (*table)["mac"].value<std::string>())
+                host->setMac(*val);
             if (auto val = (*table)["target"].value<int64_t>())
                 host->setChiakiTarget(static_cast<ChiakiTarget>(*val));
             if (auto val = (*table)["psn_online_id"].value<std::string>())
@@ -523,6 +642,8 @@ void SettingsManager::parseTomlFile() {
                 host->haptic = static_cast<int>(*val);
             if (auto val = (*table)["remote_duid"].value<std::string>())
                 host->remoteDuid = *val;
+            if (auto val = (*table)["remote_account"].value<std::string>())
+                host->remoteAccountId = *val;
 
             bool rpKeySet = false, rpRegistKeySet = false, rpKeyTypeSet = false;
             if (auto val = (*table)["rp_key"].value<std::string>())
@@ -536,6 +657,47 @@ void SettingsManager::parseTomlFile() {
 
             if (rpKeySet && rpRegistKeySet && rpKeyTypeSet) {
                 host->rpKeyData = true;
+            }
+
+            if (rpKeySet || rpRegistKeySet ||
+                (*table)["psn_account_id"].value<std::string>() ||
+                (*table)["psn_online_id"].value<std::string>() ||
+                (*table)["console_pin"].value<std::string>()) {
+                legacyConfigDetected = true;
+            }
+
+            if (auto regsArr = (*table)["registrations"].as_array()) {
+                for (auto& elem : *regsArr) {
+                    auto* rt = elem.as_table();
+                    if (!rt) continue;
+                    HostProfile profile;
+                    if (auto v = (*rt)["account_id"].value<std::string>()) profile.psnAccountId = *v;
+                    if (auto v = (*rt)["online_id"].value<std::string>()) profile.psnOnlineId = *v;
+                    if (auto v = (*rt)["console_pin"].value<std::string>()) profile.consolePIN = *v;
+                    bool k = false, rk = false, kt = false;
+                    if (auto v = (*rt)["rp_key"].value<std::string>()) k = decodeRpKey(*v, profile.rpKey);
+                    if (auto v = (*rt)["rp_regist_key"].value<std::string>()) rk = decodeRpRegistKey(*v, profile.rpRegistKey);
+                    if (auto v = (*rt)["rp_key_type"].value<int64_t>()) { profile.rpKeyType = static_cast<uint32_t>(*v); kt = true; }
+                    profile.hasRpKey = k && rk && kt;
+                    host->profiles.push_back(profile);
+                }
+            }
+
+            std::string activeAccount;
+            if (auto val = (*table)["active_account"].value<std::string>())
+                activeAccount = *val;
+
+            if (!host->profiles.empty() || !activeAccount.empty()) {
+                int activeIdx = activeAccount.empty() ? -1 : host->findProfileByAccount(activeAccount);
+                if (activeIdx < 0 && !activeAccount.empty()) {
+                    HostProfile ap;
+                    ap.psnAccountId = activeAccount;
+                    host->profiles.push_back(ap);
+                    activeIdx = static_cast<int>(host->profiles.size()) - 1;
+                }
+                if (activeIdx < 0) activeIdx = 0;
+                host->activeProfile = activeIdx;
+                host->applyActiveProfile();
             }
         }
 
@@ -643,10 +805,10 @@ void SettingsManager::parseLegacyFile() {
                 setPsnAccountId(currentHost, value);
                 break;
             case ConfigItem::PsnRefreshToken:
-                globalPsnRefreshToken = value;
+                setPsnRefreshToken(value);
                 break;
             case ConfigItem::PsnAccessToken:
-                globalPsnAccessToken = value;
+                setPsnAccessToken(value);
                 break;
             case ConfigItem::ConsolePIN:
                 if (currentHost) currentHost->consolePIN = value;
@@ -687,10 +849,10 @@ void SettingsManager::parseLegacyFile() {
                 if (companionPort <= 0 || companionPort > 65535) companionPort = 8080;
                 break;
             case ConfigItem::PsnTokenExpiresAt:
-                globalPsnTokenExpiresAt = std::atoll(value.c_str());
+                setPsnTokenExpiresAt(std::atoll(value.c_str()));
                 break;
             case ConfigItem::GlobalDuid:
-                globalDuid = value;
+                setGlobalDuid(value);
                 break;
         }
 
@@ -720,21 +882,28 @@ int SettingsManager::writeFile() {
     config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
     config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
     config.insert("haptic", std::to_underlying(globalHaptic));
-    if (!globalPsnOnlineId.empty())
-        config.insert("psn_online_id", globalPsnOnlineId);
-    if (!globalPsnAccountId.empty())
-        config.insert("psn_account_id", globalPsnAccountId);
-    if (!globalPsnRefreshToken.empty())
-        config.insert("psn_refresh_token", globalPsnRefreshToken);
-    if (!globalPsnAccessToken.empty())
-        config.insert("psn_access_token", globalPsnAccessToken);
-    if (globalPsnTokenExpiresAt > 0)
-        config.insert("psn_token_expires_at", globalPsnTokenExpiresAt);
-    if (!globalDuid.empty())
-        config.insert("global_duid", globalDuid);
+    {
+        toml::array accountsArr;
+        for (const auto& acc : accounts) {
+            toml::table at;
+            if (!acc.onlineId.empty()) at.insert("online_id", acc.onlineId);
+            if (!acc.accountId.empty()) at.insert("account_id", acc.accountId);
+            if (!acc.refreshToken.empty()) at.insert("refresh_token", acc.refreshToken);
+            if (!acc.accessToken.empty()) at.insert("access_token", acc.accessToken);
+            if (acc.tokenExpiresAt > 0) at.insert("token_expires_at", acc.tokenExpiresAt);
+            if (!acc.duid.empty()) at.insert("duid", acc.duid);
+            accountsArr.push_back(at);
+        }
+        if (!accountsArr.empty())
+            config.insert("accounts", accountsArr);
+    }
+    if (!defaultAccountId.empty())
+        config.insert("default_account", defaultAccountId);
     if (!companionHost.empty())
         config.insert("companion_host", companionHost);
     config.insert("companion_port", companionPort);
+    if (manualHostNextId > 0)
+        config.insert("manual_host_next_id", manualHostNextId);
     if (holepunchRetry)
         config.insert("holepunch_retry", holepunchRetry);
     config.insert("port_guessing", portGuessing);
@@ -837,22 +1006,38 @@ int SettingsManager::writeFile() {
         hostTable.insert("host_addr", host->getHostAddr());
         hostTable.insert("target", static_cast<int>(host->getChiakiTarget()));
         hostTable.insert("host_type", std::to_underlying(host->hostType));
+        if (!host->mac.empty())
+            hostTable.insert("mac", host->mac);
+        hostTable.insert("nickname", host->getHostName());
 
-        if (!host->psnOnlineId.empty())
-            hostTable.insert("psn_online_id", host->psnOnlineId);
-        if (!host->psnAccountId.empty())
-            hostTable.insert("psn_account_id", host->psnAccountId);
-        if (!host->consolePIN.empty())
-            hostTable.insert("console_pin", host->consolePIN);
+        std::string activeAccount;
+        if (host->activeProfile >= 0 && host->activeProfile < static_cast<int>(host->profiles.size()))
+            activeAccount = host->profiles[host->activeProfile].psnAccountId;
+        else if (!host->psnAccountId.empty())
+            activeAccount = host->psnAccountId;
+        if (!activeAccount.empty())
+            hostTable.insert("active_account", activeAccount);
 
-        if (host->rpKeyData || host->registered) {
-            hostTable.insert("rp_key", getHostRpKey(host.get()));
-            hostTable.insert("rp_regist_key", getHostRpRegistKey(host.get()));
-            hostTable.insert("rp_key_type", host->rpKeyType);
+        toml::array regsArr;
+        for (const auto& p : host->profiles) {
+            if (!p.hasRpKey) continue;
+            toml::table rt;
+            if (!p.psnAccountId.empty()) rt.insert("account_id", p.psnAccountId);
+            if (!p.psnOnlineId.empty()) rt.insert("online_id", p.psnOnlineId);
+            if (!p.consolePIN.empty()) rt.insert("console_pin", p.consolePIN);
+            rt.insert("rp_key", encodeRpKey(p.rpKey));
+            rt.insert("rp_regist_key", encodeRpRegistKey(p.rpRegistKey));
+            rt.insert("rp_key_type", static_cast<int64_t>(p.rpKeyType));
+            regsArr.push_back(rt);
         }
+        if (!regsArr.empty())
+            hostTable.insert("registrations", regsArr);
 
         if (!host->remoteDuid.empty())
             hostTable.insert("remote_duid", host->remoteDuid);
+
+        if (!host->remoteAccountId.empty())
+            hostTable.insert("remote_account", host->remoteAccountId);
 
         if (host->haptic >= 0)
             hostTable.insert("haptic", host->haptic);
@@ -1016,32 +1201,36 @@ void SettingsManager::setDiscovered(Host* host, bool value) {
 }
 
 std::string SettingsManager::getPsnOnlineId(Host* host) {
-    if (!host || host->psnOnlineId.empty()) {
-        return globalPsnOnlineId;
+    if (host && !host->psnOnlineId.empty()) {
+        return host->psnOnlineId;
     }
-    return host->psnOnlineId;
+    const Account* a = getDefaultAccount();
+    return a ? a->onlineId : "";
 }
 
 void SettingsManager::setPsnOnlineId(Host* host, const std::string& id) {
     if (host) {
         host->psnOnlineId = id;
     } else {
-        globalPsnOnlineId = id;
+        ensureDefaultAccount().onlineId = id;
     }
 }
 
 std::string SettingsManager::getPsnAccountId(Host* host) {
-    if (!host || host->psnAccountId.empty()) {
-        return globalPsnAccountId;
+    if (host && !host->psnAccountId.empty()) {
+        return host->psnAccountId;
     }
-    return host->psnAccountId;
+    const Account* a = getDefaultAccount();
+    return a ? a->accountId : "";
 }
 
 void SettingsManager::setPsnAccountId(Host* host, const std::string& id) {
     if (host) {
         host->psnAccountId = id;
     } else {
-        globalPsnAccountId = id;
+        Account& a = ensureDefaultAccount();
+        a.accountId = id;
+        if (!id.empty()) defaultAccountId = id;
     }
 }
 
@@ -1053,6 +1242,7 @@ std::string SettingsManager::getConsolePIN(Host* host) {
 void SettingsManager::setConsolePIN(Host* host, const std::string& pin) {
     if (host) {
         host->consolePIN = pin;
+        host->setActiveProfileConsolePin(pin);
     } else {
         brls::Logger::error("Cannot setConsolePIN on nullptr");
     }
@@ -1319,42 +1509,197 @@ void SettingsManager::setCompanionPort(int port) {
 }
 
 std::string SettingsManager::getPsnRefreshToken() const {
-    return globalPsnRefreshToken;
+    const Account* a = getDefaultAccount();
+    return a ? a->refreshToken : "";
 }
 
 void SettingsManager::setPsnRefreshToken(const std::string& token) {
-    globalPsnRefreshToken = token;
+    ensureDefaultAccount().refreshToken = token;
 }
 
 std::string SettingsManager::getPsnAccessToken() const {
-    return globalPsnAccessToken;
+    const Account* a = getDefaultAccount();
+    return a ? a->accessToken : "";
 }
 
 void SettingsManager::setPsnAccessToken(const std::string& token) {
-    globalPsnAccessToken = token;
+    ensureDefaultAccount().accessToken = token;
 }
 
 int64_t SettingsManager::getPsnTokenExpiresAt() const {
-    return globalPsnTokenExpiresAt;
+    const Account* a = getDefaultAccount();
+    return a ? a->tokenExpiresAt : 0;
 }
 
 void SettingsManager::setPsnTokenExpiresAt(int64_t expiresAt) {
-    globalPsnTokenExpiresAt = expiresAt;
+    ensureDefaultAccount().tokenExpiresAt = expiresAt;
 }
 
 void SettingsManager::clearPsnTokenData() {
-    globalPsnAccessToken.clear();
-    globalPsnRefreshToken.clear();
-    globalPsnTokenExpiresAt = 0;
+    if (Account* a = getDefaultAccount()) {
+        a->accessToken.clear();
+        a->refreshToken.clear();
+        a->tokenExpiresAt = 0;
+        a->duid.clear();
+    }
     brls::Logger::info("PSN token data cleared");
 }
 
 std::string SettingsManager::getGlobalDuid() const {
-    return globalDuid;
+    const Account* a = getDefaultAccount();
+    return a ? a->duid : "";
 }
 
 void SettingsManager::setGlobalDuid(const std::string& duid) {
-    globalDuid = duid;
+    ensureDefaultAccount().duid = duid;
+}
+
+std::vector<Account>& SettingsManager::getAccounts() {
+    return accounts;
+}
+
+Account* SettingsManager::findAccount(const std::string& accountId) {
+    if (accountId.empty()) return nullptr;
+    for (auto& a : accounts) {
+        if (a.accountId == accountId) return &a;
+    }
+    return nullptr;
+}
+
+Account* SettingsManager::getAccountForHost(Host* host) {
+    if (host) {
+        if (host->isRemote() && !host->getRemoteAccountId().empty()) {
+            if (Account* a = findAccount(host->getRemoteAccountId())) return a;
+        }
+        std::string aid = getPsnAccountId(host);
+        if (Account* a = findAccount(aid)) return a;
+    }
+    return getDefaultAccount();
+}
+
+bool SettingsManager::hasAnyRemoteAccount() const {
+    for (const auto& a : accounts) {
+        if (!a.refreshToken.empty()) return true;
+    }
+    return false;
+}
+
+void SettingsManager::upsertAccount(const Account& account) {
+    Account* existing = account.accountId.empty() ? nullptr : findAccount(account.accountId);
+    if (existing) {
+        *existing = account;
+    } else {
+        accounts.push_back(account);
+    }
+}
+
+void SettingsManager::removeAccount(const std::string& accountId) {
+    accounts.erase(std::remove_if(accounts.begin(), accounts.end(),
+        [&](const Account& a) { return a.accountId == accountId; }), accounts.end());
+    if (defaultAccountId == accountId) {
+        defaultAccountId = accounts.empty() ? "" : accounts.front().accountId;
+    }
+
+    std::vector<std::string> hostsToRemove;
+    for (auto& [name, host] : hosts) {
+        if (!host) continue;
+
+        if (host->getRemoteAccountId() == accountId) {
+            if (host->isRemote()) {
+                hostsToRemove.push_back(name);
+                continue;
+            }
+            host->setRemoteAccountId("");
+        }
+
+        int active = host->activeProfile;
+        if (active >= 0 && active < static_cast<int>(host->profiles.size()) &&
+            host->profiles[active].psnAccountId == accountId) {
+            int replacement = -1;
+            for (size_t i = 0; i < host->profiles.size(); i++) {
+                const auto& p = host->profiles[i];
+                if (p.hasRpKey && !p.psnAccountId.empty() && findAccount(p.psnAccountId)) {
+                    replacement = static_cast<int>(i);
+                    break;
+                }
+            }
+            host->activeProfile = replacement;
+            host->applyActiveProfile();
+        }
+    }
+    for (const auto& name : hostsToRemove) {
+        hosts.erase(name);
+    }
+}
+
+std::string SettingsManager::getDefaultAccountId() const {
+    return defaultAccountId;
+}
+
+void SettingsManager::setDefaultAccountId(const std::string& accountId) {
+    defaultAccountId = accountId;
+}
+
+const Account* SettingsManager::getDefaultAccount() const {
+    if (accounts.empty()) return nullptr;
+    if (!defaultAccountId.empty()) {
+        for (const auto& a : accounts) {
+            if (a.accountId == defaultAccountId) return &a;
+        }
+    }
+    return &accounts.front();
+}
+
+Account* SettingsManager::getDefaultAccount() {
+    return const_cast<Account*>(std::as_const(*this).getDefaultAccount());
+}
+
+Account& SettingsManager::ensureDefaultAccount() {
+    if (Account* a = getDefaultAccount()) return *a;
+    accounts.emplace_back();
+    return accounts.back();
+}
+
+void SettingsManager::migrateConfigToMultiAccount() {
+    for (auto& [name, host] : hosts) {
+        if (!host) continue;
+
+        if (!host->profiles.empty()) {
+            for (const auto& p : host->profiles) {
+                if (!p.psnAccountId.empty() && !findAccount(p.psnAccountId)) {
+                    Account a;
+                    a.accountId = p.psnAccountId;
+                    a.onlineId = p.psnOnlineId;
+                    accounts.push_back(a);
+                }
+            }
+            continue;
+        }
+
+        bool hasFlat = host->rpKeyData || !host->psnAccountId.empty() || !host->psnOnlineId.empty();
+        if (!hasFlat) continue;
+
+        legacyConfigDetected = true;
+
+        HostProfile p;
+        p.psnAccountId = host->psnAccountId;
+        p.psnOnlineId = host->psnOnlineId;
+        p.consolePIN = host->consolePIN;
+        memcpy(p.rpRegistKey, host->rpRegistKey, sizeof(p.rpRegistKey));
+        p.rpKeyType = host->rpKeyType;
+        memcpy(p.rpKey, host->rpKey, sizeof(p.rpKey));
+        p.hasRpKey = host->rpKeyData;
+        host->profiles.push_back(p);
+        host->activeProfile = 0;
+        host->applyActiveProfile();
+
+        if (!p.psnAccountId.empty() && !findAccount(p.psnAccountId)) {
+            Account a;
+            a.accountId = p.psnAccountId;
+            a.onlineId = p.psnOnlineId;
+            accounts.push_back(a);
+        }
+    }
 }
 
 bool SettingsManager::getHolepunchRetry() const {
