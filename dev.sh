@@ -15,6 +15,13 @@ print_status() { echo -e "${GREEN}[*]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[!]${NC} $1"; }
 print_error() { echo -e "${RED}[x]${NC} $1"; }
 
+# Cross-platform sed -i (BSD on macOS requires empty-string arg, GNU on Linux does not)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed_inplace() { sed -i '' "$@"; }
+else
+    sed_inplace() { sed -i "$@"; }
+fi
+
 # Get Switch IP from argument or environment
 SWITCH_IP="${1:-$SWITCH_IP}"
 
@@ -128,12 +135,12 @@ DEV_TIMESTAMP=$(date +%d%m%y-%H%M%S)
 DEV_REVISION="${ORIGINAL_REVISION}-dev-${DEV_TIMESTAMP}"
 
 cleanup_version() {
-    sed -i "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
+    sed_inplace "s/set(VERSION_REVISION \".*\")/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
 }
 trap cleanup_version EXIT
 
 print_status "Setting dev version: ${DEV_REVISION}"
-sed -i "s/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/set(VERSION_REVISION \"${DEV_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
+sed_inplace "s/set(VERSION_REVISION \"${ORIGINAL_REVISION}\")/set(VERSION_REVISION \"${DEV_REVISION}\")/" "${SCRIPT_DIR}/CMakeLists.txt"
 
 docker run --rm \
     -v "${SCRIPT_DIR}:/build" \
