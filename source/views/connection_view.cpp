@@ -1,6 +1,8 @@
 #include "views/connection_view.hpp"
 #include "views/stream_view.hpp"
 #include <format>
+#include <thread>
+#include <chrono>
 #include "core/discovery_manager.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
@@ -230,7 +232,22 @@ void* ConnectionView::connectionThreadFunc(void* user)
             return nullptr;
         }
 
-        brls::Logger::info("CTRL holepunch successful! Transitioning to StreamView...");
+        brls::Logger::info("CTRL holepunch successful! Waiting for PS5 to be ready...");
+
+        // When PS5 wakes from rest mode it shows "press PS button" and needs time
+        // before it can accept the DATA holepunch channel. Without this wait the
+        // DATA holepunch times out (~15 s) and the session never establishes.
+        static constexpr int WAKEUP_WAIT_SECONDS = 20;
+        for (int i = WAKEUP_WAIT_SECONDS; i > 0; i--)
+        {
+            if (auto view = weak.lock()) {
+                if (!view->connectionRunning) break; // cancelled
+            } else break;
+            brls::Logger::info("PS5 waking up... {} seconds remaining", i);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+
+        brls::Logger::info("Wait complete, transitioning to StreamView...");
 
         if (auto view = weak.lock()) {
             view->connectionSuccess = true;
