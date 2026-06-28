@@ -225,6 +225,7 @@ void StreamView::stopStream()
     brls::Application::forceUnblockInputs();
     brls::Application::setRenderSuspended(false);
     brls::Application::setSuspendedRenderCallback(nullptr);
+    brls::Application::setLimitedFPS(0);
     brls::Application::setSwapInterval(1);
     brls::Application::setExclusiveRender(false);
     videoPipelineActive = false;
@@ -319,6 +320,7 @@ void StreamView::prepareVideoPipelineTick()
         if (auto self = weak.lock())
             self->streamingTick();
     });
+    brls::Application::setLimitedFPS(60);
     brls::Application::setSwapInterval(0);
     brls::Application::setExclusiveRender(true);
 }
@@ -353,6 +355,7 @@ void StreamView::streamingTick()
         brls::Application::setExclusiveRender(false);
         brls::Application::setRenderSuspended(false);
         brls::Application::setSuspendedRenderCallback(nullptr);
+        brls::Application::setLimitedFPS(0);
         videoPipelineActive = false;
         intentionalDisconnect = true;
         brls::sync([this]() {
