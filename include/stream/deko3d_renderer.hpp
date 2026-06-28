@@ -32,6 +32,7 @@ public:
                    ChiakiLog* log) override;
     bool isInitialized() const override { return m_initialized; }
     void draw(AVFrame* frame) override;
+    void presentFrame(AVFrame* frame) override;
     void cleanup() override;
     void waitIdle() override;
 
@@ -197,7 +198,7 @@ private:
     int m_frame_ring_index = 0;
     AVFrame* m_current_frame = nullptr;
 
-    void renderVideo(AVFrame* frame);
+    void renderVideo();
 
     void registerCallback();
     void unregisterCallback();

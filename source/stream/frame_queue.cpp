@@ -83,7 +83,17 @@ void FrameQueue::push(AVFrame* frame)
     m_ring[tail] = frame;
     m_count++;
 
-    auto now = std::chrono::steady_clock::now();
+    recordDecodedFrameLocked(std::chrono::steady_clock::now());
+}
+
+void FrameQueue::recordDecodedFrame()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    recordDecodedFrameLocked(std::chrono::steady_clock::now());
+}
+
+void FrameQueue::recordDecodedFrameLocked(std::chrono::steady_clock::time_point now)
+{
     if (!m_fps_initialized)
     {
         m_fps_start_time = now;

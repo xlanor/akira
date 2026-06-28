@@ -227,7 +227,6 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
     brls::Logger::info("Deko3dRenderer: shaders and vertex buffer initialized");
 
     initTextRendering();
-    registerCallback();
 
     m_initialized = true;
     return true;
@@ -686,7 +685,20 @@ void Deko3dRenderer::draw(AVFrame* frame)
     m_frame_bound = true;
 }
 
-void Deko3dRenderer::renderVideo(AVFrame* frame)
+void Deko3dRenderer::presentFrame(AVFrame* frame)
+{
+    draw(frame);
+
+    if (!m_frame_bound || m_paused)
+        return;
+
+    VideoContext* videoContext = brls::Application::getPlatform()->getVideoContext();
+    videoContext->beginFrame();
+    renderVideo();
+    videoContext->endFrame();
+}
+
+void Deko3dRenderer::renderVideo()
 {
     if (!m_initialized || !m_textures_initialized || !m_frame_bound || !m_current_frame)
         return;
@@ -801,7 +813,7 @@ void Deko3dRenderer::registerCallback()
 
         if (m_frame_bound && !m_paused)
         {
-            renderVideo(nullptr);
+            renderVideo();
         }
     });
 

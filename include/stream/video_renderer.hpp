@@ -24,6 +24,8 @@ public:
 
     virtual void draw(AVFrame* frame) = 0;
 
+    virtual void presentFrame(AVFrame* frame) { draw(frame); }
+
     virtual void cleanup() = 0;
 
     virtual void waitIdle() {}

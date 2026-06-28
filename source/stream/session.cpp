@@ -138,15 +138,24 @@ bool Session::InitVideo(int video_width, int video_height)
         return false;
     }
 
+    m_video_decoder->setFrameReadyCallback([this](AVFrame* frame) {
+        presentDecodedFrame(frame);
+        av_frame_free(&frame);
+    });
+
     return true;
 }
 
 bool Session::FreeVideo()
 {
+    this->quit = true;
+
+    if (m_video_decoder)
+        m_video_decoder->setFrameReadyCallback(nullptr);
+
     if (m_ipc_service)
         m_ipc_service->SetStreamActive(false);
 
-    this->quit = true;
     m_first_frame_received = false;
     SettingsManager::getInstance()->setStreamingActive(false);
 
@@ -236,34 +245,6 @@ bool Session::MainLoop()
 {
     if (m_video_renderer && m_video_renderer->isInitialized() && m_video_decoder)
     {
-        FrameQueue* queue = m_video_decoder->getFrameQueue();
-        if (queue && queue->hasFrames())
-        {
-            queue->get([this](AVFrame* frame) {
-                if (frame && frame->data[0])
-                {
-                    if (!m_first_frame_received)
-                    {
-                        m_first_frame_received = true;
-                        updateActualResolution(frame->width, frame->height);
-                        SettingsManager::getInstance()->setStreamingActive(true);
-                        brls::Logger::info("First video frame received!");
-
-                        if (SettingsManager::getInstance()->getIpcStatsEnabled())
-                        {
-                            if (!m_ipc_service)
-                            {
-                                m_ipc_service = std::make_unique<IpcStatsService>(this);
-                                m_ipc_service->Start();
-                            }
-                            m_ipc_service->SetStreamActive(true);
-                        }
-                    }
-                    m_video_renderer->draw(frame);
-                }
-            });
-        }
-
         m_video_renderer->setShowStatsOverlay(m_show_stats_overlay);
         if (m_show_stats_overlay)
         {
@@ -272,6 +253,33 @@ bool Session::MainLoop()
     }
 
     return !this->quit;
+}
+
+void Session::presentDecodedFrame(AVFrame* frame)
+{
+    if (!frame || !frame->data[0] || !m_video_renderer)
+        return;
+
+    if (!m_first_frame_received)
+    {
+        m_first_frame_received = true;
+        brls::Application::setRenderSuspended(true);
+        updateActualResolution(frame->width, frame->height);
+        SettingsManager::getInstance()->setStreamingActive(true);
+        brls::Logger::info("First video frame received!");
+
+        if (SettingsManager::getInstance()->getIpcStatsEnabled())
+        {
+            if (!m_ipc_service)
+            {
+                m_ipc_service = std::make_unique<IpcStatsService>(this);
+                m_ipc_service->Start();
+            }
+            m_ipc_service->SetStreamActive(true);
+        }
+    }
+
+    m_video_renderer->presentFrame(frame);
 }
 
 StreamStats Session::getStreamStats()

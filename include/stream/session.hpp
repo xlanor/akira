@@ -21,6 +21,7 @@ class InputManager;
 class VideoDecoder;
 class IVideoRenderer;
 class IpcStatsService;
+typedef struct AVFrame AVFrame;
 
 class Session
 {
@@ -40,7 +41,7 @@ private:
 
     bool m_show_stats_overlay = false;
 
-    bool m_first_frame_received = false;
+    std::atomic<bool> m_first_frame_received = false;
 
     int m_requested_width = 0;
     int m_requested_height = 0;
@@ -52,6 +53,8 @@ private:
     std::chrono::steady_clock::time_point m_stream_start_time;
     std::atomic<size_t> m_network_frames_lost = 0;
     std::atomic<size_t> m_frames_recovered = 0;
+
+    void presentDecodedFrame(AVFrame* frame);
 
 public:
     Session(const Session&) = delete;

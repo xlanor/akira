@@ -25,6 +25,7 @@ public:
     void setLimit(size_t limit);
 
     void push(AVFrame* frame);
+    void recordDecodedFrame();
 
     AVFrame* pop();
 
@@ -54,6 +55,8 @@ private:
     uint64_t m_frames_this_second = 0;
     float m_current_fps = 0.0f;
     bool m_fps_initialized = false;
+
+    void recordDecodedFrameLocked(std::chrono::steady_clock::time_point now);
 };
 
 #endif // AKIRA_IO_FRAME_QUEUE_HPP

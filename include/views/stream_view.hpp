@@ -42,6 +42,7 @@ private:
     static constexpr int MAX_WAKE_RETRIES = 4;
 
     bool menuOpen = false;
+    bool videoPipelineActive = false;
     bool intentionalDisconnect = false;
     bool reconnecting = false;
     uint32_t sessionGeneration = 0;
@@ -62,6 +63,9 @@ private:
     void onLoginPinRequest(bool pinIncorrect);
 
     void checkMenuTrigger();
+    void prepareVideoPipelineTick();
+    void activateVideoPipeline();
+    void streamingTick();
     void showDisconnectMenu();
     void disconnectWithSleep(bool sleep);
     void retryWithWake();

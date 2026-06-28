@@ -167,7 +167,15 @@ bool VideoDecoder::decode(uint8_t* buf, size_t buf_size)
                 }
 
                 av_frame_move_ref(queued_frame, m_tmp_frame);
-                m_frame_queue.push(queued_frame);
+                if (m_frame_ready_callback)
+                {
+                    m_frame_queue.recordDecodedFrame();
+                    m_frame_ready_callback(queued_frame);
+                }
+                else
+                {
+                    m_frame_queue.push(queued_frame);
+                }
                 continue;
             }
 
