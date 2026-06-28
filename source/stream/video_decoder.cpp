@@ -52,8 +52,9 @@ bool VideoDecoder::initCodec(bool is_PS5, int width, int height)
         m_codec_context->skip_loop_filter = AVDISCARD_ALL;
         m_codec_context->flags |= AV_CODEC_FLAG_LOW_DELAY;
         m_codec_context->flags2 |= AV_CODEC_FLAG2_FAST;
-        m_codec_context->thread_type = FF_THREAD_FRAME;
+        m_codec_context->thread_type = FF_THREAD_SLICE;
         m_codec_context->thread_count = 1;
+        m_codec_context->has_b_frames = 0;
 #ifdef BOREALIS_USE_DEKO3D
         // Create HW device context BEFORE opening codec 
 	brls::Logger::info("VideoDecoder: Creating NVTegra hardware device context...");
