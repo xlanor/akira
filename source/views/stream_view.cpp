@@ -309,6 +309,7 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
             checkMenuTrigger();
             if (menuOpen)
             {
+                brls::Application::setSwapInterval(1);
                 brls::Application::setExclusiveRender(false);
                 session->getVideoRenderer()->setTickCallback(nullptr);
                 return false;
@@ -318,6 +319,7 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
 
             if (!session->MainLoop())
             {
+                brls::Application::setSwapInterval(1);
                 brls::Application::setExclusiveRender(false);
                 session->getVideoRenderer()->setTickCallback(nullptr);
                 intentionalDisconnect = true;
@@ -329,6 +331,7 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
             }
             return true;
         });
+        brls::Application::setSwapInterval(0);
         brls::Application::setExclusiveRender(true);
     }
 }
