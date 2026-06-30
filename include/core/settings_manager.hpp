@@ -82,7 +82,6 @@ private:
     float packetLossMax = 0.05f;
     bool enableFileLogging = false;
     bool enableThreadAffinity = false;
-    bool lowLatencyMode = false;
     std::string debugLocale;
 
     // Picture adjustments
@@ -278,9 +277,6 @@ public:
 
     bool getEnableThreadAffinity() const;
     void setEnableThreadAffinity(bool enabled);
-
-    bool getLowLatencyMode() const;
-    void setLowLatencyMode(bool enabled);
 
     bool getEnableDithering() const;
     void setEnableDithering(bool enabled);

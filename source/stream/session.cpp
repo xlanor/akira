@@ -301,7 +301,6 @@ StreamStats Session::getStreamStats()
         stats.video_height = m_video_decoder->getVideoHeight();
         stats.is_hevc = m_video_decoder->isHEVC();
         stats.is_hardware_decoder = m_video_decoder->isHardwareAccelerated();
-        stats.low_latency_mode = SettingsManager::getInstance()->getLowLatencyMode();
     }
 
     stats.renderer_name = "Deko3d";

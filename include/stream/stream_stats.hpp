@@ -22,7 +22,6 @@ struct StreamStats
 
     // Frame stats
     float fps = 0.0f;
-    bool low_latency_mode = false;
 
     int video_width = 0;
     int video_height = 0;

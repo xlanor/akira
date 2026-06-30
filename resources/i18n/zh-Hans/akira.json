@@ -288,8 +288,6 @@
         "probe_socket_count_desc": "用于 NAT 探测的本地 socket 数量（最多 250）",
         "auto_reconnect": "自动重连",
         "auto_reconnect_desc": "从休眠恢复或返回主菜单时自动重新连接上次会话",
-        "low_latency_mode": "低延迟模式",
-        "low_latency_mode_desc": "仅保留最新解码帧以减少排队延迟。在高负载下可能增加丢帧或可见卡顿。",
         "run_benchmark": "运行 GHASH 基准测试",
         "benchmark_desc": "比较 TABLE 与 PMULL 性能",
         "power_user_unlocked": "高级用户菜单已解锁！",

@@ -135,7 +135,6 @@ Result IpcStatsService::ServiceHandler(void* userdata, const IpcServerRequest* r
             out->is_hevc = stats.is_hevc ? 1 : 0;
 
             out->fps = stats.fps;
-            out->low_latency_mode = stats.low_latency_mode ? 1 : 0;
 
             out->packet_loss_percent = stats.packet_loss_percent;
             out->packets_received = stats.packets_received;

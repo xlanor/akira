@@ -288,8 +288,6 @@
         "probe_socket_count_desc": "Number of local sockets to open for NAT probing (max 250)",
         "auto_reconnect": "Auto Reconnect",
         "auto_reconnect_desc": "Automatically reconnect to the last session when resuming from sleep or returning from the home menu",
-        "low_latency_mode": "Low Latency Mode",
-        "low_latency_mode_desc": "Keep only the newest decoded frame to reduce queueing delay. May increase dropped frames or visible stutter under load.",
         "run_benchmark": "Run GHASH Benchmark",
         "benchmark_desc": "Compares TABLE vs PMULL performance",
         "power_user_unlocked": "Power User Menu unlocked!",

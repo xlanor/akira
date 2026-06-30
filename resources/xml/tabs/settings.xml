@@ -321,20 +321,6 @@
                 marginTop="5"
                 marginBottom="10"/>
 
-            <brls:BooleanCell
-                id="settings/lowLatencyMode"
-                title="@i18n/akira/settings/low_latency_mode"
-                marginLeft="15"
-                marginRight="15"/>
-
-            <brls:Label
-                text="@i18n/akira/settings/low_latency_mode_desc"
-                fontSize="14"
-                textColor="#666666"
-                marginLeft="15"
-                marginTop="5"
-                marginBottom="10"/>
-
             <brls:Button
                 id="settings/runBenchmark"
                 text="@i18n/akira/settings/run_benchmark"

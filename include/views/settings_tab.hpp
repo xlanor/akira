@@ -67,7 +67,6 @@ private:
     BRLS_BIND(brls::Box, powerUserSection, "settings/powerUserSection");
     BRLS_BIND(brls::BooleanCell, unlockBitrateMaxToggle, "settings/unlockBitrateMax");
     BRLS_BIND(brls::BooleanCell, ipcStatsToggle, "settings/ipcStats");
-    BRLS_BIND(brls::BooleanCell, lowLatencyModeToggle, "settings/lowLatencyMode");
     BRLS_BIND(brls::BooleanCell, portGuessingToggle, "settings/portGuessing");
     BRLS_BIND(brls::SliderCell, portGuessingCountSlider, "settings/portGuessingCount");
     BRLS_BIND(brls::SliderCell, portGuessingSocksSlider, "settings/portGuessingSocks");
@@ -108,7 +107,6 @@ private:
     void initRcasEnabledToggle();
     void initRcasSharpnessSlider();
     void initEnableThreadAffinityToggle();
-    void initLowLatencyModeToggle();
     void initHolepunchRetryToggle();
     void initRequestIdrOnFecFailureToggle();
     void initPacketLossMaxSlider();

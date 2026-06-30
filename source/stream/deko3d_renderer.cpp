@@ -1193,11 +1193,6 @@ void Deko3dRenderer::renderStatsOverlay()
         m_stats.is_hevc ? "HEVC" : "H.264",
         m_stats.is_hardware_decoder ? "NVTEGRA" : "SW");
 
-    if (m_stats.low_latency_mode)
-    {
-        renderedSection += "Mode: Low Latency\n";
-    }
-
     std::string statsText = std::format(
         "=== Requested ===\n"
         "{}x{} @ {}fps\n"

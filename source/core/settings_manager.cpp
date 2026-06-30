@@ -254,6 +254,7 @@ void SettingsManager::removeLegacyConfig() {
         "video_fps",
         "video_bitrate",
         "power_user_mode",
+        "low_latency_mode",
     };
 
     std::string content;
@@ -354,8 +355,6 @@ void SettingsManager::parseTomlFile() {
             enableFileLogging = *val;
         if (auto val = config["enable_thread_affinity"].value<bool>())
             enableThreadAffinity = *val;
-        if (auto val = config["low_latency_mode"].value<bool>())
-            lowLatencyMode = *val;
         if (auto val = config["debug_locale"].value<std::string>())
             debugLocale = *val;
         if (auto val = config["local_fsr_enabled"].value<bool>())
@@ -765,8 +764,6 @@ int SettingsManager::writeFile() {
         config.insert("rcas_sharpness", static_cast<double>(rcasSharpness));
     if (enableThreadAffinity)
         config.insert("enable_thread_affinity", enableThreadAffinity);
-    if (lowLatencyMode)
-        config.insert("low_latency_mode", lowLatencyMode);
     if (!debugLocale.empty())
         config.insert("debug_locale", debugLocale);
     if (debugLwipLog)
@@ -1550,14 +1547,6 @@ bool SettingsManager::getEnableThreadAffinity() const {
 
 void SettingsManager::setEnableThreadAffinity(bool enabled) {
     enableThreadAffinity = enabled;
-}
-
-bool SettingsManager::getLowLatencyMode() const {
-    return lowLatencyMode;
-}
-
-void SettingsManager::setLowLatencyMode(bool enabled) {
-    lowLatencyMode = enabled;
 }
 
 bool SettingsManager::getEnableDithering() const {

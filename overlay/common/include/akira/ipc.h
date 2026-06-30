@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define AKIRA_IPC_API_VERSION 2
+#define AKIRA_IPC_API_VERSION 3
 #define AKIRA_IPC_SERVICE_NAME "akira:s"
 #define AKIRA_ERROR_NO_STREAM 0x1A901
 
@@ -27,7 +27,6 @@ typedef struct
     uint8_t is_hevc;
 
     float fps;
-    uint8_t low_latency_mode;
 
     float packet_loss_percent;
     uint64_t packets_received;
