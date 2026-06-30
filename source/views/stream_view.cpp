@@ -565,6 +565,7 @@ void StreamView::showDisconnectMenu()
 {
     brls::Logger::info("showDisconnectMenu: entering");
     menuOpen = true;
+    session->setVideoPaused(true);
     session->CleanUpHaptic();
     brls::Application::forceUnblockInputs();
 

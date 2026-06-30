@@ -696,6 +696,28 @@ void Deko3dRenderer::presentFrame(AVFrame* frame)
     videoContext->beginFrame();
     renderVideo();
     videoContext->endFrame();
+
+    recordPresentedFrame();
+}
+
+void Deko3dRenderer::recordPresentedFrame()
+{
+    auto now = std::chrono::steady_clock::now();
+    if (!m_render_fps_init)
+    {
+        m_render_fps_start = now;
+        m_render_frame_count = 0;
+        m_render_fps_init = true;
+    }
+
+    m_render_frame_count++;
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_render_fps_start).count();
+    if (elapsed >= 1000)
+    {
+        m_render_fps = (m_render_frame_count * 1000.0f) / elapsed;
+        m_render_frame_count = 0;
+        m_render_fps_start = now;
+    }
 }
 
 void Deko3dRenderer::renderVideo()
@@ -1167,7 +1189,7 @@ void Deko3dRenderer::renderStatsOverlay()
         "Decoder: {} ({})\n",
         m_stats.video_width,
         m_stats.video_height,
-        m_stats.fps,
+        m_render_fps,
         m_stats.is_hevc ? "HEVC" : "H.264",
         m_stats.is_hardware_decoder ? "NVTEGRA" : "SW");
 

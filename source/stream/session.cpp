@@ -297,7 +297,7 @@ StreamStats Session::getStreamStats()
         FrameQueue* queue = m_video_decoder->getFrameQueue();
         if (queue)
         {
-            stats.fps = queue->getCurrentFPS();
+            stats.fps = m_video_renderer ? m_video_renderer->getRenderFPS() : queue->getCurrentFPS();
             stats.dropped_frames = queue->getFramesDropped();
             stats.faked_frames = queue->getFakeFrameUsed();
             stats.queue_size = queue->size();

@@ -6,6 +6,7 @@
 #include "stream/video_renderer.hpp"
 
 #include <deko3d.hpp>
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
@@ -38,6 +39,7 @@ public:
 
     void setShowStatsOverlay(bool show) override { m_show_stats = show; }
     void setStreamStats(const StreamStats& stats) override { m_stats = stats; }
+    float getRenderFPS() const override { return m_render_fps; }
     void setPaused(bool paused) { m_paused = paused; }
     void updateResolution(int width, int height) { m_frame_width = width; m_frame_height = height; }
 
@@ -199,6 +201,12 @@ private:
     AVFrame* m_current_frame = nullptr;
 
     void renderVideo();
+    void recordPresentedFrame();
+
+    uint64_t m_render_frame_count = 0;
+    std::chrono::steady_clock::time_point m_render_fps_start;
+    float m_render_fps = 0.0f;
+    bool m_render_fps_init = false;
 
     void registerCallback();
     void unregisterCallback();
