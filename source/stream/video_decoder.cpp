@@ -104,9 +104,6 @@ bool VideoDecoder::initVideo(int video_width, int video_height)
     m_waiting_for_idr = true;
     brls::Logger::info("VideoDecoder: Waiting for IDR frame to start decoding");
 
-    size_t frame_queue_limit = SettingsManager::getInstance()->getLowLatencyMode() ? 1 : 3;
-    m_frame_queue.setLimit(frame_queue_limit);
-
     m_tmp_frame = av_frame_alloc();
     if (!m_tmp_frame)
     {
@@ -169,12 +166,11 @@ bool VideoDecoder::decode(uint8_t* buf, size_t buf_size)
                 av_frame_move_ref(queued_frame, m_tmp_frame);
                 if (m_frame_ready_callback)
                 {
-                    m_frame_queue.recordDecodedFrame();
                     m_frame_ready_callback(queued_frame);
                 }
                 else
                 {
-                    m_frame_queue.push(queued_frame);
+                    av_frame_free(&queued_frame);
                 }
                 continue;
             }
@@ -287,8 +283,6 @@ bool VideoDecoder::scanNALUnits(uint8_t* buf, size_t buf_size)
 
 void VideoDecoder::cleanup()
 {
-    m_frame_queue.cleanup();
-
     if (m_tmp_frame)
     {
         av_frame_free(&m_tmp_frame);

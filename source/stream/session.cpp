@@ -292,17 +292,11 @@ StreamStats Session::getStreamStats()
     stats.requested_bitrate = m_requested_bitrate;
     stats.requested_hevc = m_requested_hevc;
 
+    if (m_video_renderer)
+        stats.fps = m_video_renderer->getRenderFPS();
+
     if (m_video_decoder)
     {
-        FrameQueue* queue = m_video_decoder->getFrameQueue();
-        if (queue)
-        {
-            stats.fps = m_video_renderer ? m_video_renderer->getRenderFPS() : queue->getCurrentFPS();
-            stats.dropped_frames = queue->getFramesDropped();
-            stats.faked_frames = queue->getFakeFrameUsed();
-            stats.queue_size = queue->size();
-        }
-
         stats.video_width = m_video_decoder->getVideoWidth();
         stats.video_height = m_video_decoder->getVideoHeight();
         stats.is_hevc = m_video_decoder->isHEVC();

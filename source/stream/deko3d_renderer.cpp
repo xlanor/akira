@@ -1197,15 +1197,6 @@ void Deko3dRenderer::renderStatsOverlay()
     {
         renderedSection += "Mode: Low Latency\n";
     }
-    else
-    {
-        renderedSection += std::format(
-            "Dropped: {}  Faked: {}\n"
-            "Queue: {}\n",
-            m_stats.dropped_frames,
-            m_stats.faked_frames,
-            m_stats.queue_size);
-    }
 
     std::string statsText = std::format(
         "=== Requested ===\n"

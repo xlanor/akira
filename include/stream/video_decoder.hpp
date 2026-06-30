@@ -5,7 +5,6 @@
 #include <functional>
 #include <utility>
 #include <chiaki/log.h>
-#include "stream/frame_queue.hpp"
 
 extern "C"
 {
@@ -43,9 +42,6 @@ public:
     // Cleanup
     void cleanup();
 
-    // Get frame queue for renderer access
-    FrameQueue* getFrameQueue() { return &m_frame_queue; }
-
     int getVideoWidth() const { return m_video_width; }
     int getVideoHeight() const { return m_video_height; }
     void updateResolution(int width, int height) { m_video_width = width; m_video_height = height; }
@@ -60,7 +56,6 @@ private:
     AVBufferRef* m_hw_device_ctx = nullptr;
     AVFrame* m_tmp_frame = nullptr;
 
-    FrameQueue m_frame_queue;
     FrameReadyCallback m_frame_ready_callback;
 
     int m_video_width = 0;

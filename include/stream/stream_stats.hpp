@@ -22,9 +22,6 @@ struct StreamStats
 
     // Frame stats
     float fps = 0.0f;
-    size_t dropped_frames = 0;
-    size_t faked_frames = 0;
-    size_t queue_size = 0;
     bool low_latency_mode = false;
 
     int video_width = 0;
