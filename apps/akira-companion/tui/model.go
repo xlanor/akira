@@ -35,9 +35,18 @@ type Model struct {
 }
 
 func NewModel(s *state.AppState) Model {
+	currentStep := StepDUID
+	if s.GetDUID() != "" {
+		currentStep = StepLogin
+		tokenInfo := s.GetTokenInfo()
+		if tokenInfo.HasAccessToken && !tokenInfo.IsExpired {
+			currentStep = StepServer
+		}
+	}
+
 	return Model{
 		state:       s,
-		currentStep: StepDUID,
+		currentStep: currentStep,
 		duidModel:   NewDUIDModel(s),
 		loginModel:  NewLoginModel(s),
 		serverModel: NewServerModel(s),
@@ -55,13 +64,6 @@ func detectNAT() tea.Msg {
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.state.GetDUID() != "" {
-		m.currentStep = StepLogin
-		tokenInfo := m.state.GetTokenInfo()
-		if tokenInfo.HasAccessToken && !tokenInfo.IsExpired {
-			m.currentStep = StepServer
-		}
-	}
 	return tea.Batch(m.currentStepInit(), detectNAT)
 }
 
