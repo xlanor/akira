@@ -120,7 +120,6 @@ private:
 
     void parseTomlFile();
     void parseLegacyFile();
-    void removeLegacyConfig();
     static size_t getB64EncodeSize(size_t inputSize);
     static bool fileExists(const char* path);
 
