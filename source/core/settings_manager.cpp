@@ -252,8 +252,16 @@ void SettingsManager::parseTomlFile() {
     try {
         auto config = toml::parse_file(TOML_CONFIG_FILE);
 
-        const bool configMigrated =
-            chiaki_migrations::buildSettingsMigrator().migrate(config).changed();
+        // Best-effort: on failure (e.g. newer config version) load fields as-is
+        // and skip the rewrite rather than aborting startup.
+        bool configMigrated = false;
+        try {
+            configMigrated =
+                chiaki_migrations::buildSettingsMigrator().migrate(config).changed();
+        } catch (const tomlmigrate::MigrationError& err) {
+            brls::Logger::error(
+                "Config migration skipped, loading fields as-is: {}", err.what());
+        }
 
         if (auto val = config["local_video_resolution"].value<std::string>())
             localVideoResolution = stringToResolution(*val);
@@ -461,6 +469,8 @@ void SettingsManager::parseTomlFile() {
         }
     } catch (const toml::parse_error& err) {
         brls::Logger::error("Failed to parse TOML config: {}", err.what());
+    } catch (const std::exception& err) {
+        brls::Logger::error("Failed to load TOML config: {}", err.what());
     }
 }
 
