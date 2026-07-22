@@ -1,6 +1,7 @@
 #include "core/settings_manager.hpp"
 #include "core/swipe_direction.hpp"
 #include "core/host.hpp"
+#include "core/migrations/registry.hpp"
 
 #include <borealis.hpp>
 #include <format>
@@ -236,7 +237,6 @@ Host* SettingsManager::findHostByDuid(const std::string& duid) {
 void SettingsManager::parseFile() {
     if (fileExists(TOML_CONFIG_FILE)) {
         parseTomlFile();
-        removeLegacyConfig();
     } else if (fileExists(LEGACY_CONFIG_FILE)) {
         brls::Logger::info("Migrating from legacy config format");
         parseLegacyFile();
@@ -246,61 +246,33 @@ void SettingsManager::parseFile() {
     }
 }
 
-void SettingsManager::removeLegacyConfig() {
-    static const std::vector<std::string> legacyKeys = {
-        "invert_ab",
-        "enable_experimental_crypto",
-        "video_resolution",
-        "video_fps",
-        "video_bitrate",
-        "power_user_mode",
-        "low_latency_mode",
-    };
-
-    std::string content;
-    {
-        std::ifstream f(TOML_CONFIG_FILE);
-        if (!f) return;
-        content.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
-    }
-
-    bool needsRewrite = false;
-    for (const auto& key : legacyKeys) {
-        if (content.find(key) != std::string::npos) {
-            brls::Logger::info("Removing legacy config key: {}", key);
-            needsRewrite = true;
-        }
-    }
-
-    if (needsRewrite) {
-        writeFile();
-    }
-}
-
 void SettingsManager::parseTomlFile() {
     brls::Logger::info("Parsing TOML config file: {}", TOML_CONFIG_FILE);
 
     try {
         auto config = toml::parse_file(TOML_CONFIG_FILE);
 
+        // Best-effort: on failure (e.g. newer config version) load fields as-is
+        // and skip the rewrite rather than aborting startup.
+        bool configMigrated = false;
+        try {
+            configMigrated =
+                chiaki_migrations::buildSettingsMigrator().migrate(config).changed();
+        } catch (const tomlmigrate::MigrationError& err) {
+            brls::Logger::error(
+                "Config migration skipped, loading fields as-is: {}", err.what());
+        }
+
         if (auto val = config["local_video_resolution"].value<std::string>())
-            localVideoResolution = stringToResolution(*val);
-        else if (auto val = config["video_resolution"].value<std::string>())
             localVideoResolution = stringToResolution(*val);
 
         if (auto val = config["remote_video_resolution"].value<std::string>())
             remoteVideoResolution = stringToResolution(*val);
-        else if (auto val = config["video_resolution"].value<std::string>())
-            remoteVideoResolution = stringToResolution(*val);
 
         if (auto val = config["local_video_fps"].value<int64_t>())
             localVideoFPS = stringToFps(std::to_string(*val));
-        else if (auto val = config["video_fps"].value<int64_t>())
-            localVideoFPS = stringToFps(std::to_string(*val));
 
         if (auto val = config["remote_video_fps"].value<int64_t>())
-            remoteVideoFPS = stringToFps(std::to_string(*val));
-        else if (auto val = config["video_fps"].value<int64_t>())
             remoteVideoFPS = stringToFps(std::to_string(*val));
         if (auto val = config["haptic"].value<int64_t>())
             globalHaptic = static_cast<HapticPreset>(*val);
@@ -337,8 +309,6 @@ void SettingsManager::parseTomlFile() {
             portGuessingSocks = static_cast<int>(*val);
         if (auto val = config["power_user_menu_unlocked"].value<bool>())
             powerUserMenuUnlocked = *val;
-        else if (auto val = config["power_user_mode"].value<bool>())
-            powerUserMenuUnlocked = *val;
         if (auto val = config["ipc_stats_enabled"].value<bool>())
             ipcStatsEnabled = *val;
         if (auto val = config["unlock_bitrate_max"].value<bool>())
@@ -363,27 +333,9 @@ void SettingsManager::parseTomlFile() {
             remoteFsrEnabled = *val;
         if (auto val = config["vpn_fsr_enabled"].value<bool>())
             vpnFsrEnabled = *val;
-        if (!config["local_fsr_enabled"].value<bool>() &&
-            !config["remote_fsr_enabled"].value<bool>() &&
-            !config["vpn_fsr_enabled"].value<bool>()) {
-            bool legacyEasu = false;
-            if (auto val = config["easu_enabled"].value<bool>())
-                legacyEasu = *val;
-            else if (auto val = config["fsr_enabled"].value<bool>())
-                legacyEasu = *val;
-            if (legacyEasu) {
-                localFsrEnabled = true;
-                remoteFsrEnabled = true;
-                vpnFsrEnabled = true;
-            }
-        }
         if (auto val = config["rcas_enabled"].value<bool>())
             rcasEnabled = *val;
-        else if (auto val = config["fsr_enabled"].value<bool>())
-            rcasEnabled = *val;
         if (auto val = config["rcas_sharpness"].value<double>())
-            rcasSharpness = static_cast<float>(*val);
-        else if (auto val = config["fsr_sharpness"].value<double>())
             rcasSharpness = static_cast<float>(*val);
         if (auto val = config["debug_lwip_log"].value<bool>())
             debugLwipLog = *val;
@@ -411,14 +363,10 @@ void SettingsManager::parseTomlFile() {
             companionPort = static_cast<int>(*val);
         if (auto val = config["local_video_bitrate"].value<int64_t>())
             localVideoBitrate = static_cast<int>(*val);
-        else if (auto val = config["video_bitrate"].value<int64_t>())
-            localVideoBitrate = static_cast<int>(*val);
         else
             localVideoBitrate = getDefaultBitrateForResolution(localVideoResolution);
 
         if (auto val = config["remote_video_bitrate"].value<int64_t>())
-            remoteVideoBitrate = static_cast<int>(*val);
-        else if (auto val = config["video_bitrate"].value<int64_t>())
             remoteVideoBitrate = static_cast<int>(*val);
         else
             remoteVideoBitrate = getDefaultBitrateForResolution(remoteVideoResolution);
@@ -474,39 +422,14 @@ void SettingsManager::parseTomlFile() {
 
             auto* table = value.as_table();
 
-            std::string cleanName = hostName;
-            HostType migratedType = HostType::Discovered;
+            HostType hostType = HostType::Discovered;
+            if (auto val = (*table)["host_type"].value<int64_t>())
+                hostType = static_cast<HostType>(*val);
 
-            if (auto val = (*table)["host_type"].value<int64_t>()) {
-                migratedType = static_cast<HostType>(*val);
-            } else {
-                if (hostName.length() > 9 && hostName.substr(hostName.length() - 9) == " (Remote)") {
-                    cleanName = hostName;
-                    migratedType = HostType::Remote;
-                } else if (hostName.rfind("[Manual] ", 0) == 0) {
-                    cleanName = hostName.substr(9);
-                    migratedType = HostType::Manual;
-                } else if (hostName.rfind("[Auto] ", 0) == 0) {
-                    cleanName = hostName.substr(7);
-                    migratedType = HostType::Auto;
-                }
-            }
-
-            if (cleanName != hostName) {
-                if (hosts.find(cleanName) != hosts.end()) {
-                    Host* existing = hosts[cleanName].get();
-                    if (existing->hostType == HostType::Manual && migratedType != HostType::Manual) {
-                        brls::Logger::info("Skipping {} - Manual host {} already exists", hostName, cleanName);
-                        continue;
-                    }
-                }
-                brls::Logger::info("Migrating host '{}' to '{}'", hostName, cleanName);
-            }
-
-            Host* host = getOrCreateHost(cleanName);
+            Host* host = getOrCreateHost(hostName);
             host->inConfig = true;
-            host->hostType = migratedType;
-            host->hostName = cleanName;
+            host->hostType = hostType;
+            host->hostName = hostName;
 
             if (auto val = (*table)["host_addr"].value<std::string>())
                 host->hostAddr = *val;
@@ -539,8 +462,15 @@ void SettingsManager::parseTomlFile() {
         }
 
         brls::Logger::info("Loaded {} host(s) from TOML config", hosts.size());
+
+        if (configMigrated) {
+            brls::Logger::info("Config migrated to current schema, rewriting");
+            writeFile();
+        }
     } catch (const toml::parse_error& err) {
         brls::Logger::error("Failed to parse TOML config: {}", err.what());
+    } catch (const std::exception& err) {
+        brls::Logger::error("Failed to load TOML config: {}", err.what());
     }
 }
 
@@ -709,6 +639,7 @@ int SettingsManager::writeFile() {
 
     toml::table config;
 
+    config.insert("version", chiaki_migrations::buildSettingsMigrator().latest_version());
     config.insert("local_video_resolution", resolutionToString(localVideoResolution));
     config.insert("remote_video_resolution", resolutionToString(remoteVideoResolution));
     config.insert("local_video_fps", fpsToInt(localVideoFPS));
