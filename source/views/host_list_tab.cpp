@@ -4,6 +4,7 @@
 #include "views/enter_pin_view.hpp"
 #include "views/host_settings_view.hpp"
 #include "core/host.hpp"
+#include "psn/auth.hpp"
 #include "stream/session.hpp"
 #include "util/shared_view_holder.hpp"
 
@@ -589,7 +590,7 @@ void HostListTab::initFindRemoteButton() {
             return true;
         }
 
-        auto onComplete = [](const PsnResult& result) {
+        auto onComplete = [](const psn::AuthResult& result) {
             if (!result.success) {
                 brls::Application::notify(brls::getStr("akira/hosts/token_refresh_failed", result.message));
             }
@@ -603,7 +604,7 @@ void HostListTab::initFindRemoteButton() {
             }
         };
 
-        if (discovery->isPsnTokenValid()) {
+        if (psn::Auth::instance().tokenValid()) {
             brls::Application::notify("akira/hosts/finding_remote"_i18n);
         } else {
             brls::Application::notify("akira/hosts/token_expired_refreshing"_i18n);

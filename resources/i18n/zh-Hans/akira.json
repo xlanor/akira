@@ -28,7 +28,7 @@
         "title": "PlayStation 主机",
         "find_remote": "查找远程设备",
         "find_remote_busy": "正在查找...",
-        "find_remote_wait": "等待 {} 秒",
+        "find_remote_wait": "等待 {}",
         "no_consoles": "未找到主机",
         "no_consoles_hint": "请确保您的 PlayStation 与本设备在同一网络中",
         "remote": "远程",
@@ -68,6 +68,10 @@
         "title": "奖杯",
         "loading": "正在加载奖杯...",
         "refresh": "刷新",
+        "force_refresh": "强制刷新 — 会消耗 PSN 请求配额（已用 {}/{}）",
+        "force_refresh_btn": "强制刷新",
+        "force_refresh_busy": "正在刷新...",
+        "force_refresh_wait": "等待 {}",
         "summary_level": "等级 {} · 阶层 {} · 距下一级 {}%",
         "summary_counts": "已获得 {} 个 — {}",
         "empty": "此账号暂无奖杯游戏",
@@ -354,7 +358,7 @@
         "fetch_psn_btn": "从伴侣应用获取 PSN 信息",
         "refresh_token_btn": "刷新令牌",
         "refresh_token_busy": "正在刷新...",
-        "refresh_token_wait": "等待 {} 秒"
+        "refresh_token_wait": "等待 {}"
     },
     "network": {
         "check_nat": "检测 NAT 类型",

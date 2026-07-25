@@ -28,7 +28,7 @@
         "title": "PlayStation Consoles",
         "find_remote": "Find Remote",
         "find_remote_busy": "Searching...",
-        "find_remote_wait": "Wait {}s",
+        "find_remote_wait": "Wait {}",
         "no_consoles": "No consoles found",
         "no_consoles_hint": "Make sure your PlayStation is on the same network",
         "remote": "Remote",
@@ -68,6 +68,10 @@
         "title": "Trophies",
         "loading": "Loading trophies...",
         "refresh": "Refresh",
+        "force_refresh": "Force refreshing — spends PSN requests ({}/{} used)",
+        "force_refresh_btn": "Force Refresh",
+        "force_refresh_busy": "Refreshing...",
+        "force_refresh_wait": "Wait {}",
         "summary_level": "Level {} · Tier {} · {}% to next",
         "summary_counts": "{} earned — {}",
         "empty": "No trophy titles on this account yet",
@@ -354,7 +358,7 @@
         "fetch_psn_btn": "Fetch PSN Credentials from Companion App",
         "refresh_token_btn": "Refresh Token",
         "refresh_token_busy": "Refreshing...",
-        "refresh_token_wait": "Wait {}s"
+        "refresh_token_wait": "Wait {}"
     },
     "network": {
         "check_nat": "Check NAT Type",

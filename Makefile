@@ -9,8 +9,9 @@
 #   make build MUTE_CHIAKI=true          Build with chiaki library logs muted
 #   make crash SWITCH_IP=192.168.x.x     Pull + symbolicate the latest crash report
 #   make crash LOG=path/to/report.log    Symbolicate a crash report already on disk
+#   make test                            Run the host-side unit tests
 
-.PHONY: help build deploy crash rebuild shell clean-libs docker-image submodules
+.PHONY: help build deploy crash test rebuild shell clean-libs docker-image submodules
 
 DOCKER_IMAGE := akira-builder
 NRO_FILE     := $(CURDIR)/build/akira.nro
@@ -18,6 +19,15 @@ ELF_FILE     := build/akira.elf
 FTP_PORT     ?= 5000
 MUTE_CHIAKI  ?= false
 SWITCH_IP    ?=
+
+# The psn package is plain C++ over json-c with no libnx or borealis dependency, so it
+# builds and runs natively. Everything else in the app needs the Switch toolchain.
+TEST_BIN     := $(CURDIR)/build/tests/psn_tests
+TEST_SRC     := $(wildcard $(CURDIR)/tests/*.cpp) \
+                $(CURDIR)/source/psn/models.cpp \
+                $(CURDIR)/source/psn/client.cpp \
+                $(CURDIR)/source/psn/log.cpp
+JSONC_PREFIX ?= $(shell pkg-config --variable=prefix json-c 2>/dev/null || echo /opt/homebrew)
 
 # Colors
 GREEN  := \033[0;32m
@@ -34,6 +44,7 @@ help:
 	@echo "  rebuild      Force full rebuild (clean libs + rebuild docker image)"
 	@echo "  shell        Open shell in build container"
 	@echo "  crash        Symbolicate the latest Switch crash report (SWITCH_IP or LOG)"
+	@echo "  test         Run the host-side unit tests for the psn package"
 	@echo "  clean-libs   Clean library build artifacts"
 	@echo "  help         Show this help"
 	@echo ""
@@ -69,6 +80,20 @@ crash:
 		echo "Requires sys-ftpd running on the Switch."; \
 		exit 1; \
 	fi
+
+test:
+	@if [ ! -f "$(JSONC_PREFIX)/include/json-c/json.h" ]; then \
+		printf "$(RED)[x]$(NC) json-c headers not found under $(JSONC_PREFIX)\n"; \
+		echo "    brew install json-c, or pass JSONC_PREFIX=<prefix>"; \
+		exit 1; \
+	fi
+	@mkdir -p "$(CURDIR)/build/tests"
+	@printf "$(GREEN)[*]$(NC) Building host tests...\n"
+	@c++ -std=c++23 -g -O0 -Wall -Wextra -Wno-unused-parameter \
+		-I"$(CURDIR)/include" -I"$(CURDIR)/tests" -I"$(JSONC_PREFIX)/include" \
+		$(TEST_SRC) -L"$(JSONC_PREFIX)/lib" -ljson-c -o "$(TEST_BIN)"
+	@printf "$(GREEN)[*]$(NC) Running host tests...\n"
+	@"$(TEST_BIN)"
 
 submodules:
 	@if [ ! -f "$(CURDIR)/library/borealis/README.md" ]; then \

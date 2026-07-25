@@ -40,7 +40,7 @@ std::string formatTrophyPlatforms(const std::string& raw)
     return out;
 }
 
-std::string formatTrophyCounts(const TrophyCounts& counts)
+std::string formatTrophyCounts(const psn::TrophyCounts& counts)
 {
     std::string out;
 
@@ -110,7 +110,7 @@ TrophyCardCell::~TrophyCardCell()
     liveCells.erase(this);
 }
 
-void TrophyCardCell::bindTitle(const TrophyTitle& title)
+void TrophyCardCell::bindTitle(const psn::TrophyTitle& title)
 {
     nameLabel->setText(title.trophyTitleName.empty() ? title.npCommunicationId : title.trophyTitleName);
 
@@ -192,7 +192,7 @@ RecyclingGridItem* TrophyCardCell::create()
     return new TrophyCardCell();
 }
 
-TrophyGridDataSource::TrophyGridDataSource(std::vector<TrophyTitle> titles)
+TrophyGridDataSource::TrophyGridDataSource(std::vector<psn::TrophyTitle> titles)
     : titles(std::move(titles))
 {
 }
@@ -228,21 +228,46 @@ TrophyListTab::TrophyListTab()
     grid->registerCell("TrophyCard", TrophyCardCell::create);
     grid->estimatedRowHeight = CARD_ROW_HEIGHT;
 
-    this->registerAction("akira/trophies/refresh"_i18n, brls::ControllerButton::BUTTON_X,
-        [this](brls::View* view) {
-            brls::Logger::info("User triggered force refresh");
-            load(true);
+    forceRefreshGate.attach(
+        forceRefreshBtn,
+        nvgRGBA(92, 157, 255, 255),
+        "akira/trophies/force_refresh_btn"_i18n,
+        "akira/trophies/force_refresh_busy"_i18n,
+        "akira/trophies/force_refresh_wait",
+        [this]() {
+            if (loading)
+                return psn::ActionStatus{psn::ActionState::Busy, 0};
+
+            return TrophyManager::getInstance()->forceRefreshStatus();
+        }
+    );
+
+    forceRefreshBtn->registerClickAction([this](brls::View* view) {
+        if (!forceRefreshGate.isReady())
             return true;
-        });
+
+        brls::Logger::info("User triggered force refresh");
+
+        TrophyManager* manager = TrophyManager::getInstance();
+        PersistedRateLimiter::Status budget = manager->budgetStatus();
+        brls::Application::notify(brls::getStr("akira/trophies/force_refresh",
+            budget.used, budget.limit));
+
+        manager->recordForcedRefresh();
+        load(true);
+        forceRefreshGate.apply();
+
+        return true;
+    });
 
     TrophyManager* trophies = TrophyManager::getInstance();
 
-    trophies->setSummaryObserver([](const TrophySummary& summary) {
+    trophies->setSummaryObserver([](const psn::TrophySummary& summary) {
         if (currentInstance)
             currentInstance->applySummary(summary);
     });
 
-    trophies->setLibraryObserver([](const std::vector<TrophyTitle>& titles) {
+    trophies->setLibraryObserver([](const std::vector<psn::TrophyTitle>& titles) {
         if (currentInstance)
             currentInstance->applyTitles(titles);
     });
@@ -268,11 +293,20 @@ void TrophyListTab::willAppear(bool resetState)
 {
     Box::willAppear(resetState);
 
+    forceRefreshGate.start();
+
     if (!loadRequested)
         load(false);
 }
 
-void TrophyListTab::applySummary(const TrophySummary& summary)
+void TrophyListTab::willDisappear(bool resetState)
+{
+    forceRefreshGate.stop();
+
+    Box::willDisappear(resetState);
+}
+
+void TrophyListTab::applySummary(const psn::TrophySummary& summary)
 {
     summaryTitleLabel->setText(brls::getStr("akira/trophies/summary_level",
         summary.trophyLevel, summary.tier, summary.progress));
@@ -281,12 +315,12 @@ void TrophyListTab::applySummary(const TrophySummary& summary)
         summary.earnedTrophies.total(), formatTrophyCounts(summary.earnedTrophies)));
 }
 
-void TrophyListTab::applyTitles(const std::vector<TrophyTitle>& titles)
+void TrophyListTab::applyTitles(const std::vector<psn::TrophyTitle>& titles)
 {
     this->titles.clear();
     this->titles.reserve(titles.size());
 
-    for (const TrophyTitle& title : titles)
+    for (const psn::TrophyTitle& title : titles)
     {
         if (title.hiddenFlag)
             continue;
@@ -295,7 +329,7 @@ void TrophyListTab::applyTitles(const std::vector<TrophyTitle>& titles)
     }
 
     std::stable_sort(this->titles.begin(), this->titles.end(),
-        [](const TrophyTitle& a, const TrophyTitle& b) {
+        [](const psn::TrophyTitle& a, const psn::TrophyTitle& b) {
             return a.lastUpdatedDateTime > b.lastUpdatedDateTime;
         });
 
@@ -331,26 +365,26 @@ void TrophyListTab::load(bool forceRefresh)
     TrophyManager* trophies = TrophyManager::getInstance();
 
     trophies->fetchSummary(forceRefresh,
-        [](const TrophySummary& summary) {
+        [](const psn::TrophySummary& summary) {
             if (currentInstance)
                 currentInstance->applySummary(summary);
         },
-        [](TrophyStatus status, const std::string& message) {
+        [](psn::Status status, const std::string& message) {
             brls::Logger::warning("Trophy grid: summary unavailable [{}] {}",
-                trophyStatusName(status), message);
+                psn::statusName(status), message);
             if (currentInstance)
                 currentInstance->summaryDetailLabel->setText("akira/trophies/summary_unavailable"_i18n);
         });
 
     trophies->fetchLibrary(forceRefresh,
-        [](const std::vector<TrophyTitle>& titles) {
+        [](const std::vector<psn::TrophyTitle>& titles) {
             if (!currentInstance)
                 return;
 
             currentInstance->loading = false;
             currentInstance->applyTitles(titles);
         },
-        [](TrophyStatus status, const std::string& message) {
+        [](psn::Status status, const std::string& message) {
             if (!currentInstance)
                 return;
 
@@ -359,14 +393,14 @@ void TrophyListTab::load(bool forceRefresh)
             const char* key = "akira/trophies/error_generic";
             switch (status)
             {
-                case TrophyStatus::NotLinked: key = "akira/trophies/error_not_linked"; break;
-                case TrophyStatus::SessionExpired: key = "akira/trophies/error_session_expired"; break;
-                case TrophyStatus::Offline: key = "akira/trophies/error_offline"; break;
-                case TrophyStatus::RateLimited: key = "akira/trophies/error_rate_limited"; break;
+                case psn::Status::NotLinked: key = "akira/trophies/error_not_linked"; break;
+                case psn::Status::SessionExpired: key = "akira/trophies/error_session_expired"; break;
+                case psn::Status::Offline: key = "akira/trophies/error_offline"; break;
+                case psn::Status::RateLimited: key = "akira/trophies/error_rate_limited"; break;
                 default: break;
             }
 
-            brls::Logger::error("Trophy grid: load failed [{}] {}", trophyStatusName(status), message);
+            brls::Logger::error("Trophy grid: load failed [{}] {}", psn::statusName(status), message);
 
             if (currentInstance->titles.empty())
                 currentInstance->grid->setError(brls::getStr(key));

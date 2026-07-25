@@ -1,5 +1,7 @@
 #include "views/psn_action_button.hpp"
 
+#include <format>
+
 static const NVGcolor PSN_ACTION_DISABLED_BACKGROUND = nvgRGBA(72, 76, 84, 255);
 static const NVGcolor PSN_ACTION_DISABLED_TEXT = nvgRGBA(176, 180, 188, 255);
 static constexpr brls::Time PSN_ACTION_TICK_MS = 250;
@@ -18,9 +20,28 @@ void PsnActionButton::attach(brls::Button* button, NVGcolor readyColor, std::str
     apply();
 }
 
+std::string PsnActionButton::formatWait(int seconds)
+{
+    if (seconds < 60)
+        return std::format("{}s", seconds);
+
+    if (seconds < 3600)
+        return std::format("{}m", (seconds + 59) / 60);
+
+    int hours = seconds / 3600;
+    int minutes = ((seconds % 3600) + 59) / 60;
+    if (minutes == 60)
+    {
+        hours++;
+        minutes = 0;
+    }
+
+    return minutes > 0 ? std::format("{}h {}m", hours, minutes) : std::format("{}h", hours);
+}
+
 bool PsnActionButton::isReady() const
 {
-    return provider && provider().state == PsnActionState::Ready;
+    return provider && provider().state == psn::ActionState::Ready;
 }
 
 void PsnActionButton::start()
@@ -39,7 +60,7 @@ void PsnActionButton::apply()
     if (!button || !provider)
         return;
 
-    PsnActionStatus status = provider();
+    psn::ActionStatus status = provider();
 
     if (applied && status.state == appliedState && status.secondsRemaining == appliedSeconds)
         return;
@@ -50,22 +71,22 @@ void PsnActionButton::apply()
 
     switch (status.state)
     {
-        case PsnActionState::Ready:
+        case psn::ActionState::Ready:
             button->setText(readyLabel);
             button->setState(brls::ButtonState::ENABLED);
             button->setTextColor(brls::Application::getTheme()["brls/button/primary_enabled_text"]);
             button->setBackgroundColor(readyColor);
             break;
 
-        case PsnActionState::Busy:
+        case psn::ActionState::Busy:
             button->setText(busyLabel);
             button->setState(brls::ButtonState::DISABLED);
             button->setTextColor(PSN_ACTION_DISABLED_TEXT);
             button->setBackgroundColor(PSN_ACTION_DISABLED_BACKGROUND);
             break;
 
-        case PsnActionState::CoolingDown:
-            button->setText(brls::getStr(waitLabelKey, status.secondsRemaining));
+        case psn::ActionState::CoolingDown:
+            button->setText(brls::getStr(waitLabelKey, formatWait(status.secondsRemaining)));
             button->setState(brls::ButtonState::DISABLED);
             button->setTextColor(PSN_ACTION_DISABLED_TEXT);
             button->setBackgroundColor(PSN_ACTION_DISABLED_BACKGROUND);

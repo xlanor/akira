@@ -8,6 +8,7 @@
 #include "core/wireguard_manager.hpp"
 #include "stream/input_manager.hpp"
 #include "core/discovery_manager.hpp"
+#include "psn/auth.hpp"
 #include "util/shared_view_holder.hpp"
 #include <switch.h>
 #include <thread>
@@ -158,8 +159,7 @@ void StreamView::startStream()
             {
                 brls::Logger::info("Remote host detected, initiating holepunch connection...");
 
-                auto* dm = DiscoveryManager::getInstance();
-                if (!dm->isPsnTokenValid())
+                if (!psn::Auth::instance().tokenValid())
                 {
                     brls::Logger::error("PSN token not valid for remote connection");
                     throw Exception("akira/stream/psn_token_expired"_i18n);

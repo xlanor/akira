@@ -10,77 +10,34 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include <borealis.hpp>
 
 #include "core/rate_limiter.hpp"
+#include "psn/auth.hpp"
+#include "psn/client.hpp"
+#include "psn/models.hpp"
 #include "util/http.hpp"
 #include "util/http_pool.hpp"
 
 class SettingsManager;
 
-enum class TrophyStatus {
-    Ok,
-    NotLinked,
-    SessionExpired,
-    Offline,
-    RateLimited,
-    ServerError
-};
-
-const char* trophyStatusName(TrophyStatus status);
-
-struct TrophyCounts {
-    int bronze = 0;
-    int silver = 0;
-    int gold = 0;
-    int platinum = 0;
-
-    int total() const { return bronze + silver + gold + platinum; }
-};
-
-struct TrophySummary {
-    std::string accountId;
-    int trophyLevel = 0;
-    int tier = 0;
-    int progress = 0;
-    int trophyPoint = 0;
-    int trophyLevelBasePoint = 0;
-    int trophyLevelNextPoint = 0;
-    TrophyCounts earnedTrophies;
-};
-
-struct TrophyTitle {
-    std::string npCommunicationId;
-    std::string npServiceName;
-    std::string trophyTitleName;
-    std::string trophyTitleDetail;
-    std::string trophyTitleIconUrl;
-    std::string trophyTitlePlatform;
-    std::string trophySetVersion;
-    bool hasTrophyGroups = false;
-    int trophyGroupCount = 0;
-    TrophyCounts definedTrophies;
-    TrophyCounts earnedTrophies;
-    int progress = 0;
-    bool hiddenFlag = false;
-    std::string lastUpdatedDateTime;
-};
-
+// Owns everything around the PSN client rather than inside it: the token gate, the request
+// budget, the circuit breaker, TTLs, the disk cache and icons. Endpoints, response shapes
+// and paging belong to psn::Client.
 class TrophyManager {
 public:
     template <typename T>
     using Callback = std::function<void(const T&)>;
-    using ErrorCallback = std::function<void(TrophyStatus, const std::string&)>;
+    using ErrorCallback = std::function<void(psn::Status, const std::string&)>;
 
     static TrophyManager* getInstance();
 
     using IconCallback = std::function<void(const std::string& url, const std::vector<uint8_t>&)>;
 
-    void fetchSummary(bool forceRefresh, Callback<TrophySummary> onSuccess, ErrorCallback onError);
-    void fetchLibrary(bool forceRefresh, Callback<std::vector<TrophyTitle>> onSuccess, ErrorCallback onError);
+    void fetchSummary(bool forceRefresh, Callback<psn::TrophySummary> onSuccess, ErrorCallback onError);
+    void fetchLibrary(bool forceRefresh, Callback<std::vector<psn::TrophyTitle>> onSuccess, ErrorCallback onError);
 
     void fetchIcon(const std::string& url, IconCallback onSuccess);
 
@@ -91,29 +48,26 @@ public:
     // one exact deadline, which stays correct across sleep, resume and clock changes.
     void startAutoRefresh();
 
-    void setSummaryObserver(Callback<TrophySummary> observer);
-    void setLibraryObserver(Callback<std::vector<TrophyTitle>> observer);
+    void setSummaryObserver(Callback<psn::TrophySummary> observer);
+    void setLibraryObserver(Callback<std::vector<psn::TrophyTitle>> observer);
 
     PersistedRateLimiter::Status budgetStatus() const;
 
-private:
-    struct Response {
-        TrophyStatus status = TrophyStatus::Ok;
-        std::string body;
-        std::string message;
-    };
+    static constexpr const char* SCOPE_LIBRARY = "library";
 
-    static constexpr const char* TROPHY_API_BASE = "https://m.np.playstation.com/api/trophy/v1";
+    psn::ActionStatus forceRefreshStatus(const std::string& scope = SCOPE_LIBRARY);
+    void recordForcedRefresh(const std::string& scope = SCOPE_LIBRARY);
+
+private:
     static constexpr long REQUEST_TIMEOUT_S = 15;
-    static constexpr int LIBRARY_PAGE_SIZE = 100;
-    static constexpr int LIBRARY_PAGE_CAP = 50;
-    static constexpr int LIBRARY_LOG_CAP = 50;
     static constexpr int MAX_ATTEMPTS = 3;
     static constexpr int BURST_LIMIT = 5;
     static constexpr int BURST_WINDOW_MS = 1000;
     static constexpr int BREAKER_MINUTES = 15;
     static constexpr int SUSTAINED_BUDGET = 300;
     static constexpr int STALE_CHECK_MINUTES = 5;
+    static constexpr int FORCE_REFRESH_COOLDOWN_MINUTES = 360;
+    static constexpr int LIBRARY_LOG_CAP = 50;
     static constexpr int ICON_PREFETCH_CAP = 120;
     static constexpr int SUMMARY_TTL_MINUTES = 360;
     static constexpr int LIBRARY_TTL_MINUTES = 360;
@@ -126,33 +80,37 @@ private:
     static constexpr const char* RATELIMIT_PATH = "sdmc:/switch/akira/cache/ratelimit.json";
     static constexpr const char* LIBRARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/library.json";
     static constexpr const char* SUMMARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/summary.json";
+    static constexpr const char* FORCE_STATE_PATH = "sdmc:/switch/akira/cache/trophies/refresh_state.json";
 
     TrophyManager();
 
     bool hasConnectivity() const;
-    TrophyStatus ensureToken(HttpSession& session, std::string& outToken, std::string& outMessage);
+    psn::Status ensureToken(HttpSession& session, std::string& outToken, std::string& outMessage);
     void awaitBurstSlot();
     bool breakerOpen(int& outSecondsRemaining) const;
     void tripBreaker(int seconds);
 
-    Response request(HttpSession& session, const std::string& path);
-
-    Response fetchSummaryBlocking(HttpSession& session, TrophySummary& outSummary);
-    Response fetchLibraryBlocking(HttpSession& session, std::vector<TrophyTitle>& outTitles);
+    // The Fetch the client is handed: token gate, budget, burst window, breaker and retry
+    // policy, applied per request so a paged call is governed on every page.
+    psn::Error governedGet(HttpSession& session, const std::string& url, std::string& outBody);
+    psn::Client clientFor(HttpSession& session);
 
     void ensureCacheDirs();
     void ensureIconCacheDir();
 
-    bool loadLibraryFromDisk(std::vector<TrophyTitle>& outTitles, int64_t& outSavedAt) const;
-    void saveLibraryToDisk(const std::vector<TrophyTitle>& titles) const;
-    bool loadSummaryFromDisk(TrophySummary& outSummary, int64_t& outSavedAt) const;
-    void saveSummaryToDisk(const TrophySummary& summary) const;
+    bool loadLibraryFromDisk(std::vector<psn::TrophyTitle>& outTitles, int64_t& outSavedAt) const;
+    void saveLibraryToDisk(const std::vector<psn::TrophyTitle>& titles) const;
+    bool loadSummaryFromDisk(psn::TrophySummary& outSummary, int64_t& outSavedAt) const;
+    void saveSummaryToDisk(const psn::TrophySummary& summary) const;
     static bool cacheEntryFresh(int64_t savedAt, int ttlMinutes);
+    void loadForceStateLocked();
+    void saveForceStateLocked() const;
     std::string iconCachePath(const std::string& url) const;
     bool readIconFromDisk(const std::string& path, std::vector<uint8_t>& outBytes) const;
     void writeIconToDisk(const std::string& path, const std::vector<uint8_t>& bytes) const;
     void storeIconInMemory(const std::string& url, const std::vector<uint8_t>& bytes);
-    void prefetchIcons(const std::vector<TrophyTitle>& titles);
+    void prefetchIcons(const std::vector<psn::TrophyTitle>& titles);
+    void logLibrary(const std::vector<psn::TrophyTitle>& titles) const;
     void runStaleCheck();
 
     SettingsManager* settings = nullptr;
@@ -160,8 +118,8 @@ private:
 
     brls::RepeatingTimer staleTimer;
     bool autoRefreshStarted = false;
-    Callback<TrophySummary> summaryObserver;
-    Callback<std::vector<TrophyTitle>> libraryObserver;
+    Callback<psn::TrophySummary> summaryObserver;
+    Callback<std::vector<psn::TrophyTitle>> libraryObserver;
     std::atomic<bool> iconCacheDirReady{false};
     std::atomic<bool> iconDiskWritable{true};
 
@@ -175,11 +133,14 @@ private:
     std::deque<std::chrono::steady_clock::time_point> burstWindow;
     std::chrono::steady_clock::time_point breakerUntil{};
 
-    TrophySummary cachedSummary;
+    psn::TrophySummary cachedSummary;
     bool hasCachedSummary = false;
     int64_t summarySavedAt = 0;
 
-    std::vector<TrophyTitle> cachedLibrary;
+    std::unordered_map<std::string, int64_t> forcedAt;
+    bool forceStateLoaded = false;
+
+    std::vector<psn::TrophyTitle> cachedLibrary;
     bool hasCachedLibrary = false;
     int64_t librarySavedAt = 0;
 };

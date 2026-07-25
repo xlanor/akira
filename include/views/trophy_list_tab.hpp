@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/trophy_manager.hpp"
+#include "views/psn_action_button.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
 
 class TrophyCardCell : public RecyclingGridItem {
@@ -15,7 +16,7 @@ public:
     TrophyCardCell();
     ~TrophyCardCell() override;
 
-    void bindTitle(const TrophyTitle& title);
+    void bindTitle(const psn::TrophyTitle& title);
     void prepareForReuse() override;
     void cacheForReuse() override;
 
@@ -38,9 +39,9 @@ private:
 
 class TrophyGridDataSource : public RecyclingGridDataSource {
 public:
-    explicit TrophyGridDataSource(std::vector<TrophyTitle> titles);
+    explicit TrophyGridDataSource(std::vector<psn::TrophyTitle> titles);
 
-    std::vector<TrophyTitle> titles;
+    std::vector<psn::TrophyTitle> titles;
 
     size_t getItemCount() override;
     RecyclingGridItem* cellForRow(RecyclingView* recycler, size_t index) override;
@@ -55,6 +56,7 @@ public:
     static brls::View* create();
 
     void willAppear(bool resetState) override;
+    void willDisappear(bool resetState) override;
 
     static TrophyListTab* currentInstance;
 
@@ -62,17 +64,20 @@ private:
     BRLS_BIND(brls::Label, summaryTitleLabel, "trophies/summaryTitle");
     BRLS_BIND(brls::Label, summaryDetailLabel, "trophies/summaryDetail");
     BRLS_BIND(RecyclingGrid, grid, "trophies/grid");
+    BRLS_BIND(brls::Button, forceRefreshBtn, "trophies/forceRefreshBtn");
 
     void load(bool forceRefresh);
-    void applySummary(const TrophySummary& summary);
-    void applyTitles(const std::vector<TrophyTitle>& titles);
+    void applySummary(const psn::TrophySummary& summary);
+    void applyTitles(const std::vector<psn::TrophyTitle>& titles);
 
-    std::vector<TrophyTitle> titles;
+    PsnActionButton forceRefreshGate;
+
+    std::vector<psn::TrophyTitle> titles;
     bool loadRequested = false;
     bool loading = false;
 };
 
 std::string formatTrophyPlatforms(const std::string& raw);
-std::string formatTrophyCounts(const TrophyCounts& counts);
+std::string formatTrophyCounts(const psn::TrophyCounts& counts);
 
 #endif // AKIRA_TROPHY_LIST_TAB_HPP

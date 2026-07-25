@@ -7,7 +7,9 @@
     <brls:Box
         width="auto"
         height="auto"
-        axis="column"
+        axis="row"
+        justifyContent="spaceBetween"
+        alignItems="center"
         backgroundColor="@theme/color/card"
         cornerRadius="8"
         paddingTop="12"
@@ -19,17 +21,31 @@
         marginRight="@style/brls/tab_frame/content_padding_sides"
         marginBottom="10">
 
-        <brls:Label
-            id="trophies/summaryTitle"
-            text="@i18n/akira/trophies/title"
-            fontSize="22"/>
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column"
+            grow="1.0">
 
-        <brls:Label
-            id="trophies/summaryDetail"
-            text="@i18n/akira/trophies/loading"
-            fontSize="15"
-            textColor="#888888"
-            marginTop="4"/>
+            <brls:Label
+                id="trophies/summaryTitle"
+                text="@i18n/akira/trophies/title"
+                fontSize="22"/>
+
+            <brls:Label
+                id="trophies/summaryDetail"
+                text="@i18n/akira/trophies/loading"
+                fontSize="15"
+                textColor="#888888"
+                marginTop="4"/>
+
+        </brls:Box>
+
+        <brls:Button
+            id="trophies/forceRefreshBtn"
+            text="@i18n/akira/trophies/force_refresh_btn"
+            style="bordered"
+            marginLeft="15"/>
 
     </brls:Box>
 

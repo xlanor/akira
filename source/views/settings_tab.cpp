@@ -2,6 +2,7 @@
 #include "views/benchmark_view.hpp"
 #include "views/controller_remap_view.hpp"
 #include "core/discovery_manager.hpp"
+#include "psn/auth.hpp"
 #include <borealis/core/i18n.hpp>
 #include <format>
 
@@ -934,7 +935,7 @@ void SettingsTab::initAuthSection() {
         "akira/settings/refresh_token_btn"_i18n,
         "akira/settings/refresh_token_busy"_i18n,
         "akira/settings/refresh_token_wait",
-        []() { return DiscoveryManager::getInstance()->getTokenRefreshStatus(); }
+        []() { return psn::Auth::instance().refreshStatus(); }
     );
 
     refreshTokenBtn->registerClickAction([this](brls::View* view) {
@@ -950,7 +951,7 @@ void SettingsTab::initAuthSection() {
 
         brls::Application::notify("akira/settings/refreshing_token"_i18n);
 
-        DiscoveryManager::getInstance()->refreshPsnToken(
+        psn::Auth::instance().refresh(
             []() {
                 brls::Application::notify("akira/settings/token_refreshed"_i18n);
                 brls::Logger::info("PSN token refreshed");
@@ -958,10 +959,10 @@ void SettingsTab::initAuthSection() {
                     SettingsTab::currentInstance->updateCredentialsDisplay();
                 }
             },
-            [](PsnAuthError kind, const std::string& error) {
+            [](psn::AuthError kind, const std::string& error) {
                 brls::Application::notify(brls::getStr("akira/settings/refresh_failed", error));
                 brls::Logger::error("Failed to refresh PSN token ({}): {}",
-                    kind == PsnAuthError::Invalid ? "invalid" : "transient", error);
+                    kind == psn::AuthError::Invalid ? "invalid" : "transient", error);
             }
         );
 

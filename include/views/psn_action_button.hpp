@@ -6,16 +6,18 @@
 #include <functional>
 #include <string>
 
-#include "core/discovery_manager.hpp"
+#include "psn/auth.hpp"
 
 class PsnActionButton {
 public:
-    using StatusProvider = std::function<PsnActionStatus()>;
+    using StatusProvider = std::function<psn::ActionStatus()>;
 
     void attach(brls::Button* button, NVGcolor readyColor, std::string readyLabel,
                 std::string busyLabel, std::string waitLabelKey, StatusProvider provider);
 
     bool isReady() const;
+
+    static std::string formatWait(int seconds);
 
     void start();
     void stop();
@@ -30,7 +32,7 @@ private:
     StatusProvider provider;
 
     brls::RepeatingTimer timer;
-    PsnActionState appliedState = PsnActionState::Ready;
+    psn::ActionState appliedState = psn::ActionState::Ready;
     int appliedSeconds = -1;
     bool applied = false;
 };

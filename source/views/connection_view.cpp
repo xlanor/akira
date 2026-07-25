@@ -4,6 +4,7 @@
 #include <thread>
 #include <chrono>
 #include "core/discovery_manager.hpp"
+#include "psn/auth.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
 #include "util/shared_view_holder.hpp"
@@ -208,8 +209,7 @@ void* ConnectionView::connectionThreadFunc(void* user)
     brls::Logger::info("Connection thread started");
 
     if (host->isRemote()) {
-        auto* dm = DiscoveryManager::getInstance();
-        if (!dm->isPsnTokenValid()) {
+        if (!psn::Auth::instance().tokenValid()) {
             if (auto view = weak.lock()) {
                 view->connectionError = "akira/connection/psn_token_expired"_i18n;
                 brls::Logger::error("{}", view->connectionError);
