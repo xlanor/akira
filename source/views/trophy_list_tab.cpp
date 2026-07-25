@@ -1,5 +1,7 @@
 #include "views/trophy_list_tab.hpp"
 
+#include <borealis/core/cache_helper.hpp>
+
 #include <algorithm>
 #include <format>
 
@@ -127,13 +129,49 @@ void TrophyCardCell::bindTitle(const TrophyTitle& title)
     if (iconUrl.empty())
         return;
 
+    // Textures are owned by the cache, not the cell, so a recycled cell must not free the
+    // one it was showing. The cache is a 200-entry LRU keyed by URL and it decodes once.
+    cover->setFreeTexture(false);
+
+    int cached = brls::TextureCache::instance().getCache(iconUrl);
+    if (cached > 0)
+    {
+        brls::Logger::debug("Trophy card '{}' -> texture {} (cache hit) {}",
+            nameLabel->getFullText(), cached, iconUrl);
+        cover->innerSetImage(cached);
+        return;
+    }
+
     TrophyManager::getInstance()->fetchIcon(iconUrl,
         [](const std::string& url, const std::vector<uint8_t>& bytes) {
+            int texture = brls::TextureCache::instance().getCache(url);
+            int applied = 0;
+
             for (TrophyCardCell* cell : liveCells)
             {
-                if (cell->iconUrl == url)
+                if (cell->iconUrl != url)
+                    continue;
+
+                if (texture <= 0)
+                {
                     cell->cover->setImageFromMem(bytes.data(), static_cast<int>(bytes.size()));
+                    texture = cell->cover->getTexture();
+
+                    // set() throws if the key is already present, so only ever insert on a
+                    // confirmed miss.
+                    if (texture > 0 && brls::TextureCache::instance().getCache(url) <= 0)
+                        brls::TextureCache::instance().addCache(url, texture);
+                }
+                else
+                {
+                    cell->cover->innerSetImage(texture);
+                }
+
+                applied++;
             }
+
+            brls::Logger::debug("Trophy icon ready: texture {} applied to {} card(s) {}",
+                texture, applied, url);
         });
 }
 
@@ -192,9 +230,24 @@ TrophyListTab::TrophyListTab()
 
     this->registerAction("akira/trophies/refresh"_i18n, brls::ControllerButton::BUTTON_X,
         [this](brls::View* view) {
+            brls::Logger::info("User triggered force refresh");
             load(true);
             return true;
         });
+
+    TrophyManager* trophies = TrophyManager::getInstance();
+
+    trophies->setSummaryObserver([](const TrophySummary& summary) {
+        if (currentInstance)
+            currentInstance->applySummary(summary);
+    });
+
+    trophies->setLibraryObserver([](const std::vector<TrophyTitle>& titles) {
+        if (currentInstance)
+            currentInstance->applyTitles(titles);
+    });
+
+    trophies->startAutoRefresh();
 
     summaryTitleLabel->setText("akira/trophies/title"_i18n);
     summaryDetailLabel->setText("akira/trophies/loading"_i18n);

@@ -13,6 +13,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include <borealis.hpp>
+
+#include "core/rate_limiter.hpp"
 #include "util/http.hpp"
 #include "util/http_pool.hpp"
 
@@ -83,6 +86,16 @@ public:
 
     void clearCache();
 
+    // Started once the feature is first used, so an install that never opens Trophies
+    // never issues background traffic. Checks staleness on a timer rather than computing
+    // one exact deadline, which stays correct across sleep, resume and clock changes.
+    void startAutoRefresh();
+
+    void setSummaryObserver(Callback<TrophySummary> observer);
+    void setLibraryObserver(Callback<std::vector<TrophyTitle>> observer);
+
+    PersistedRateLimiter::Status budgetStatus() const;
+
 private:
     struct Response {
         TrophyStatus status = TrophyStatus::Ok;
@@ -99,6 +112,9 @@ private:
     static constexpr int BURST_LIMIT = 5;
     static constexpr int BURST_WINDOW_MS = 1000;
     static constexpr int BREAKER_MINUTES = 15;
+    static constexpr int SUSTAINED_BUDGET = 300;
+    static constexpr int STALE_CHECK_MINUTES = 5;
+    static constexpr int ICON_PREFETCH_CAP = 120;
     static constexpr int SUMMARY_TTL_MINUTES = 360;
     static constexpr int LIBRARY_TTL_MINUTES = 360;
     static constexpr long ICON_TIMEOUT_S = 20;
@@ -107,11 +123,14 @@ private:
     static constexpr const char* CACHE_DIR = "sdmc:/switch/akira/cache";
     static constexpr const char* TROPHY_CACHE_DIR = "sdmc:/switch/akira/cache/trophies";
     static constexpr const char* ICON_CACHE_DIR = "sdmc:/switch/akira/cache/trophies/icons";
+    static constexpr const char* RATELIMIT_PATH = "sdmc:/switch/akira/cache/ratelimit.json";
+    static constexpr const char* LIBRARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/library.json";
+    static constexpr const char* SUMMARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/summary.json";
 
     TrophyManager();
 
     bool hasConnectivity() const;
-    TrophyStatus ensureToken(std::string& outToken, std::string& outMessage);
+    TrophyStatus ensureToken(HttpSession& session, std::string& outToken, std::string& outMessage);
     void awaitBurstSlot();
     bool breakerOpen(int& outSecondsRemaining) const;
     void tripBreaker(int seconds);
@@ -121,13 +140,28 @@ private:
     Response fetchSummaryBlocking(HttpSession& session, TrophySummary& outSummary);
     Response fetchLibraryBlocking(HttpSession& session, std::vector<TrophyTitle>& outTitles);
 
+    void ensureCacheDirs();
     void ensureIconCacheDir();
+
+    bool loadLibraryFromDisk(std::vector<TrophyTitle>& outTitles, int64_t& outSavedAt) const;
+    void saveLibraryToDisk(const std::vector<TrophyTitle>& titles) const;
+    bool loadSummaryFromDisk(TrophySummary& outSummary, int64_t& outSavedAt) const;
+    void saveSummaryToDisk(const TrophySummary& summary) const;
+    static bool cacheEntryFresh(int64_t savedAt, int ttlMinutes);
     std::string iconCachePath(const std::string& url) const;
     bool readIconFromDisk(const std::string& path, std::vector<uint8_t>& outBytes) const;
     void writeIconToDisk(const std::string& path, const std::vector<uint8_t>& bytes) const;
     void storeIconInMemory(const std::string& url, const std::vector<uint8_t>& bytes);
+    void prefetchIcons(const std::vector<TrophyTitle>& titles);
+    void runStaleCheck();
 
     SettingsManager* settings = nullptr;
+    PersistedRateLimiter limiter{RATELIMIT_PATH, SUSTAINED_BUDGET};
+
+    brls::RepeatingTimer staleTimer;
+    bool autoRefreshStarted = false;
+    Callback<TrophySummary> summaryObserver;
+    Callback<std::vector<TrophyTitle>> libraryObserver;
     std::atomic<bool> iconCacheDirReady{false};
     std::atomic<bool> iconDiskWritable{true};
 
@@ -136,18 +170,18 @@ private:
     mutable std::mutex iconMutex;
     std::unordered_map<std::string, std::vector<uint8_t>> iconCache;
     std::deque<std::string> iconOrder;
-    std::unordered_set<std::string> iconInFlight;
+    std::unordered_map<std::string, std::vector<IconCallback>> iconWaiters;
     size_t iconCacheBytes = 0;
     std::deque<std::chrono::steady_clock::time_point> burstWindow;
     std::chrono::steady_clock::time_point breakerUntil{};
 
     TrophySummary cachedSummary;
     bool hasCachedSummary = false;
-    std::chrono::steady_clock::time_point summaryFetchedAt{};
+    int64_t summarySavedAt = 0;
 
     std::vector<TrophyTitle> cachedLibrary;
     bool hasCachedLibrary = false;
-    std::chrono::steady_clock::time_point libraryFetchedAt{};
+    int64_t librarySavedAt = 0;
 };
 
 #endif // AKIRA_TROPHY_MANAGER_HPP

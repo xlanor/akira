@@ -121,7 +121,9 @@ void ConnectionView::switchToConnectionLog()
 void ConnectionView::restoreMainLog()
 {
     if (m_connectionLogFile) {
-        brls::Logger::setLogOutput(m_prevLogOutput);
+        brls::Logger::flushAsyncLogs();
+        brls::Logger::setLogOutput(m_prevLogOutput ? m_prevLogOutput : stdout);
+        brls::Logger::flushAsyncLogs();
         fclose(m_connectionLogFile);
         m_connectionLogFile = nullptr;
         m_prevLogOutput = nullptr;

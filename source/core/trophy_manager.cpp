@@ -4,7 +4,9 @@
 
 #include <borealis.hpp>
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <format>
 #include <thread>
 
@@ -125,16 +127,241 @@ TrophyManager::TrophyManager()
     settings = SettingsManager::getInstance();
 }
 
+void TrophyManager::ensureCacheDirs()
+{
+    mkdir(CACHE_DIR, 0755);
+    mkdir(TROPHY_CACHE_DIR, 0755);
+}
+
 void TrophyManager::ensureIconCacheDir()
 {
     if (iconCacheDirReady.load())
         return;
 
-    mkdir(CACHE_DIR, 0755);
-    mkdir(TROPHY_CACHE_DIR, 0755);
+    ensureCacheDirs();
     mkdir(ICON_CACHE_DIR, 0755);
 
     iconCacheDirReady.store(true);
+}
+
+bool TrophyManager::cacheEntryFresh(int64_t savedAt, int ttlMinutes)
+{
+    if (savedAt <= 0)
+        return false;
+
+    int64_t now = static_cast<int64_t>(std::time(nullptr));
+
+    // A timestamp in the future means the clock moved, not that the entry is invalid.
+    // Treating it as fresh errs toward fewer requests, which is the safe direction here.
+    if (savedAt > now)
+        return true;
+
+    return (now - savedAt) < static_cast<int64_t>(ttlMinutes) * 60;
+}
+
+static std::string readWholeFile(const std::string& path)
+{
+    FILE* file = fopen(path.c_str(), "rb");
+    if (!file)
+        return std::string();
+
+    std::string body;
+    char buffer[4096];
+    size_t read = 0;
+    while ((read = fread(buffer, 1, sizeof(buffer), file)) > 0)
+        body.append(buffer, read);
+
+    fclose(file);
+    return body;
+}
+
+// FAT via newlib does not replace on rename the way POSIX does: it fails with EEXIST if
+// the destination is already there. The destination has to be removed first, which gives
+// up atomicity, but on this filesystem there was never an atomic replace to give up. The
+// failure window leaves no file at all, and a missing cache entry just means a refetch.
+static bool replaceFile(const std::string& temp, const std::string& path)
+{
+    remove(path.c_str());
+
+    if (rename(temp.c_str(), path.c_str()) == 0)
+        return true;
+
+    brls::Logger::warning("Trophy: rename {} -> {} failed: {}", temp, path, strerror(errno));
+    remove(temp.c_str());
+    return false;
+}
+
+static bool writeWholeFile(const std::string& path, const std::string& body)
+{
+    std::string temp = path + ".tmp";
+
+    FILE* file = fopen(temp.c_str(), "wb");
+    if (!file)
+    {
+        brls::Logger::warning("Trophy: could not open {}: {}", temp, strerror(errno));
+        return false;
+    }
+
+    size_t written = fwrite(body.data(), 1, body.size(), file);
+    fclose(file);
+
+    if (written != body.size())
+    {
+        brls::Logger::warning("Trophy: short write to {} ({}/{} bytes)", temp, written, body.size());
+        remove(temp.c_str());
+        return false;
+    }
+
+    return replaceFile(temp, path);
+}
+
+static void addCounts(json_object* parent, const char* key, const TrophyCounts& counts)
+{
+    json_object* obj = json_object_new_object();
+    json_object_object_add(obj, "bronze", json_object_new_int(counts.bronze));
+    json_object_object_add(obj, "silver", json_object_new_int(counts.silver));
+    json_object_object_add(obj, "gold", json_object_new_int(counts.gold));
+    json_object_object_add(obj, "platinum", json_object_new_int(counts.platinum));
+    json_object_object_add(parent, key, obj);
+}
+
+bool TrophyManager::loadSummaryFromDisk(TrophySummary& outSummary, int64_t& outSavedAt) const
+{
+    json_object* parsed = json_tokener_parse(readWholeFile(SUMMARY_CACHE_PATH).c_str());
+    if (!parsed)
+        return false;
+
+    outSavedAt = jsonInt(parsed, "savedAt");
+
+    json_object* payload = nullptr;
+    if (!jsonField(parsed, "summary", &payload))
+    {
+        json_object_put(parsed);
+        return false;
+    }
+
+    outSummary.accountId = jsonString(payload, "accountId");
+    outSummary.trophyLevel = jsonInt(payload, "trophyLevel");
+    outSummary.tier = jsonInt(payload, "tier");
+    outSummary.progress = jsonInt(payload, "progress");
+    outSummary.trophyPoint = jsonInt(payload, "trophyPoint");
+    outSummary.trophyLevelBasePoint = jsonInt(payload, "trophyLevelBasePoint");
+    outSummary.trophyLevelNextPoint = jsonInt(payload, "trophyLevelNextPoint");
+    outSummary.earnedTrophies = jsonCounts(payload, "earnedTrophies");
+
+    json_object_put(parsed);
+    return true;
+}
+
+void TrophyManager::saveSummaryToDisk(const TrophySummary& summary) const
+{
+    json_object* payload = json_object_new_object();
+    json_object_object_add(payload, "accountId", json_object_new_string(summary.accountId.c_str()));
+    json_object_object_add(payload, "trophyLevel", json_object_new_int(summary.trophyLevel));
+    json_object_object_add(payload, "tier", json_object_new_int(summary.tier));
+    json_object_object_add(payload, "progress", json_object_new_int(summary.progress));
+    json_object_object_add(payload, "trophyPoint", json_object_new_int(summary.trophyPoint));
+    json_object_object_add(payload, "trophyLevelBasePoint", json_object_new_int(summary.trophyLevelBasePoint));
+    json_object_object_add(payload, "trophyLevelNextPoint", json_object_new_int(summary.trophyLevelNextPoint));
+    addCounts(payload, "earnedTrophies", summary.earnedTrophies);
+
+    json_object* root = json_object_new_object();
+    json_object_object_add(root, "savedAt", json_object_new_int64(static_cast<int64_t>(std::time(nullptr))));
+    json_object_object_add(root, "summary", payload);
+
+    const char* text = json_object_to_json_string(root);
+    if (!writeWholeFile(SUMMARY_CACHE_PATH, text ? text : ""))
+        brls::Logger::warning("Trophy: could not write {}", SUMMARY_CACHE_PATH);
+
+    json_object_put(root);
+}
+
+bool TrophyManager::loadLibraryFromDisk(std::vector<TrophyTitle>& outTitles, int64_t& outSavedAt) const
+{
+    json_object* parsed = json_tokener_parse(readWholeFile(LIBRARY_CACHE_PATH).c_str());
+    if (!parsed)
+        return false;
+
+    outSavedAt = jsonInt(parsed, "savedAt");
+
+    json_object* array = nullptr;
+    if (!jsonField(parsed, "titles", &array) || !json_object_is_type(array, json_type_array))
+    {
+        json_object_put(parsed);
+        return false;
+    }
+
+    size_t count = json_object_array_length(array);
+    outTitles.reserve(count);
+
+    for (size_t i = 0; i < count; i++)
+    {
+        json_object* entry = json_object_array_get_idx(array, i);
+        if (!entry)
+            continue;
+
+        TrophyTitle title;
+        title.npCommunicationId = jsonString(entry, "npCommunicationId");
+        title.npServiceName = jsonString(entry, "npServiceName");
+        title.trophyTitleName = jsonString(entry, "trophyTitleName");
+        title.trophyTitleDetail = jsonString(entry, "trophyTitleDetail");
+        title.trophyTitleIconUrl = jsonString(entry, "trophyTitleIconUrl");
+        title.trophyTitlePlatform = jsonString(entry, "trophyTitlePlatform");
+        title.trophySetVersion = jsonString(entry, "trophySetVersion");
+        title.hasTrophyGroups = jsonBool(entry, "hasTrophyGroups");
+        title.trophyGroupCount = jsonInt(entry, "trophyGroupCount");
+        title.definedTrophies = jsonCounts(entry, "definedTrophies");
+        title.earnedTrophies = jsonCounts(entry, "earnedTrophies");
+        title.progress = jsonInt(entry, "progress");
+        title.hiddenFlag = jsonBool(entry, "hiddenFlag");
+        title.lastUpdatedDateTime = jsonString(entry, "lastUpdatedDateTime");
+
+        if (!title.npCommunicationId.empty())
+            outTitles.push_back(std::move(title));
+    }
+
+    json_object_put(parsed);
+    return true;
+}
+
+void TrophyManager::saveLibraryToDisk(const std::vector<TrophyTitle>& titles) const
+{
+    json_object* array = json_object_new_array();
+
+    for (const TrophyTitle& title : titles)
+    {
+        json_object* entry = json_object_new_object();
+        json_object_object_add(entry, "npCommunicationId", json_object_new_string(title.npCommunicationId.c_str()));
+        json_object_object_add(entry, "npServiceName", json_object_new_string(title.npServiceName.c_str()));
+        json_object_object_add(entry, "trophyTitleName", json_object_new_string(title.trophyTitleName.c_str()));
+        json_object_object_add(entry, "trophyTitleDetail", json_object_new_string(title.trophyTitleDetail.c_str()));
+        json_object_object_add(entry, "trophyTitleIconUrl", json_object_new_string(title.trophyTitleIconUrl.c_str()));
+        json_object_object_add(entry, "trophyTitlePlatform", json_object_new_string(title.trophyTitlePlatform.c_str()));
+        json_object_object_add(entry, "trophySetVersion", json_object_new_string(title.trophySetVersion.c_str()));
+        json_object_object_add(entry, "hasTrophyGroups", json_object_new_boolean(title.hasTrophyGroups));
+        json_object_object_add(entry, "trophyGroupCount", json_object_new_int(title.trophyGroupCount));
+        addCounts(entry, "definedTrophies", title.definedTrophies);
+        addCounts(entry, "earnedTrophies", title.earnedTrophies);
+        json_object_object_add(entry, "progress", json_object_new_int(title.progress));
+        json_object_object_add(entry, "hiddenFlag", json_object_new_boolean(title.hiddenFlag));
+        json_object_object_add(entry, "lastUpdatedDateTime", json_object_new_string(title.lastUpdatedDateTime.c_str()));
+        json_object_array_add(array, entry);
+    }
+
+    json_object* root = json_object_new_object();
+    json_object_object_add(root, "savedAt", json_object_new_int64(static_cast<int64_t>(std::time(nullptr))));
+    json_object_object_add(root, "titles", array);
+
+    const char* text = json_object_to_json_string(root);
+    if (!writeWholeFile(LIBRARY_CACHE_PATH, text ? text : ""))
+        brls::Logger::warning("Trophy: could not write {}", LIBRARY_CACHE_PATH);
+
+    json_object_put(root);
+}
+
+PersistedRateLimiter::Status TrophyManager::budgetStatus() const
+{
+    return limiter.status();
 }
 
 std::string TrophyManager::iconCachePath(const std::string& url) const
@@ -195,8 +422,7 @@ void TrophyManager::writeIconToDisk(const std::string& path, const std::vector<u
         return;
     }
 
-    if (rename(temp.c_str(), path.c_str()) != 0)
-        remove(temp.c_str());
+    replaceFile(temp, path);
 }
 
 void TrophyManager::storeIconInMemory(const std::string& url, const std::vector<uint8_t>& bytes)
@@ -246,7 +472,7 @@ bool TrophyManager::hasConnectivity() const
     return status == NifmInternetConnectionStatus_Connected;
 }
 
-TrophyStatus TrophyManager::ensureToken(std::string& outToken, std::string& outMessage)
+TrophyStatus TrophyManager::ensureToken(HttpSession& session, std::string& outToken, std::string& outMessage)
 {
     DiscoveryManager* discovery = DiscoveryManager::getInstance();
 
@@ -268,7 +494,7 @@ TrophyStatus TrophyManager::ensureToken(std::string& outToken, std::string& outM
     }
 
     brls::Logger::info("Trophy: access token expired, refreshing");
-    PsnResult refresh = discovery->refreshPsnTokenBlocking();
+    PsnResult refresh = discovery->refreshPsnTokenBlocking(session);
 
     if (refresh.success)
     {
@@ -369,7 +595,7 @@ TrophyManager::Response TrophyManager::request(HttpSession& session, const std::
 
     std::string token;
     std::string tokenMessage;
-    TrophyStatus tokenStatus = ensureToken(token, tokenMessage);
+    TrophyStatus tokenStatus = ensureToken(session, token, tokenMessage);
     if (tokenStatus != TrophyStatus::Ok)
     {
         result.status = tokenStatus;
@@ -383,6 +609,15 @@ TrophyManager::Response TrophyManager::request(HttpSession& session, const std::
 
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
     {
+        std::string budgetReason;
+        if (!limiter.tryAcquire(budgetReason))
+        {
+            result.status = TrophyStatus::RateLimited;
+            result.message = budgetReason;
+            brls::Logger::warning("Trophy: {} refused, {}", path, budgetReason);
+            return result;
+        }
+
         awaitBurstSlot();
 
         HttpResponse response = session.get(url, token, REQUEST_TIMEOUT_S);
@@ -407,7 +642,7 @@ TrophyManager::Response TrophyManager::request(HttpSession& session, const std::
             refreshedOn401 = true;
             brls::Logger::info("Trophy: {} returned 401, refreshing token once", path);
 
-            PsnResult refresh = DiscoveryManager::getInstance()->refreshPsnTokenBlocking();
+            PsnResult refresh = DiscoveryManager::getInstance()->refreshPsnTokenBlocking(session);
             if (!refresh.success)
             {
                 result.message = refresh.message;
@@ -446,6 +681,7 @@ TrophyManager::Response TrophyManager::request(HttpSession& session, const std::
 
             cooldown = std::min(cooldown, 60 * 60);
             tripBreaker(cooldown);
+            limiter.recordThrottle(cooldown);
 
             result.status = TrophyStatus::RateLimited;
             result.message = std::format("PSN is rate-limiting, backing off for {}s", cooldown);
@@ -659,12 +895,36 @@ void TrophyManager::fetchSummary(bool forceRefresh, Callback<TrophySummary> onSu
     HttpPool::instance().submit([this, forceRefresh, onSuccess, onError](HttpSession& session) {
         if (!forceRefresh)
         {
-            std::lock_guard<std::mutex> lock(mutex);
-            if (hasCachedSummary &&
-                std::chrono::steady_clock::now() - summaryFetchedAt < std::chrono::minutes(SUMMARY_TTL_MINUTES))
+            TrophySummary cached;
+            bool haveCached = false;
+
             {
-                TrophySummary cached = cachedSummary;
-                brls::Logger::debug("Trophy: serving cached summary");
+                std::lock_guard<std::mutex> lock(mutex);
+                if (hasCachedSummary)
+                {
+                    cached = cachedSummary;
+                    haveCached = cacheEntryFresh(summarySavedAt, SUMMARY_TTL_MINUTES);
+                }
+            }
+
+            if (!haveCached)
+            {
+                int64_t savedAt = 0;
+                TrophySummary fromDisk;
+                if (loadSummaryFromDisk(fromDisk, savedAt) && cacheEntryFresh(savedAt, SUMMARY_TTL_MINUTES))
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    cachedSummary = fromDisk;
+                    hasCachedSummary = true;
+                    summarySavedAt = savedAt;
+                    cached = fromDisk;
+                    haveCached = true;
+                    brls::Logger::info("Trophy: summary served from disk cache");
+                }
+            }
+
+            if (haveCached)
+            {
                 brls::sync([onSuccess, cached]() { if (onSuccess) onSuccess(cached); });
                 return;
             }
@@ -679,8 +939,11 @@ void TrophyManager::fetchSummary(bool forceRefresh, Callback<TrophySummary> onSu
                 std::lock_guard<std::mutex> lock(mutex);
                 cachedSummary = summary;
                 hasCachedSummary = true;
-                summaryFetchedAt = std::chrono::steady_clock::now();
+                summarySavedAt = static_cast<int64_t>(std::time(nullptr));
             }
+
+            ensureCacheDirs();
+            saveSummaryToDisk(summary);
 
             brls::sync([onSuccess, summary]() { if (onSuccess) onSuccess(summary); });
             return;
@@ -700,12 +963,37 @@ void TrophyManager::fetchLibrary(bool forceRefresh, Callback<std::vector<TrophyT
     HttpPool::instance().submit([this, forceRefresh, onSuccess, onError](HttpSession& session) {
         if (!forceRefresh)
         {
-            std::lock_guard<std::mutex> lock(mutex);
-            if (hasCachedLibrary &&
-                std::chrono::steady_clock::now() - libraryFetchedAt < std::chrono::minutes(LIBRARY_TTL_MINUTES))
+            std::vector<TrophyTitle> cached;
+            bool haveCached = false;
+
             {
-                std::vector<TrophyTitle> cached = cachedLibrary;
-                brls::Logger::debug("Trophy: serving {} cached title(s)", cached.size());
+                std::lock_guard<std::mutex> lock(mutex);
+                if (hasCachedLibrary && cacheEntryFresh(librarySavedAt, LIBRARY_TTL_MINUTES))
+                {
+                    cached = cachedLibrary;
+                    haveCached = true;
+                }
+            }
+
+            if (!haveCached)
+            {
+                int64_t savedAt = 0;
+                std::vector<TrophyTitle> fromDisk;
+                if (loadLibraryFromDisk(fromDisk, savedAt) && cacheEntryFresh(savedAt, LIBRARY_TTL_MINUTES))
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    cachedLibrary = fromDisk;
+                    hasCachedLibrary = true;
+                    librarySavedAt = savedAt;
+                    cached = std::move(fromDisk);
+                    haveCached = true;
+                    brls::Logger::info("Trophy: {} title(s) served from disk cache", cached.size());
+                }
+            }
+
+            if (haveCached)
+            {
+                prefetchIcons(cached);
                 brls::sync([onSuccess, cached]() { if (onSuccess) onSuccess(cached); });
                 return;
             }
@@ -720,8 +1008,12 @@ void TrophyManager::fetchLibrary(bool forceRefresh, Callback<std::vector<TrophyT
                 std::lock_guard<std::mutex> lock(mutex);
                 cachedLibrary = titles;
                 hasCachedLibrary = true;
-                libraryFetchedAt = std::chrono::steady_clock::now();
+                librarySavedAt = static_cast<int64_t>(std::time(nullptr));
             }
+
+            ensureCacheDirs();
+            saveLibraryToDisk(titles);
+            prefetchIcons(titles);
 
             brls::sync([onSuccess, titles]() { if (onSuccess) onSuccess(titles); });
             return;
@@ -749,7 +1041,7 @@ void TrophyManager::fetchLibrary(bool forceRefresh, Callback<std::vector<TrophyT
 
 void TrophyManager::fetchIcon(const std::string& url, IconCallback onSuccess)
 {
-    if (url.empty() || !onSuccess)
+    if (url.empty())
         return;
 
     {
@@ -758,15 +1050,27 @@ void TrophyManager::fetchIcon(const std::string& url, IconCallback onSuccess)
         auto cached = iconCache.find(url);
         if (cached != iconCache.end())
         {
-            std::vector<uint8_t> bytes = cached->second;
-            brls::sync([onSuccess, url, bytes]() { onSuccess(url, bytes); });
+            if (onSuccess)
+            {
+                std::vector<uint8_t> bytes = cached->second;
+                brls::sync([onSuccess, url, bytes]() { onSuccess(url, bytes); });
+            }
             return;
         }
 
-        if (iconInFlight.count(url) > 0)
-            return;
+        // Every caller for a URL is queued, not just the first. Dropping later callers
+        // meant a prefetch with no callback could claim the slot and leave the card that
+        // actually wanted the image waiting for a result it never received.
+        auto existing = iconWaiters.find(url);
+        bool alreadyInFlight = existing != iconWaiters.end();
 
-        iconInFlight.insert(url);
+        if (onSuccess)
+            iconWaiters[url].push_back(std::move(onSuccess));
+        else if (!alreadyInFlight)
+            iconWaiters[url];
+
+        if (alreadyInFlight)
+            return;
     }
 
     HttpPool::instance().submit([this, url, onSuccess](HttpSession& session) {
@@ -808,9 +1112,15 @@ void TrophyManager::fetchIcon(const std::string& url, IconCallback onSuccess)
         if (usable)
             storeIconInMemory(url, bytes);
 
+        std::vector<IconCallback> waiters;
         {
             std::lock_guard<std::mutex> lock(iconMutex);
-            iconInFlight.erase(url);
+            auto entry = iconWaiters.find(url);
+            if (entry != iconWaiters.end())
+            {
+                waiters.swap(entry->second);
+                iconWaiters.erase(entry);
+            }
         }
 
         if (!usable)
@@ -819,15 +1129,127 @@ void TrophyManager::fetchIcon(const std::string& url, IconCallback onSuccess)
         if (!fromDisk && iconDiskWritable.load())
             writeIconToDisk(path, bytes);
 
-        brls::sync([onSuccess, url, bytes]() { onSuccess(url, bytes); });
+        if (waiters.empty())
+            return;
+
+        brls::sync([waiters, url, bytes]() {
+            for (const IconCallback& waiter : waiters)
+                waiter(url, bytes);
+        });
     });
+}
+
+void TrophyManager::setSummaryObserver(Callback<TrophySummary> observer)
+{
+    summaryObserver = std::move(observer);
+}
+
+void TrophyManager::setLibraryObserver(Callback<std::vector<TrophyTitle>> observer)
+{
+    libraryObserver = std::move(observer);
+}
+
+void TrophyManager::startAutoRefresh()
+{
+    if (autoRefreshStarted)
+        return;
+
+    autoRefreshStarted = true;
+
+    staleTimer.setCallback([this]() { runStaleCheck(); });
+    staleTimer.start(STALE_CHECK_MINUTES * 60 * 1000);
+
+    brls::Logger::info("Trophy: auto refresh checking every {} min", STALE_CHECK_MINUTES);
+}
+
+void TrophyManager::runStaleCheck()
+{
+    bool stale = false;
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        // Only keep warm what has actually been loaded once. Nothing cached means the user
+        // has never opened the tab, and refreshing on their behalf would be traffic they
+        // never asked for.
+        if (!hasCachedLibrary)
+            return;
+
+        stale = !cacheEntryFresh(librarySavedAt, LIBRARY_TTL_MINUTES);
+    }
+
+    if (!stale)
+        return;
+
+    brls::Logger::info("Trophy: cache passed its TTL, refreshing in the background");
+
+    fetchSummary(false,
+        [this](const TrophySummary& summary) {
+            if (summaryObserver)
+                summaryObserver(summary);
+        },
+        [](TrophyStatus status, const std::string& message) {
+            brls::Logger::warning("Trophy: background summary refresh failed [{}] {}",
+                trophyStatusName(status), message);
+        });
+
+    fetchLibrary(false,
+        [this](const std::vector<TrophyTitle>& titles) {
+            if (libraryObserver)
+                libraryObserver(titles);
+        },
+        [](TrophyStatus status, const std::string& message) {
+            brls::Logger::warning("Trophy: background library refresh failed [{}] {}",
+                trophyStatusName(status), message);
+        });
+}
+
+void TrophyManager::prefetchIcons(const std::vector<TrophyTitle>& titles)
+{
+    int queued = 0;
+    int skipped = 0;
+
+    for (const TrophyTitle& title : titles)
+    {
+        if (title.trophyTitleIconUrl.empty())
+            continue;
+
+        if (queued >= ICON_PREFETCH_CAP)
+        {
+            skipped++;
+            continue;
+        }
+
+        queued++;
+        // No callback: this only warms the cache. A visible card asking for the same URL
+        // joins the in-flight request as a waiter and is served when it lands.
+        fetchIcon(title.trophyTitleIconUrl, nullptr);
+    }
+
+    if (skipped > 0)
+    {
+        brls::Logger::info("Trophy: prefetching {} icon(s), {} beyond the cap left to load on scroll",
+            queued, skipped);
+    }
+    else if (queued > 0)
+    {
+        brls::Logger::info("Trophy: prefetching {} icon(s) into the disk cache", queued);
+    }
 }
 
 void TrophyManager::clearCache()
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    hasCachedSummary = false;
-    hasCachedLibrary = false;
-    cachedLibrary.clear();
-    brls::Logger::info("Trophy: in-memory cache cleared");
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        hasCachedSummary = false;
+        hasCachedLibrary = false;
+        cachedLibrary.clear();
+        summarySavedAt = 0;
+        librarySavedAt = 0;
+    }
+
+    remove(SUMMARY_CACHE_PATH);
+    remove(LIBRARY_CACHE_PATH);
+
+    brls::Logger::info("Trophy: cache cleared (memory and disk)");
 }

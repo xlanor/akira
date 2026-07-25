@@ -14,30 +14,48 @@
 #include <borealis.hpp>
 #include <format>
 #include "util/curl_wrappers.hpp"
+#include "util/http.hpp"
+
+#include <sys/stat.h>
 #include "util/net_wrappers.hpp"
 
 static FILE* s_natLogFile = nullptr;
 static FILE* s_prevLogOutput = nullptr;
 
 static void natLogStart() {
+    mkdir("sdmc:/switch/akira/logs", 0755);
+
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
     auto path = std::format("sdmc:/switch/akira/logs/{:02}{:02}{:02}_{:02}{:02}{:02}_nat.log",
         t->tm_mday, t->tm_mon + 1, t->tm_year % 100, t->tm_hour, t->tm_min, t->tm_sec);
-    s_natLogFile = fopen(path.c_str(), "w");
-    if (s_natLogFile) {
-        s_prevLogOutput = brls::Logger::getLogOutput();
-        brls::Logger::setLogOutput(s_natLogFile);
+
+    FILE* file = fopen(path.c_str(), "w");
+    if (!file) {
+        brls::Logger::warning("NAT: could not open {}, keeping the current log output", path);
+        return;
     }
+
+    s_natLogFile = file;
+    s_prevLogOutput = brls::Logger::getLogOutput();
+    brls::Logger::setLogOutput(s_natLogFile);
 }
 
 static void natLogEnd() {
-    brls::Logger::setLogOutput(s_prevLogOutput);
-    s_prevLogOutput = nullptr;
-    if (s_natLogFile) {
-        fclose(s_natLogFile);
-        s_natLogFile = nullptr;
+    // Only restore if we actually redirected. Restoring unconditionally installed a null
+    // FILE* whenever the fopen above failed, and the async log flusher fwrites to it
+    // without a null check.
+    if (!s_natLogFile) {
+        return;
     }
+
+    brls::Logger::flushAsyncLogs();
+    brls::Logger::setLogOutput(s_prevLogOutput ? s_prevLogOutput : stdout);
+    brls::Logger::flushAsyncLogs();
+
+    s_prevLogOutput = nullptr;
+    fclose(s_natLogFile);
+    s_natLogFile = nullptr;
 }
 
 static const char* STUN_SERVER_1 = "stun.l.google.com";
@@ -98,34 +116,17 @@ std::string StunClient::filteringTypeToString(FilteringType type) {
     }
 }
 
-static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, std::string* output) {
-    size_t totalSize = size * nmemb;
-    output->append(static_cast<char*>(contents), totalSize);
-    return totalSize;
-}
-
 std::vector<std::string> StunClient::fetchRFC5780Servers() {
     std::vector<std::string> servers;
 
-    CurlHandle curl;
-    if (!curl) {
+    HttpResponse result = httpGet(RFC5780_SERVER_LIST_URL, "", 5);
+    if (!result.ok()) {
+        brls::Logger::warning("STUN: could not fetch RFC5780 server list: {}",
+            result.transportFailed() ? result.error : std::format("HTTP {}", result.status));
         return servers;
     }
 
-    std::string response;
-    curl_easy_setopt(curl, CURLOPT_URL, RFC5780_SERVER_LIST_URL);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-
-    CURLcode res = curl_easy_perform(curl);
-
-    if (res != CURLE_OK) {
-        return servers;
-    }
-
-    std::istringstream stream(response);
+    std::istringstream stream(result.body);
     std::string line;
     while (std::getline(stream, line)) {
         if (!line.empty() && line[0] != '#') {

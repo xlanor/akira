@@ -879,44 +879,47 @@ void SettingsTab::initAuthSection() {
 
         DiscoveryManager::getInstance()->fetchCompanionCredentials(
             host, port,
-            [this](const std::string& onlineId, const std::string& accountId,
-                   const std::string& accessToken, const std::string& refreshToken,
-                   int64_t expiresAt, const std::string& duid) {
-                brls::sync([this, onlineId, accountId, accessToken, refreshToken, expiresAt, duid]() {
-                    if (!onlineId.empty()) {
-                        settings->setPsnOnlineId(nullptr, onlineId);
-                        brls::Logger::info("PSN Online ID set to {}", onlineId);
+            [](const std::string& onlineId, const std::string& accountId,
+               const std::string& accessToken, const std::string& refreshToken,
+               int64_t expiresAt, const std::string& duid) {
+                SettingsManager* settings = SettingsManager::getInstance();
+
+                if (!onlineId.empty()) {
+                    settings->setPsnOnlineId(nullptr, onlineId);
+                    brls::Logger::info("PSN Online ID set to {}", onlineId);
+                }
+                if (!accountId.empty()) {
+                    settings->setPsnAccountId(nullptr, accountId);
+                    brls::Logger::info("PSN Account ID set");
+                    if (SettingsTab::currentInstance) {
+                        SettingsTab::currentInstance->psnAccountIdInput->setValue(accountId);
                     }
-                    if (!accountId.empty()) {
-                        psnAccountIdInput->setValue(accountId);
-                        settings->setPsnAccountId(nullptr, accountId);
-                        brls::Logger::info("PSN Account ID set");
-                    }
-                    if (!accessToken.empty()) {
-                        settings->setPsnAccessToken(accessToken);
-                    }
-                    if (!refreshToken.empty()) {
-                        settings->setPsnRefreshToken(refreshToken);
-                    }
-                    if (expiresAt > 0) {
-                        settings->setPsnTokenExpiresAt(expiresAt);
-                        brls::Logger::info("PSN token expires at {}", expiresAt);
-                    }
-                    if (!duid.empty()) {
-                        settings->setGlobalDuid(duid);
-                        brls::Logger::info("DUID set from companion");
-                    }
-                    settings->writeFile();
-                    brls::Application::notify("akira/settings/credentials_fetched"_i18n);
-                    brls::Logger::info("Fetched PSN credentials from companion");
-                    updateCredentialsDisplay();
-                });
+                }
+                if (!accessToken.empty()) {
+                    settings->setPsnAccessToken(accessToken);
+                }
+                if (!refreshToken.empty()) {
+                    settings->setPsnRefreshToken(refreshToken);
+                }
+                if (expiresAt > 0) {
+                    settings->setPsnTokenExpiresAt(expiresAt);
+                    brls::Logger::info("PSN token expires at {}", expiresAt);
+                }
+                if (!duid.empty()) {
+                    settings->setGlobalDuid(duid);
+                    brls::Logger::info("DUID set from companion");
+                }
+                settings->writeFile();
+                brls::Application::notify("akira/settings/credentials_fetched"_i18n);
+                brls::Logger::info("Fetched PSN credentials from companion");
+
+                if (SettingsTab::currentInstance) {
+                    SettingsTab::currentInstance->updateCredentialsDisplay();
+                }
             },
             [](const std::string& error) {
-                brls::sync([error]() {
-                    brls::Application::notify(brls::getStr("akira/settings/fetch_failed", error));
-                    brls::Logger::error("Failed to fetch PSN credentials: {}", error);
-                });
+                brls::Application::notify(brls::getStr("akira/settings/fetch_failed", error));
+                brls::Logger::error("Failed to fetch PSN credentials: {}", error);
             }
         );
 

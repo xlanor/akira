@@ -15,7 +15,7 @@
 #include <chiaki/remote/holepunch.h>
 
 #include "host.hpp"
-#include "util/serial_worker.hpp"
+#include "util/http_pool.hpp"
 
 class SettingsManager;
 
@@ -74,8 +74,6 @@ private:
     static constexpr int PSN_REMOTE_COOLDOWN_S = 15;
     static constexpr int PSN_FAILED_COOLDOWN_S = 5;
 
-    SerialWorker psnWorker{"akira-psn"};
-
     mutable std::mutex psnRefreshMutex;
     std::condition_variable psnRefreshCond;
     bool psnRefreshInFlight = false;
@@ -89,8 +87,8 @@ private:
     std::vector<RemoteRefreshCallback> remoteRefreshWaiters;
     std::chrono::steady_clock::time_point remoteRefreshReadyAt{};
 
-    PsnResult performPsnTokenRefresh();
-    void runRemoteDeviceRefresh();
+    PsnResult performPsnTokenRefresh(HttpSession& session);
+    void runRemoteDeviceRefresh(HttpSession& session);
     void finishRemoteDeviceRefresh(const PsnResult& result);
 
     ChiakiThread remoteDiscoveryThread;
@@ -143,7 +141,7 @@ public:
         PsnTokenErrorCallback onError
     );
 
-    PsnResult refreshPsnTokenBlocking();
+    PsnResult refreshPsnTokenBlocking(HttpSession& session);
 
     bool isPsnTokenValid() const;
 

@@ -16,6 +16,7 @@
 #include <json-c/json.h>
 
 #include "util/http.hpp"
+#include "util/http_pool.hpp"
 
 static void discovery_log_cb(ChiakiLogLevel level, const char* msg, void* user)
 {
@@ -346,6 +347,12 @@ void DiscoveryManager::fetchCompanionCredentials(
     )> onSuccess,
     std::function<void(const std::string&)> onError)
 {
+    HttpPool::instance().submit([host, port, onSuccess = std::move(onSuccess),
+                                 onError = std::move(onError)](HttpSession& session) {
+    auto fail = [onError](const std::string& message) {
+        brls::sync([onError, message]() { if (onError) onError(message); });
+    };
+
     std::string accountId;
     std::string onlineId;
     std::string accessToken;
@@ -353,25 +360,25 @@ void DiscoveryManager::fetchCompanionCredentials(
     int64_t expiresAt = 0;
     std::string duid;
 
-    auto companionGet = [&host, port](const char* path) {
+    auto companionGet = [&session, &host, port](const char* path) {
         HttpRequest request;
         request.url = std::format("http://{}:{}{}", host, port, path);
         request.timeoutSec = 10;
         request.connectTimeoutSec = 5;
-        return httpPerform(request);
+        return session.perform(request);
     };
 
     HttpResponse response = companionGet("/account");
 
     if (response.transportFailed())
     {
-        onError(response.error);
+        fail(response.error);
         return;
     }
 
     if (response.status != 200)
     {
-        onError(std::format("Account fetch HTTP error: {}", response.status));
+        fail(std::format("Account fetch HTTP error: {}", response.status));
         return;
     }
 
@@ -384,7 +391,7 @@ void DiscoveryManager::fetchCompanionCredentials(
 
         if (json_object_object_get_ex(parsed_json, "error", &error_obj))
         {
-            onError(json_object_get_string(error_obj));
+            fail(json_object_get_string(error_obj));
             json_object_put(parsed_json);
             return;
         }
@@ -404,13 +411,13 @@ void DiscoveryManager::fetchCompanionCredentials(
 
     if (response.transportFailed())
     {
-        onError("Token fetch failed: " + response.error);
+        fail("Token fetch failed: " + response.error);
         return;
     }
 
     if (response.status != 200)
     {
-        onError(std::format("Token fetch HTTP error: {}", response.status));
+        fail(std::format("Token fetch HTTP error: {}", response.status));
         return;
     }
 
@@ -424,7 +431,7 @@ void DiscoveryManager::fetchCompanionCredentials(
 
         if (json_object_object_get_ex(parsed_json, "error", &error_obj))
         {
-            onError(std::string("Token error: ") + json_object_get_string(error_obj));
+            fail(std::string("Token error: ") + json_object_get_string(error_obj));
             json_object_put(parsed_json);
             return;
         }
@@ -448,13 +455,13 @@ void DiscoveryManager::fetchCompanionCredentials(
 
     if (response.transportFailed())
     {
-        onError("DUID fetch failed: " + response.error);
+        fail("DUID fetch failed: " + response.error);
         return;
     }
 
     if (response.status != 200)
     {
-        onError(std::format("DUID fetch HTTP error: {}", response.status));
+        fail(std::format("DUID fetch HTTP error: {}", response.status));
         return;
     }
 
@@ -466,7 +473,7 @@ void DiscoveryManager::fetchCompanionCredentials(
 
         if (json_object_object_get_ex(parsed_json, "error", &error_obj))
         {
-            onError(std::string("DUID error: ") + json_object_get_string(error_obj));
+            fail(std::string("DUID error: ") + json_object_get_string(error_obj));
             json_object_put(parsed_json);
             return;
         }
@@ -478,7 +485,11 @@ void DiscoveryManager::fetchCompanionCredentials(
         json_object_put(parsed_json);
     }
 
-    onSuccess(onlineId, accountId, accessToken, refreshToken, expiresAt, duid);
+    brls::sync([onSuccess, onlineId, accountId, accessToken, refreshToken, expiresAt, duid]() {
+        if (onSuccess)
+            onSuccess(onlineId, accountId, accessToken, refreshToken, expiresAt, duid);
+    });
+    });
 }
 
 static const char* PSN_CLIENT_ID = "ba495a24-818c-472b-b12d-ff231c1b5745";
@@ -496,8 +507,8 @@ void DiscoveryManager::refreshPsnToken(
         psnRefreshQueued++;
     }
 
-    psnWorker.post([this, onSuccess = std::move(onSuccess), onError = std::move(onError)]() {
-        PsnResult result = refreshPsnTokenBlocking();
+    HttpPool::instance().submit([this, onSuccess = std::move(onSuccess), onError = std::move(onError)](HttpSession& session) {
+        PsnResult result = refreshPsnTokenBlocking(session);
 
         {
             std::lock_guard<std::mutex> lock(psnRefreshMutex);
@@ -518,7 +529,7 @@ void DiscoveryManager::refreshPsnToken(
     });
 }
 
-PsnResult DiscoveryManager::refreshPsnTokenBlocking()
+PsnResult DiscoveryManager::refreshPsnTokenBlocking(HttpSession& session)
 {
     std::unique_lock<std::mutex> lock(psnRefreshMutex);
 
@@ -532,7 +543,7 @@ PsnResult DiscoveryManager::refreshPsnTokenBlocking()
     psnRefreshInFlight = true;
     lock.unlock();
 
-    PsnResult result = performPsnTokenRefresh();
+    PsnResult result = performPsnTokenRefresh(session);
 
     lock.lock();
     psnLastRefreshResult = result;
@@ -569,7 +580,7 @@ PsnActionStatus DiscoveryManager::getRemoteRefreshStatus() const
     return psnActionStatus(remoteRefreshInFlight, remoteRefreshReadyAt);
 }
 
-PsnResult DiscoveryManager::performPsnTokenRefresh()
+PsnResult DiscoveryManager::performPsnTokenRefresh(HttpSession& session)
 {
     std::string refreshToken = settings->getPsnRefreshToken();
     if (refreshToken.empty())
@@ -589,7 +600,7 @@ PsnResult DiscoveryManager::performPsnTokenRefresh()
     request.post = true;
     request.timeoutSec = 30;
 
-    HttpResponse response = httpPerform(request);
+    HttpResponse response = session.perform(request);
 
     if (response.transportFailed())
     {
@@ -723,10 +734,10 @@ void DiscoveryManager::refreshRemoteDevices(RemoteRefreshCallback onComplete, bo
         remoteRefreshInFlight = true;
     }
 
-    psnWorker.post([this]() { runRemoteDeviceRefresh(); });
+    HttpPool::instance().submit([this](HttpSession& session) { runRemoteDeviceRefresh(session); });
 }
 
-void DiscoveryManager::runRemoteDeviceRefresh()
+void DiscoveryManager::runRemoteDeviceRefresh(HttpSession& session)
 {
     if (!isPsnTokenValid())
     {
@@ -740,7 +751,7 @@ void DiscoveryManager::runRemoteDeviceRefresh()
             return;
         }
 
-        PsnResult result = refreshPsnTokenBlocking();
+        PsnResult result = refreshPsnTokenBlocking(session);
         if (!result.success)
         {
             if (result.error == PsnAuthError::Invalid)
