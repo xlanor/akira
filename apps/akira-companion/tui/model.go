@@ -110,6 +110,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.serverModel = NewServerModel(m.state)
 			return m, m.serverModel.Init()
 		}
+
+	case StepBackMsg:
+		switch m.currentStep {
+		case StepLogin:
+			m.currentStep = StepDUID
+			m.duidModel = NewDUIDModel(m.state)
+			return m, m.duidModel.Init()
+		case StepServer:
+			m.currentStep = StepLogin
+			m.loginModel = NewLoginModel(m.state)
+			return m, m.loginModel.Init()
+		}
 	}
 
 	var cmd tea.Cmd
@@ -181,6 +193,12 @@ type StepCompleteMsg struct{}
 
 func CompleteStep() tea.Msg {
 	return StepCompleteMsg{}
+}
+
+type StepBackMsg struct{}
+
+func GoBackStep() tea.Msg {
+	return StepBackMsg{}
 }
 
 func mappingLabel(m nat.MappingType) string {

@@ -36,6 +36,7 @@ type AppState struct {
 
 	DUID     string       `json:"duid,omitempty"`
 	Seed     string       `json:"seed,omitempty"`
+	Npsso    string       `json:"npsso,omitempty"`
 	Tokens   *Tokens      `json:"tokens,omitempty"`
 	Account  *AccountInfo `json:"account,omitempty"`
 	filePath string       `json:"-"`
@@ -88,8 +89,21 @@ func (s *AppState) Clear() {
 
 	s.DUID = ""
 	s.Seed = ""
+	s.Npsso = ""
 	s.Tokens = nil
 	s.Account = nil
+}
+
+func (s *AppState) SetNpsso(npsso string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Npsso = npsso
+}
+
+func (s *AppState) GetNpsso() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Npsso
 }
 
 func (s *AppState) SetDUID(duid string) {

@@ -46,8 +46,6 @@ private:
     BRLS_BIND(brls::BooleanCell, debugChiakiLogToggle, "settings/debugChiakiLog");
     BRLS_BIND(brls::BooleanCell, debugDiscoveryLogToggle, "settings/debugDiscoveryLog");
     BRLS_BIND(brls::BooleanCell, debugFfmpegLogToggle, "settings/debugFfmpegLog");
-    BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
-    BRLS_BIND(brls::Button, lookupBtn, "settings/lookupBtn");
     BRLS_BIND(brls::InputCell, psnAccountIdInput, "settings/psnAccountId");
     BRLS_BIND(brls::InputCell, companionHostInput, "settings/companionHost");
     BRLS_BIND(brls::InputCell, companionPortInput, "settings/companionPort");
@@ -56,7 +54,6 @@ private:
     BRLS_BIND(brls::Button, clearPsnBtn, "settings/clearPsnBtn");
 
     BRLS_BIND(brls::DetailCell, credOnlineIdCell, "settings/credOnlineId");
-    BRLS_BIND(brls::DetailCell, credAccountIdCell, "settings/credAccountId");
     BRLS_BIND(brls::DetailCell, credAccessTokenCell, "settings/credAccessToken");
     BRLS_BIND(brls::DetailCell, credRefreshTokenCell, "settings/credRefreshToken");
     BRLS_BIND(brls::DetailCell, credTokenExpiryCell, "settings/credTokenExpiry");
@@ -117,8 +114,7 @@ private:
     void initDebugChiakiLogToggle();
     void initDebugDiscoveryLogToggle();
     void initDebugFfmpegLogToggle();
-    void initPsnAccountSection();
-    void initCompanionSection();
+    void initAuthSection();
     void initPortGuessingToggle();
     void initPortGuessingCountSlider();
     void initPortGuessingSocksSlider();

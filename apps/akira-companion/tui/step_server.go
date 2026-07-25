@@ -89,6 +89,11 @@ func (m ServerModel) handleKeyMsg(msg tea.KeyMsg) (ServerModel, tea.Cmd) {
 		m.localIPs = getLocalIPs()
 		m.message = i18n.T("server.msg_ips_refreshed")
 		m.isError = false
+	case "b":
+		if m.serverRunning {
+			m.stopServer()
+		}
+		return m, GoBackStep
 	}
 
 	return m, nil

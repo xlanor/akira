@@ -67,8 +67,7 @@ SettingsTab::SettingsTab() {
     initRcasSharpnessSlider();
     initEnableThreadAffinityToggle();
     initHolepunchRetryToggle();
-    initPsnAccountSection();
-    initCompanionSection();
+    initAuthSection();
     initPowerUserSection();
     initPortGuessingToggle();
     initPortGuessingCountSlider();
@@ -795,20 +794,7 @@ void SettingsTab::initHolepunchRetryToggle() {
     );
 }
 
-void SettingsTab::initPsnAccountSection() {
-    std::string currentOnlineId = settings->getPsnOnlineId(nullptr);
-    psnOnlineIdInput->init(
-        "akira/settings/psn_online_id"_i18n,
-        currentOnlineId,
-        [this](std::string text) {
-            settings->setPsnOnlineId(nullptr, text);
-            settings->writeFile();
-            brls::Logger::info("PSN Online ID set to {}", text);
-        },
-        "akira/settings/psn_online_id_placeholder"_i18n,
-        "akira/settings/psn_online_id_hint"_i18n
-    );
-
+void SettingsTab::initAuthSection() {
     std::string currentAccountId = settings->getPsnAccountId(nullptr);
     psnAccountIdInput->init(
         "akira/settings/psn_account_id"_i18n,
@@ -822,43 +808,6 @@ void SettingsTab::initPsnAccountSection() {
         "akira/settings/psn_account_id_hint"_i18n
     );
 
-    lookupBtn->setStyle(&BUTTONSTYLE_BLUE);
-    lookupBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
-
-    lookupBtn->registerClickAction([this](brls::View* view) {
-        std::string onlineId = psnOnlineIdInput->getValue();
-        if (onlineId.empty()) {
-            brls::Application::notify("akira/settings/enter_online_id_first"_i18n);
-            return true;
-        }
-
-        brls::Application::notify("akira/settings/looking_up"_i18n);
-
-        DiscoveryManager::getInstance()->lookupPsnAccountId(
-            onlineId,
-            [this](const std::string& accountId) {
-                brls::sync([this, accountId]() {
-                    psnAccountIdInput->setValue(accountId);
-                    settings->setPsnAccountId(nullptr, accountId);
-                    settings->writeFile();
-                    updateCredentialsDisplay();
-                    brls::Application::notify("akira/settings/account_id_found"_i18n);
-                    brls::Logger::info("Found account ID for PSN user");
-                });
-            },
-            [](const std::string& error) {
-                brls::sync([error]() {
-                    brls::Application::notify(brls::getStr("akira/settings/lookup_failed", error));
-                    brls::Logger::error("PSN account lookup failed: {}", error);
-                });
-            }
-        );
-
-        return true;
-    });
-}
-
-void SettingsTab::initCompanionSection() {
     std::string currentHost = settings->getCompanionHost();
     companionHostInput->init(
         "akira/settings/companion_host"_i18n,
@@ -916,7 +865,6 @@ void SettingsTab::initCompanionSection() {
                    int64_t expiresAt, const std::string& duid) {
                 brls::sync([this, onlineId, accountId, accessToken, refreshToken, expiresAt, duid]() {
                     if (!onlineId.empty()) {
-                        psnOnlineIdInput->setValue(onlineId);
                         settings->setPsnOnlineId(nullptr, onlineId);
                         brls::Logger::info("PSN Online ID set to {}", onlineId);
                     }
@@ -1020,10 +968,6 @@ void SettingsTab::updateCredentialsDisplay() {
     credOnlineIdCell->setText("akira/settings/online_id"_i18n);
     std::string onlineId = settings->getPsnOnlineId(nullptr);
     credOnlineIdCell->setDetailText(onlineId.empty() ? "akira/common/not_set"_i18n : onlineId);
-
-    credAccountIdCell->setText("akira/settings/account_id"_i18n);
-    std::string accountId = settings->getPsnAccountId(nullptr);
-    credAccountIdCell->setDetailText(accountId.empty() ? "akira/common/not_set"_i18n : accountId);
 
     credAccessTokenCell->setText("akira/settings/access_token"_i18n);
     std::string accessToken = settings->getPsnAccessToken();

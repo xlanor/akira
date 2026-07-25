@@ -97,26 +97,26 @@ other = "Enter 48-character hex DUID..."
 [login.title]
 other = "Login to PlayStation Network"
 
-[login.url_warning]
-other = ">>> OPEN THIS URL IN A WINDOWS BROWSER (SONY BLOCKS LINUX) <<<"
-
-[login.qr_warning]
-other = ">>> OR SCAN THIS QR CODE WITH YOUR PHONE <<<"
+[login.url_prompt]
+other = "Log in to PSN, then open this URL in your browser:"
 
 [login.press_enter_ready]
-other = "Press Enter when ready to paste the redirect URL"
+other = "Press Enter when ready to paste your npsso token"
+
+[login.back_help]
+other = "Press 'b' to go back to DUID setup"
 
 [login.paste_prompt]
-other = "Paste the redirect URL after logging in:"
+other = "Paste your npsso token:"
 
 [login.redirect_hint]
-other = "The URL starts with: https://remoteplay.dl.playstation.net/remoteplay/redirect?..."
+other = "The page shows JSON like {\"npsso\":\"...\"} — copy the value between the quotes"
 
 [login.submit_help]
 other = "Press Enter to submit, Esc to go back"
 
 [login.exchanging]
-other = "Exchanging authorization code for tokens..."
+other = "Authenticating with npsso token..."
 
 [login.please_wait]
 other = "Please wait..."
@@ -148,8 +148,8 @@ other = "✗ Login Failed"
 [login.retry_help]
 other = "Press Enter or 'r' to retry"
 
-[login.placeholder_redirect]
-other = "Paste the redirect URL here..."
+[login.placeholder_npsso]
+other = "Paste your npsso token here..."
 
 [server.credentials_title]
 other = "PSN Credentials"
@@ -209,10 +209,10 @@ other = "  GET /token   - Get PSN tokens"
 other = "  GET /duid    - Get current DUID"
 
 [server.help_running]
-other = "Press 's' to stop server, 'r' to refresh IPs"
+other = "Press 's' to stop server, 'r' to refresh IPs, 'b' to go back"
 
 [server.help_stopped]
-other = "Press 's' to start server, 'r' to refresh IPs"
+other = "Press 's' to start server, 'r' to refresh IPs, 'b' to go back"
 
 [server.msg_started]
 other = "Server started on port {{.Port}}"
