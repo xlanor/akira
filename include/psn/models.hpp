@@ -9,8 +9,6 @@ struct json_object;
 
 namespace psn {
 
-// Owns a parsed document so an early return cannot leak it. json-c's ownership is manual
-// and the paged fetches below have several exits per page.
 class Json {
 public:
     Json() = default;
@@ -33,8 +31,6 @@ bool jsonField(json_object* parent, const char* key, json_object** out);
 std::string jsonString(json_object* parent, const char* key);
 bool jsonBool(json_object* parent, const char* key);
 
-// PSN returns several numeric fields as strings — trophyEarnedRate, progress and
-// trophyProgressTargetValue among them. These read either representation.
 int jsonInt(json_object* parent, const char* key);
 int64_t jsonInt64(json_object* parent, const char* key);
 double jsonDouble(json_object* parent, const char* key);
@@ -117,8 +113,14 @@ struct Trophy {
     std::string progressedDateTime;
 };
 
-// The bare and users/me forms of each endpoint carry disjoint fields, so a row is parsed
-// by which endpoint it came from rather than by guessing which keys are present.
+struct TitleDetail {
+    std::string npCommunicationId;
+    std::string npServiceName;
+    std::string lastUpdatedDateTime;
+    std::vector<TrophyGroup> groups;
+    std::vector<Trophy> trophies;
+};
+
 bool parseSummary(json_object* obj, TrophySummary& out);
 bool parseTitle(json_object* obj, TrophyTitle& out);
 bool parseGroupDefinition(json_object* obj, TrophyGroup& out);
@@ -126,10 +128,18 @@ bool parseGroupProgress(json_object* obj, TrophyGroup& out);
 bool parseTrophyDefinition(json_object* obj, Trophy& out);
 bool parseTrophyProgress(json_object* obj, Trophy& out);
 
-// The disk cache stores the API's own field names, so these round-trip through the
-// parsers above rather than needing a second field list to keep in step.
+void mergeTrophies(std::vector<Trophy>& definitions, const std::vector<Trophy>& progress);
+void mergeGroups(std::vector<TrophyGroup>& definitions, const std::vector<TrophyGroup>& progress);
+
+void tallyGroupEarned(std::vector<TrophyGroup>& groups, const std::vector<Trophy>& trophies);
+
 json_object* toJson(const TrophySummary& summary);
 json_object* toJson(const TrophyTitle& title);
+json_object* toJson(const TrophyGroup& group);
+json_object* toJson(const Trophy& trophy);
+
+bool parseCachedGroup(json_object* obj, TrophyGroup& out);
+bool parseCachedTrophy(json_object* obj, Trophy& out);
 
 } // namespace psn
 

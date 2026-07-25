@@ -84,7 +84,21 @@
         "count_gold": "金 {}",
         "count_silver": "银 {}",
         "count_bronze": "铜 {}",
-        "summary_unavailable": "无法获取总览"
+        "summary_unavailable": "无法获取总览",
+        "group_all": "全部奖杯",
+        "group_picker": "奖杯分组",
+        "empty_group": "该分组暂无奖杯",
+        "hidden_name": "隐藏奖杯",
+        "hidden_detail": "获得后显示详情",
+        "earned": "已获得",
+        "type_platinum": "白金",
+        "type_gold": "金",
+        "type_silver": "银",
+        "type_bronze": "铜",
+        "rarity_ultra_rare": "极为稀有",
+        "rarity_very_rare": "非常稀有",
+        "rarity_rare": "稀有",
+        "rarity_common": "常见"
     },
     "add_host": {
         "title": "添加 PlayStation 主机",

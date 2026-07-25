@@ -23,8 +23,6 @@ struct Doc {
 
 TEST(json_reads_numbers_given_as_strings)
 {
-    // trophyEarnedRate, progress and trophyProgressTargetValue all arrive quoted. A blind
-    // json_object_get_int on those returns 0, which reads as "no progress".
     Doc doc(R"({"asInt": 165, "asString": "165", "big": "4294967296", "rate": "0.4", "rateNum": 12.5})");
 
     CHECK_EQ(jsonInt(doc.get(), "asInt"), 165);
@@ -52,7 +50,6 @@ TEST(json_missing_and_null_fields_take_defaults)
 
 TEST(json_strings_are_trimmed_and_flattened)
 {
-    // A live account returned this title name with a trailing newline attached.
     Doc doc(R"({"name": "Overcooked! All You Can Eat\n", "wrapped": "  two\nlines  ", "blank": "   "})");
 
     CHECK_EQ(jsonString(doc.get(), "name"), std::string("Overcooked! All You Can Eat"));
@@ -142,8 +139,6 @@ TEST(parse_trophy_definition_reads_a_string_progress_target)
 
 TEST(parse_trophy_definition_leaves_progress_unset_when_absent)
 {
-    // The progress trio appeared on 30 of 165 rows. Absent must stay absent rather than
-    // becoming a target of zero, which would render as a completed bar.
     Doc doc(R"({"trophyId": 3, "trophyName": "Plain", "trophyType": "bronze"})");
 
     Trophy trophy;
@@ -190,7 +185,6 @@ TEST(parse_trophy_progress_tolerates_a_row_with_only_the_required_fields)
 
 TEST(parse_group_endpoints_read_disjoint_halves)
 {
-    // The bare and users/me forms carry different fields; neither is a superset.
     Doc definition(R"({
         "trophyGroupId": "001",
         "trophyGroupName": "DLC Pack",
@@ -230,8 +224,6 @@ TEST(rarity_maps_the_documented_codes)
 
 TEST(title_round_trips_through_the_disk_cache_format)
 {
-    // The cache stores the API's own field names so one parser serves both. If that ever
-    // stops being true this is what catches it.
     TrophyTitle original;
     original.npCommunicationId = "NPWR99999_00";
     original.npServiceName = "trophy";
@@ -311,4 +303,202 @@ TEST(json_handle_survives_move_and_bad_input)
     target = std::move(moved);
     CHECK(static_cast<bool>(target));
     CHECK_EQ(jsonInt(target.get(), "a"), 1);
+}
+
+TEST(merge_joins_definitions_and_progress_by_trophy_id)
+{
+    std::vector<Trophy> definitions(3);
+    definitions[0].trophyId = 1;
+    definitions[0].trophyName = "First";
+    definitions[0].trophyType = "bronze";
+    definitions[1].trophyId = 2;
+    definitions[1].trophyName = "Second";
+    definitions[1].trophyType = "gold";
+    definitions[1].hasProgress = true;
+    definitions[1].progressTarget = 9;
+    definitions[2].trophyId = 3;
+    definitions[2].trophyName = "Third";
+
+    std::vector<Trophy> progress(3);
+    progress[2].trophyId = 1;
+    progress[2].earned = true;
+    progress[2].earnedDateTime = "2026-01-02T00:00:00Z";
+    progress[2].trophyRare = 0;
+    progress[2].trophyEarnedRate = 0.4;
+    progress[0].trophyId = 2;
+    progress[0].hasProgress = true;
+    progress[0].progress = 6;
+    progress[0].progressRate = 66;
+    progress[1].trophyId = 3;
+
+    mergeTrophies(definitions, progress);
+
+    CHECK_EQ(definitions[0].trophyName, std::string("First"));
+    CHECK_EQ(definitions[0].earned, true);
+    CHECK_EQ(definitions[0].trophyRare, 0);
+    CHECK(definitions[0].trophyEarnedRate > 0.39 && definitions[0].trophyEarnedRate < 0.41);
+
+    CHECK_EQ(definitions[1].progressTarget, int64_t(9));
+    CHECK_EQ(definitions[1].progress, int64_t(6));
+    CHECK_EQ(definitions[1].progressRate, 66);
+    CHECK_EQ(definitions[1].hasProgress, true);
+
+    CHECK_EQ(definitions[2].earned, false);
+    CHECK_EQ(definitions[2].earnedDateTime, std::string());
+}
+
+TEST(merge_keeps_a_definition_with_no_matching_progress_row)
+{
+    std::vector<Trophy> definitions(1);
+    definitions[0].trophyId = 7;
+    definitions[0].trophyName = "Orphan";
+
+    std::vector<Trophy> progress(1);
+    progress[0].trophyId = 99;
+    progress[0].earned = true;
+
+    mergeTrophies(definitions, progress);
+
+    CHECK_EQ(definitions.size(), size_t(1));
+    CHECK_EQ(definitions[0].trophyName, std::string("Orphan"));
+    CHECK_EQ(definitions[0].earned, false);
+}
+
+TEST(merge_does_not_clear_a_definition_progress_target)
+{
+    std::vector<Trophy> definitions(1);
+    definitions[0].trophyId = 5;
+    definitions[0].hasProgress = true;
+    definitions[0].progressTarget = 42195;
+
+    std::vector<Trophy> progress(1);
+    progress[0].trophyId = 5;
+    progress[0].earned = false;
+
+    mergeTrophies(definitions, progress);
+
+    CHECK_EQ(definitions[0].hasProgress, true);
+    CHECK_EQ(definitions[0].progressTarget, int64_t(42195));
+    CHECK_EQ(definitions[0].progress, int64_t(0));
+}
+
+TEST(group_merge_fills_the_half_each_endpoint_is_missing)
+{
+    std::vector<TrophyGroup> definitions(2);
+    definitions[0].trophyGroupId = "default";
+    definitions[0].trophyGroupName = "Base Game";
+    definitions[0].definedTrophies = {24, 8, 7, 1};
+    definitions[1].trophyGroupId = "001";
+    definitions[1].trophyGroupName = "DLC";
+    definitions[1].definedTrophies = {5, 2, 1, 0};
+
+    std::vector<TrophyGroup> progress(2);
+    progress[0].trophyGroupId = "001";
+    progress[0].earnedTrophies = {2, 0, 0, 0};
+    progress[0].progress = 2;
+    progress[1].trophyGroupId = "default";
+    progress[1].earnedTrophies = {20, 8, 3, 1};
+    progress[1].progress = 74;
+    progress[1].lastUpdatedDateTime = "2026-02-03T00:00:00Z";
+
+    mergeGroups(definitions, progress);
+
+    CHECK_EQ(definitions[0].trophyGroupName, std::string("Base Game"));
+    CHECK_EQ(definitions[0].definedTrophies.total(), 40);
+    CHECK_EQ(definitions[0].earnedTrophies.total(), 32);
+    CHECK_EQ(definitions[0].progress, 74);
+    CHECK_EQ(definitions[0].lastUpdatedDateTime, std::string("2026-02-03T00:00:00Z"));
+    CHECK_EQ(definitions[1].trophyGroupName, std::string("DLC"));
+    CHECK_EQ(definitions[1].earnedTrophies.total(), 2);
+}
+
+TEST(group_earned_counts_can_be_tallied_without_the_progress_call)
+{
+    std::vector<TrophyGroup> groups(2);
+    groups[0].trophyGroupId = "default";
+    groups[1].trophyGroupId = "001";
+
+    std::vector<Trophy> trophies(5);
+    trophies[0] = {1, "", "", "", "bronze", "default", false, true};
+    trophies[1] = {2, "", "", "", "gold", "default", false, true};
+    trophies[2] = {3, "", "", "", "silver", "default", false, false};
+    trophies[3] = {4, "", "", "", "platinum", "001", false, true};
+    trophies[4] = {5, "", "", "", "bronze", "001", false, false};
+
+    tallyGroupEarned(groups, trophies);
+
+    CHECK_EQ(groups[0].earnedTrophies.bronze, 1);
+    CHECK_EQ(groups[0].earnedTrophies.gold, 1);
+    CHECK_EQ(groups[0].earnedTrophies.silver, 0);
+    CHECK_EQ(groups[0].earnedTrophies.total(), 2);
+    CHECK_EQ(groups[1].earnedTrophies.platinum, 1);
+    CHECK_EQ(groups[1].earnedTrophies.total(), 1);
+}
+
+TEST(merged_trophy_round_trips_through_the_detail_cache_format)
+{
+    Trophy original;
+    original.trophyId = 12;
+    original.trophyName = "Marathon";
+    original.trophyDetail = "Run far";
+    original.trophyIconUrl = "https://psnobj.prod.dl.playstation.net/x.png";
+    original.trophyType = "gold";
+    original.trophyGroupId = "default";
+    original.trophyHidden = true;
+    original.earned = true;
+    original.earnedDateTime = "2026-03-04T05:06:07Z";
+    original.trophyRare = 1;
+    original.trophyEarnedRate = 3.7;
+    original.hasProgress = true;
+    original.progress = 21000;
+    original.progressTarget = 42195;
+    original.progressRate = 49;
+    original.progressedDateTime = "2026-03-01T00:00:00Z";
+
+    json_object* encoded = toJson(original);
+
+    Trophy decoded;
+    CHECK(parseCachedTrophy(encoded, decoded));
+    json_object_put(encoded);
+
+    CHECK_EQ(decoded.trophyId, original.trophyId);
+    CHECK_EQ(decoded.trophyName, original.trophyName);
+    CHECK_EQ(decoded.trophyType, original.trophyType);
+    CHECK_EQ(decoded.trophyGroupId, original.trophyGroupId);
+    CHECK_EQ(decoded.trophyHidden, original.trophyHidden);
+    CHECK_EQ(decoded.earned, original.earned);
+    CHECK_EQ(decoded.earnedDateTime, original.earnedDateTime);
+    CHECK_EQ(decoded.trophyRare, original.trophyRare);
+    CHECK(decoded.trophyEarnedRate > 3.69 && decoded.trophyEarnedRate < 3.71);
+    CHECK_EQ(decoded.hasProgress, true);
+    CHECK_EQ(decoded.progress, original.progress);
+    CHECK_EQ(decoded.progressTarget, original.progressTarget);
+    CHECK_EQ(decoded.progressRate, original.progressRate);
+    CHECK_EQ(decoded.progressedDateTime, original.progressedDateTime);
+}
+
+TEST(group_round_trips_through_the_detail_cache_format)
+{
+    TrophyGroup original;
+    original.trophyGroupId = "001";
+    original.trophyGroupName = "DLC Pack";
+    original.trophyGroupDetail = "Extra";
+    original.trophyGroupIconUrl = "https://x/y.png";
+    original.definedTrophies = {5, 2, 1, 0};
+    original.earnedTrophies = {2, 0, 0, 0};
+    original.progress = 25;
+    original.lastUpdatedDateTime = "2026-01-01T00:00:00Z";
+
+    json_object* encoded = toJson(original);
+
+    TrophyGroup decoded;
+    CHECK(parseCachedGroup(encoded, decoded));
+    json_object_put(encoded);
+
+    CHECK_EQ(decoded.trophyGroupId, original.trophyGroupId);
+    CHECK_EQ(decoded.trophyGroupName, original.trophyGroupName);
+    CHECK_EQ(decoded.definedTrophies.total(), original.definedTrophies.total());
+    CHECK_EQ(decoded.earnedTrophies.total(), original.earnedTrophies.total());
+    CHECK_EQ(decoded.progress, original.progress);
+    CHECK_EQ(decoded.lastUpdatedDateTime, original.lastUpdatedDateTime);
 }

@@ -10,8 +10,6 @@ namespace {
 
 constexpr const char* BASE = "https://m.np.playstation.com/api/trophy/v1";
 
-// Serves canned bodies and records every URL the client asked for, which is how the
-// pagination assertions below check the cursor rather than just the row count.
 struct FakeApi {
     std::vector<std::string> requests;
     std::function<Error(const std::string& url, std::string& body)> handler;
@@ -105,7 +103,6 @@ TEST(titles_single_page_asks_for_limit_and_offset)
 
 TEST(titles_follow_next_offset_across_pages)
 {
-    // The whole reason this phase exists: a caller must never receive page one alone.
     FakeApi api;
     api.handler = [](const std::string& url, std::string& body) {
         if (url.find("offset=0") != std::string::npos)
@@ -151,8 +148,6 @@ TEST(titles_stop_when_the_page_has_no_next_offset)
 
 TEST(a_next_offset_that_does_not_advance_is_an_error_not_a_short_list)
 {
-    // Returning what arrived would be a silently truncated library, indistinguishable
-    // downstream from a complete one.
     FakeApi api;
     api.handler = [](const std::string&, std::string& body) {
         body = titlePage(0, 100, 250, 0);
@@ -240,8 +235,6 @@ TEST(rows_without_an_id_are_skipped_without_failing_the_page)
 
 TEST(per_trophy_endpoints_page_and_carry_the_service_name)
 {
-    // 165 trophies in one title was measured on a live account, and the probe that found
-    // it passed no limit at all — so this endpoint has to page like the library does.
     FakeApi api;
     api.handler = [](const std::string& url, std::string& body) {
         if (url.find("offset=0") != std::string::npos)
@@ -296,8 +289,6 @@ TEST(earned_trophies_use_the_users_me_path)
 
 TEST(group_listings_are_not_paged)
 {
-    // PSN documents limit/offset on the per-trophy endpoints, not on trophyGroups. Sending
-    // them anyway risks a 400 on an endpoint that returns four rows.
     FakeApi api;
     api.handler = [](const std::string&, std::string& body) {
         body = R"({"trophyGroups": [

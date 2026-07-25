@@ -1,14 +1,27 @@
 #include "views/trophy_list_tab.hpp"
-
-#include <borealis/core/cache_helper.hpp>
+#include "views/trophy_detail_view.hpp"
 
 #include <algorithm>
 #include <format>
 
 using namespace brls::literals;
 
+static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
+    .shadowType              = brls::ShadowType::GENERIC,
+    .hideHighlightBackground = true,
+    .highlightPadding = "",
+    .borderThickness  = "",
+    .enabledBackgroundColor = "",
+    .enabledLabelColor      = "brls/button/primary_enabled_text",
+    .enabledBorderColor     = "",
+    .disabledBackgroundColor = "",
+    .disabledLabelColor      = "brls/button/primary_disabled_text",
+    .disabledBorderColor     = "",
+};
+
 TrophyListTab* TrophyListTab::currentInstance = nullptr;
 std::unordered_set<TrophyCardCell*> TrophyCardCell::liveCells;
+std::unordered_set<std::string> TrophyCardCell::retriedIcons;
 
 static constexpr float CARD_COVER_HEIGHT = 128;
 static constexpr float CARD_ROW_HEIGHT = 216;
@@ -129,49 +142,28 @@ void TrophyCardCell::bindTitle(const psn::TrophyTitle& title)
     if (iconUrl.empty())
         return;
 
-    // Textures are owned by the cache, not the cell, so a recycled cell must not free the
-    // one it was showing. The cache is a 200-entry LRU keyed by URL and it decodes once.
-    cover->setFreeTexture(false);
-
-    int cached = brls::TextureCache::instance().getCache(iconUrl);
-    if (cached > 0)
-    {
-        brls::Logger::debug("Trophy card '{}' -> texture {} (cache hit) {}",
-            nameLabel->getFullText(), cached, iconUrl);
-        cover->innerSetImage(cached);
-        return;
-    }
-
     TrophyManager::getInstance()->fetchIcon(iconUrl,
         [](const std::string& url, const std::vector<uint8_t>& bytes) {
-            int texture = brls::TextureCache::instance().getCache(url);
-            int applied = 0;
+            bool decodeFailed = false;
 
             for (TrophyCardCell* cell : liveCells)
             {
                 if (cell->iconUrl != url)
                     continue;
 
-                if (texture <= 0)
-                {
-                    cell->cover->setImageFromMem(bytes.data(), static_cast<int>(bytes.size()));
-                    texture = cell->cover->getTexture();
+                cell->cover->setImageFromMem(bytes.data(), static_cast<int>(bytes.size()));
 
-                    // set() throws if the key is already present, so only ever insert on a
-                    // confirmed miss.
-                    if (texture > 0 && brls::TextureCache::instance().getCache(url) <= 0)
-                        brls::TextureCache::instance().addCache(url, texture);
-                }
-                else
-                {
-                    cell->cover->innerSetImage(texture);
-                }
-
-                applied++;
+                if (cell->cover->getTexture() <= 0)
+                    decodeFailed = true;
             }
 
-            brls::Logger::debug("Trophy icon ready: texture {} applied to {} card(s) {}",
-                texture, applied, url);
+            if (!decodeFailed)
+                return;
+
+            brls::Logger::warning("Trophy cover failed to decode ({} bytes) {}", bytes.size(), url);
+
+            if (retriedIcons.insert(url).second)
+                TrophyManager::getInstance()->discardIcon(url);
         });
 }
 
@@ -214,6 +206,14 @@ RecyclingGridItem* TrophyGridDataSource::cellForRow(RecyclingView* recycler, siz
     return cell;
 }
 
+void TrophyGridDataSource::onItemSelected(brls::Box* recycler, size_t index)
+{
+    if (index >= titles.size())
+        return;
+
+    brls::Application::pushActivity(new brls::Activity(new TrophyDetailView(titles[index])));
+}
+
 void TrophyGridDataSource::clearData()
 {
     titles.clear();
@@ -227,6 +227,8 @@ TrophyListTab::TrophyListTab()
 
     grid->registerCell("TrophyCard", TrophyCardCell::create);
     grid->estimatedRowHeight = CARD_ROW_HEIGHT;
+
+    forceRefreshBtn->setStyle(&BUTTONSTYLE_BLUE);
 
     forceRefreshGate.attach(
         forceRefreshBtn,
@@ -343,8 +345,6 @@ void TrophyListTab::applyTitles(const std::vector<psn::TrophyTitle>& titles)
         return;
     }
 
-    // setDataSource takes ownership and deletes the previous source, so hand it a
-    // fresh one built from our own copy rather than holding a pointer into it.
     grid->setDataSource(new TrophyGridDataSource(this->titles));
 }
 

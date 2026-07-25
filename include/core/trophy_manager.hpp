@@ -23,9 +23,6 @@
 
 class SettingsManager;
 
-// Owns everything around the PSN client rather than inside it: the token gate, the request
-// budget, the circuit breaker, TTLs, the disk cache and icons. Endpoints, response shapes
-// and paging belong to psn::Client.
 class TrophyManager {
 public:
     template <typename T>
@@ -39,13 +36,14 @@ public:
     void fetchSummary(bool forceRefresh, Callback<psn::TrophySummary> onSuccess, ErrorCallback onError);
     void fetchLibrary(bool forceRefresh, Callback<std::vector<psn::TrophyTitle>> onSuccess, ErrorCallback onError);
 
+    void fetchTitleDetail(const psn::TrophyTitle& title, bool forceRefresh,
+        Callback<psn::TitleDetail> onSuccess, ErrorCallback onError);
+
     void fetchIcon(const std::string& url, IconCallback onSuccess);
+    void discardIcon(const std::string& url);
 
     void clearCache();
 
-    // Started once the feature is first used, so an install that never opens Trophies
-    // never issues background traffic. Checks staleness on a timer rather than computing
-    // one exact deadline, which stays correct across sleep, resume and clock changes.
     void startAutoRefresh();
 
     void setSummaryObserver(Callback<psn::TrophySummary> observer);
@@ -70,6 +68,7 @@ private:
     static constexpr int LIBRARY_LOG_CAP = 50;
     static constexpr int ICON_PREFETCH_CAP = 120;
     static constexpr int SUMMARY_TTL_MINUTES = 360;
+    static constexpr int DETAIL_TTL_MINUTES = 360;
     static constexpr int LIBRARY_TTL_MINUTES = 360;
     static constexpr long ICON_TIMEOUT_S = 20;
     static constexpr size_t ICON_CACHE_MAX_BYTES = 12 * 1024 * 1024;
@@ -80,6 +79,7 @@ private:
     static constexpr const char* RATELIMIT_PATH = "sdmc:/switch/akira/cache/ratelimit.json";
     static constexpr const char* LIBRARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/library.json";
     static constexpr const char* SUMMARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/summary.json";
+    static constexpr const char* DETAIL_CACHE_DIR = "sdmc:/switch/akira/cache/trophies/detail";
     static constexpr const char* FORCE_STATE_PATH = "sdmc:/switch/akira/cache/trophies/refresh_state.json";
 
     TrophyManager();
@@ -90,8 +90,6 @@ private:
     bool breakerOpen(int& outSecondsRemaining) const;
     void tripBreaker(int seconds);
 
-    // The Fetch the client is handed: token gate, budget, burst window, breaker and retry
-    // policy, applied per request so a paged call is governed on every page.
     psn::Error governedGet(HttpSession& session, const std::string& url, std::string& outBody);
     psn::Client clientFor(HttpSession& session);
 
@@ -101,6 +99,12 @@ private:
     bool loadLibraryFromDisk(std::vector<psn::TrophyTitle>& outTitles, int64_t& outSavedAt) const;
     void saveLibraryToDisk(const std::vector<psn::TrophyTitle>& titles) const;
     bool loadSummaryFromDisk(psn::TrophySummary& outSummary, int64_t& outSavedAt) const;
+    std::string detailCachePath(const std::string& npCommunicationId) const;
+    bool loadDetailFromDisk(const std::string& npCommunicationId, psn::TitleDetail& outDetail,
+        int64_t& outSavedAt) const;
+    void saveDetailToDisk(const psn::TitleDetail& detail) const;
+    psn::Error fetchDetailBlocking(HttpSession& session, const psn::TrophyTitle& title,
+        psn::TitleDetail& outDetail);
     void saveSummaryToDisk(const psn::TrophySummary& summary) const;
     static bool cacheEntryFresh(int64_t savedAt, int ttlMinutes);
     void loadForceStateLocked();
@@ -139,6 +143,8 @@ private:
 
     std::unordered_map<std::string, int64_t> forcedAt;
     bool forceStateLoaded = false;
+
+    std::unordered_map<std::string, psn::TitleDetail> cachedDetails;
 
     std::vector<psn::TrophyTitle> cachedLibrary;
     bool hasCachedLibrary = false;

@@ -64,8 +64,6 @@ void HttpPool::stop()
 
 void HttpPool::run(int index)
 {
-    // One session per thread, alive for as long as the thread is. Every request this
-    // worker makes reuses its connection, so the SSL context is created once per host.
     HttpSession session;
 
     while (true)

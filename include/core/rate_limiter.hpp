@@ -5,15 +5,6 @@
 #include <mutex>
 #include <string>
 
-// A sustained request budget that survives relaunch.
-//
-// Homebrew gets closed and reopened constantly, so an in-memory window is trivially reset
-// by restarting. State lives in a fixed-size JSON file: a quarter-hour bucket id, a count,
-// and a circuit breaker deadline.
-//
-// Credits are reserved in blocks and spent from RAM, so a session costs one or two SD
-// writes rather than one per request. A crash forfeits the unspent block, which over-counts
-// rather than under-counts.
 class PersistedRateLimiter {
 public:
     struct Status {
@@ -29,12 +20,8 @@ public:
 
     PersistedRateLimiter(std::string path, int budget);
 
-    // Charges one request. Returns false and fills outReason when the breaker is open or
-    // the bucket is spent.
     bool tryAcquire(std::string& outReason);
 
-    // Called when the server reports throttling. Opens the breaker and records the event
-    // so the budget tightens for the next day.
     void recordThrottle(int cooldownSeconds);
 
     Status status() const;

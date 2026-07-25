@@ -28,8 +28,6 @@ void PersistedRateLimiter::loadLocked()
     FILE* file = fopen(path.c_str(), "rb");
     if (!file)
     {
-        // Nothing spent yet. A missing file on a fresh install is not evidence of usage,
-        // so starting at zero is correct rather than optimistic.
         brls::Logger::info("Rate limiter: no state at {}, starting a fresh bucket", path);
         return;
     }
@@ -44,7 +42,6 @@ void PersistedRateLimiter::loadLocked()
     json_object* parsed = json_tokener_parse(body.c_str());
     if (!parsed)
     {
-        // A file we cannot read might describe a spent bucket, so assume it did.
         count = budget;
         brls::Logger::warning("Rate limiter: state at {} is unreadable, treating this bucket as spent", path);
         return;
@@ -68,8 +65,6 @@ void PersistedRateLimiter::loadLocked()
 
     if (storedLastSeen > now)
     {
-        // The clock moved backwards. The stored counter may describe a bucket we are now
-        // pretending to be inside again, so spend it rather than trust it.
         bucket = now / BUCKET_SECONDS;
         count = budget;
         brls::Logger::warning("Rate limiter: clock moved backwards, treating this bucket as spent");
@@ -103,9 +98,6 @@ void PersistedRateLimiter::rollBucketLocked(int64_t now)
 
 int PersistedRateLimiter::budgetLocked() const
 {
-    // Our ceiling is a guess against an unpublished quota. If the server has throttled us
-    // recently the guess was wrong, so halve it for a day. It only ever relaxes by that
-    // day elapsing, never by probing upwards.
     if (lastThrottleAt > 0)
     {
         int64_t now = static_cast<int64_t>(std::time(nullptr));
@@ -125,8 +117,6 @@ void PersistedRateLimiter::persistLocked(int countToStore)
         "\"throttle_count\":{},\"last_throttle_at\":{}}}\n",
         bucket, countToStore, breakerUntil, lastSeen, throttleCount, lastThrottleAt);
 
-    // Written in place rather than temp+rename: a torn write leaves an unparseable file,
-    // which the loader already treats as a spent bucket. That fails in the safe direction.
     FILE* file = fopen(path.c_str(), "wb");
     if (!file)
     {

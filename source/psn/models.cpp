@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cerrno>
+#include <unordered_map>
 
 #include <json-c/json.h>
 
@@ -45,8 +46,6 @@ bool jsonField(json_object* parent, const char* key, json_object** out)
         !json_object_is_type(*out, json_type_null);
 }
 
-// Trims and flattens whitespace. A live account returned a title name with a trailing
-// newline, which pushed the card label off its line.
 static std::string sanitizeApiText(const char* raw)
 {
     if (!raw)
@@ -304,6 +303,156 @@ bool parseTrophyProgress(json_object* obj, Trophy& out)
     {
         out.hasProgress = true;
         out.progress = jsonInt64(obj, "progress");
+        out.progressRate = jsonInt(obj, "progressRate");
+    }
+
+    return true;
+}
+
+void mergeTrophies(std::vector<Trophy>& definitions, const std::vector<Trophy>& progress)
+{
+    std::unordered_map<int, const Trophy*> byId;
+    byId.reserve(progress.size());
+
+    for (const Trophy& row : progress)
+        byId[row.trophyId] = &row;
+
+    for (Trophy& target : definitions)
+    {
+        auto found = byId.find(target.trophyId);
+        if (found == byId.end())
+            continue;
+
+        const Trophy& state = *found->second;
+
+        target.earned = state.earned;
+        target.earnedDateTime = state.earnedDateTime;
+        target.trophyRare = state.trophyRare;
+        target.trophyEarnedRate = state.trophyEarnedRate;
+
+        if (state.hasProgress)
+        {
+            target.hasProgress = true;
+            target.progress = state.progress;
+            target.progressRate = state.progressRate;
+            target.progressedDateTime = state.progressedDateTime;
+        }
+    }
+}
+
+void mergeGroups(std::vector<TrophyGroup>& definitions, const std::vector<TrophyGroup>& progress)
+{
+    std::unordered_map<std::string, const TrophyGroup*> byId;
+    byId.reserve(progress.size());
+
+    for (const TrophyGroup& row : progress)
+        byId[row.trophyGroupId] = &row;
+
+    for (TrophyGroup& target : definitions)
+    {
+        auto found = byId.find(target.trophyGroupId);
+        if (found == byId.end())
+            continue;
+
+        const TrophyGroup& state = *found->second;
+
+        target.earnedTrophies = state.earnedTrophies;
+        target.progress = state.progress;
+        target.lastUpdatedDateTime = state.lastUpdatedDateTime;
+    }
+}
+
+void tallyGroupEarned(std::vector<TrophyGroup>& groups, const std::vector<Trophy>& trophies)
+{
+    std::unordered_map<std::string, TrophyCounts> counts;
+
+    for (const Trophy& trophy : trophies)
+    {
+        if (!trophy.earned)
+            continue;
+
+        TrophyCounts& bucket = counts[trophy.trophyGroupId];
+
+        if (trophy.trophyType == "bronze")
+            bucket.bronze++;
+        else if (trophy.trophyType == "silver")
+            bucket.silver++;
+        else if (trophy.trophyType == "gold")
+            bucket.gold++;
+        else if (trophy.trophyType == "platinum")
+            bucket.platinum++;
+    }
+
+    for (TrophyGroup& group : groups)
+    {
+        auto found = counts.find(group.trophyGroupId);
+        group.earnedTrophies = found == counts.end() ? TrophyCounts{} : found->second;
+    }
+}
+
+json_object* toJson(const TrophyGroup& group)
+{
+    json_object* obj = json_object_new_object();
+    addString(obj, "trophyGroupId", group.trophyGroupId);
+    addString(obj, "trophyGroupName", group.trophyGroupName);
+    addString(obj, "trophyGroupDetail", group.trophyGroupDetail);
+    addString(obj, "trophyGroupIconUrl", group.trophyGroupIconUrl);
+    json_object_object_add(obj, "definedTrophies", countsToJson(group.definedTrophies));
+    json_object_object_add(obj, "earnedTrophies", countsToJson(group.earnedTrophies));
+    json_object_object_add(obj, "progress", json_object_new_int(group.progress));
+    addString(obj, "lastUpdatedDateTime", group.lastUpdatedDateTime);
+    return obj;
+}
+
+json_object* toJson(const Trophy& trophy)
+{
+    json_object* obj = json_object_new_object();
+    json_object_object_add(obj, "trophyId", json_object_new_int(trophy.trophyId));
+    addString(obj, "trophyName", trophy.trophyName);
+    addString(obj, "trophyDetail", trophy.trophyDetail);
+    addString(obj, "trophyIconUrl", trophy.trophyIconUrl);
+    addString(obj, "trophyType", trophy.trophyType);
+    addString(obj, "trophyGroupId", trophy.trophyGroupId);
+    json_object_object_add(obj, "trophyHidden", json_object_new_boolean(trophy.trophyHidden));
+    json_object_object_add(obj, "earned", json_object_new_boolean(trophy.earned));
+    addString(obj, "earnedDateTime", trophy.earnedDateTime);
+    json_object_object_add(obj, "trophyRare", json_object_new_int(trophy.trophyRare));
+    json_object_object_add(obj, "trophyEarnedRate", json_object_new_double(trophy.trophyEarnedRate));
+    json_object_object_add(obj, "hasProgress", json_object_new_boolean(trophy.hasProgress));
+    json_object_object_add(obj, "progress", json_object_new_int64(trophy.progress));
+    json_object_object_add(obj, "progressTarget", json_object_new_int64(trophy.progressTarget));
+    json_object_object_add(obj, "progressRate", json_object_new_int(trophy.progressRate));
+    addString(obj, "progressedDateTime", trophy.progressedDateTime);
+    return obj;
+}
+
+bool parseCachedGroup(json_object* obj, TrophyGroup& out)
+{
+    if (!parseGroupDefinition(obj, out))
+        return false;
+
+    out.earnedTrophies = jsonCounts(obj, "earnedTrophies");
+    out.progress = jsonInt(obj, "progress");
+    out.lastUpdatedDateTime = jsonString(obj, "lastUpdatedDateTime");
+    return true;
+}
+
+bool parseCachedTrophy(json_object* obj, Trophy& out)
+{
+    if (!parseTrophyDefinition(obj, out))
+        return false;
+
+    out.earned = jsonBool(obj, "earned");
+    out.earnedDateTime = jsonString(obj, "earnedDateTime");
+    out.trophyRare = jsonInt(obj, "trophyRare");
+    out.trophyEarnedRate = jsonDouble(obj, "trophyEarnedRate");
+    out.progressedDateTime = jsonString(obj, "progressedDateTime");
+
+    if (jsonBool(obj, "hasProgress"))
+    {
+        out.hasProgress = true;
+        out.progress = jsonInt64(obj, "progress");
+        out.progressTarget = jsonInt64(obj, "progressTarget");
         out.progressRate = jsonInt(obj, "progressRate");
     }
 

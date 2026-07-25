@@ -31,8 +31,6 @@ std::string Client::titlePath(const std::string& prefix, const std::string& npCo
 {
     std::string path = prefix + "/npCommunicationIds/" + npCommunicationId + suffix;
 
-    // Tested as not load-bearing — the per-title endpoints answer identically without it —
-    // but it is the value the API handed us, so pass it back.
     if (!npServiceName.empty())
         path += "?npServiceName=" + npServiceName;
 
@@ -73,9 +71,15 @@ Error Client::fetchList(const std::string& path, const char* arrayKey, const Row
     }
 
     size_t count = json_object_array_length(array);
-    for (size_t i = 0; i < count; i++)
-        onRow(json_object_array_get_idx(array, i));
+    int rows = 0;
 
+    for (size_t i = 0; i < count; i++)
+    {
+        if (onRow(json_object_array_get_idx(array, i)))
+            rows++;
+    }
+
+    logInfo("PSN: read {} {} row(s)", rows, arrayKey);
     return {};
 }
 
@@ -122,8 +126,6 @@ Error Client::fetchPaged(const std::string& path, const char* arrayKey, const Ro
         if (pageCount == 0 || !hasNext)
             break;
 
-        // Both remaining exits are truncation, and a short list is indistinguishable from a
-        // complete one downstream, so they fail loudly instead of returning what arrived.
         if (nextOffset <= offset)
         {
             Error stalled{Status::ServerError,

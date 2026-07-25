@@ -84,7 +84,21 @@
         "count_gold": "{} gold",
         "count_silver": "{} silver",
         "count_bronze": "{} bronze",
-        "summary_unavailable": "Summary unavailable"
+        "summary_unavailable": "Summary unavailable",
+        "group_all": "All Trophies",
+        "group_picker": "Trophy group",
+        "empty_group": "No trophies in this group",
+        "hidden_name": "Hidden trophy",
+        "hidden_detail": "Details revealed when earned",
+        "earned": "Earned",
+        "type_platinum": "Platinum",
+        "type_gold": "Gold",
+        "type_silver": "Silver",
+        "type_bronze": "Bronze",
+        "rarity_ultra_rare": "Ultra Rare",
+        "rarity_very_rare": "Very Rare",
+        "rarity_rare": "Rare",
+        "rarity_common": "Common"
     },
     "add_host": {
         "title": "Add PlayStation Console",

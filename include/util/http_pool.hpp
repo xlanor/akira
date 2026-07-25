@@ -10,12 +10,6 @@
 
 #include "util/http.hpp"
 
-// Worker threads that each own one long-lived HttpSession for their whole lifetime.
-// Tasks borrow their thread's session, so the number of live SSL contexts is bounded by
-// the thread count rather than by the number of requests.
-//
-// Sized deliberately small: chiaki-ng's holepunch opens its own curl handles outside this
-// pool, so akira must leave the Switch ssl service headroom rather than take all of it.
 class HttpPool {
 public:
     using Task = std::function<void(HttpSession&)>;

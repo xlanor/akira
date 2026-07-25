@@ -31,10 +31,8 @@ private:
 
     std::string iconUrl;
 
-    // Cells are destroyed on recycle, on scroll, and wholesale when the data source is
-    // swapped. An icon callback must never dereference one that has gone away, so results
-    // are routed through this registry instead of a captured this.
     static std::unordered_set<TrophyCardCell*> liveCells;
+    static std::unordered_set<std::string> retriedIcons;
 };
 
 class TrophyGridDataSource : public RecyclingGridDataSource {
@@ -45,6 +43,7 @@ public:
 
     size_t getItemCount() override;
     RecyclingGridItem* cellForRow(RecyclingView* recycler, size_t index) override;
+    void onItemSelected(brls::Box* recycler, size_t index) override;
     void clearData() override;
 };
 

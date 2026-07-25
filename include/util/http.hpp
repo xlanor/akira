@@ -29,10 +29,6 @@ struct HttpRequest {
     long connectTimeoutSec = 0;
     bool verifyPeer = false;
 
-    // Optional caller-owned CURL* reused across calls. curl-libnx creates a Switch SSL
-    // context per connection, and the ssl service only allows a few at once, so a fresh
-    // handle per request exhausts them. Reusing one keeps the connection (and its context)
-    // alive. The caller must guarantee only one thread uses a given handle at a time.
     void* reuseHandle = nullptr;
 };
 
@@ -40,10 +36,6 @@ HttpResponse httpPerform(const HttpRequest& request);
 
 HttpResponse httpGet(const std::string& url, const std::string& bearer, long timeoutSec = 15);
 
-// A long-lived CURL handle. curl-libnx calls sslCreateContext per connection and the
-// Switch ssl service only allows a few at once, so a handle per request exhausts them.
-// One session per worker thread keeps the connection, and its SSL context, alive across
-// every request that thread makes. Not thread-safe: one session, one thread.
 class HttpSession {
 public:
     HttpSession();

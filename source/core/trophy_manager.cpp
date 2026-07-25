@@ -64,8 +64,6 @@ bool TrophyManager::cacheEntryFresh(int64_t savedAt, int ttlMinutes)
 
     int64_t now = static_cast<int64_t>(std::time(nullptr));
 
-    // A timestamp in the future means the clock moved, not that the entry is invalid.
-    // Treating it as fresh errs toward fewer requests, which is the safe direction here.
     if (savedAt > now)
         return true;
 
@@ -88,10 +86,6 @@ static std::string readWholeFile(const std::string& path)
     return body;
 }
 
-// FAT via newlib does not replace on rename the way POSIX does: it fails with EEXIST if
-// the destination is already there. The destination has to be removed first, which gives
-// up atomicity, but on this filesystem there was never an atomic replace to give up. The
-// failure window leaves no file at all, and a missing cache entry just means a refetch.
 static bool replaceFile(const std::string& temp, const std::string& path)
 {
     remove(path.c_str());
@@ -195,6 +189,90 @@ void TrophyManager::saveLibraryToDisk(const std::vector<psn::TrophyTitle>& title
     const char* text = json_object_to_json_string(root);
     if (!writeWholeFile(LIBRARY_CACHE_PATH, text ? text : ""))
         brls::Logger::warning("Trophy: could not write {}", LIBRARY_CACHE_PATH);
+
+    json_object_put(root);
+}
+
+std::string TrophyManager::detailCachePath(const std::string& npCommunicationId) const
+{
+    std::string safe;
+    safe.reserve(npCommunicationId.size());
+
+    for (char c : npCommunicationId)
+    {
+        bool allowed = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') || c == '_' || c == '-';
+        safe += allowed ? c : '_';
+    }
+
+    return std::format("{}/{}.json", DETAIL_CACHE_DIR, safe);
+}
+
+bool TrophyManager::loadDetailFromDisk(const std::string& npCommunicationId,
+    psn::TitleDetail& outDetail, int64_t& outSavedAt) const
+{
+    psn::Json doc(readWholeFile(detailCachePath(npCommunicationId)));
+    if (!doc)
+        return false;
+
+    outSavedAt = psn::jsonInt64(doc.get(), "savedAt");
+    outDetail.npCommunicationId = psn::jsonString(doc.get(), "npCommunicationId");
+    outDetail.npServiceName = psn::jsonString(doc.get(), "npServiceName");
+    outDetail.lastUpdatedDateTime = psn::jsonString(doc.get(), "lastUpdatedDateTime");
+
+    if (outDetail.npCommunicationId != npCommunicationId)
+        return false;
+
+    json_object* groups = nullptr;
+    if (psn::jsonField(doc.get(), "groups", &groups) && json_object_is_type(groups, json_type_array))
+    {
+        size_t count = json_object_array_length(groups);
+        for (size_t i = 0; i < count; i++)
+        {
+            psn::TrophyGroup group;
+            if (psn::parseCachedGroup(json_object_array_get_idx(groups, i), group))
+                outDetail.groups.push_back(std::move(group));
+        }
+    }
+
+    json_object* trophies = nullptr;
+    if (!psn::jsonField(doc.get(), "trophies", &trophies) || !json_object_is_type(trophies, json_type_array))
+        return false;
+
+    size_t count = json_object_array_length(trophies);
+    outDetail.trophies.reserve(count);
+
+    for (size_t i = 0; i < count; i++)
+    {
+        psn::Trophy trophy;
+        if (psn::parseCachedTrophy(json_object_array_get_idx(trophies, i), trophy))
+            outDetail.trophies.push_back(std::move(trophy));
+    }
+
+    return !outDetail.trophies.empty();
+}
+
+void TrophyManager::saveDetailToDisk(const psn::TitleDetail& detail) const
+{
+    json_object* groups = json_object_new_array();
+    for (const psn::TrophyGroup& group : detail.groups)
+        json_object_array_add(groups, psn::toJson(group));
+
+    json_object* trophies = json_object_new_array();
+    for (const psn::Trophy& trophy : detail.trophies)
+        json_object_array_add(trophies, psn::toJson(trophy));
+
+    json_object* root = json_object_new_object();
+    json_object_object_add(root, "savedAt", json_object_new_int64(static_cast<int64_t>(std::time(nullptr))));
+    json_object_object_add(root, "npCommunicationId", json_object_new_string(detail.npCommunicationId.c_str()));
+    json_object_object_add(root, "npServiceName", json_object_new_string(detail.npServiceName.c_str()));
+    json_object_object_add(root, "lastUpdatedDateTime", json_object_new_string(detail.lastUpdatedDateTime.c_str()));
+    json_object_object_add(root, "groups", groups);
+    json_object_object_add(root, "trophies", trophies);
+
+    const char* text = json_object_to_json_string(root);
+    if (!writeWholeFile(detailCachePath(detail.npCommunicationId), text ? text : ""))
+        brls::Logger::warning("Trophy: could not write the detail cache for {}", detail.npCommunicationId);
 
     json_object_put(root);
 }
@@ -794,6 +872,151 @@ void TrophyManager::fetchLibrary(bool forceRefresh, Callback<std::vector<psn::Tr
     });
 }
 
+psn::Error TrophyManager::fetchDetailBlocking(HttpSession& session, const psn::TrophyTitle& title,
+    psn::TitleDetail& outDetail)
+{
+    psn::Client client = clientFor(session);
+
+    outDetail.npCommunicationId = title.npCommunicationId;
+    outDetail.npServiceName = title.npServiceName;
+    outDetail.lastUpdatedDateTime = title.lastUpdatedDateTime;
+
+    std::vector<psn::Trophy> definitions;
+    psn::Error error = client.fetchTrophyDefinitions(title.npCommunicationId, title.npServiceName, definitions);
+    if (!error.ok())
+        return error;
+
+    std::vector<psn::Trophy> progress;
+    error = client.fetchTrophyProgress(title.npCommunicationId, title.npServiceName, progress);
+    if (!error.ok())
+        return error;
+
+    psn::mergeTrophies(definitions, progress);
+    outDetail.trophies = std::move(definitions);
+
+    if (!title.hasTrophyGroups)
+    {
+        psn::TrophyGroup base;
+        base.trophyGroupId = "default";
+        base.trophyGroupName = title.trophyTitleName;
+        base.trophyGroupIconUrl = title.trophyTitleIconUrl;
+        base.definedTrophies = title.definedTrophies;
+        base.earnedTrophies = title.earnedTrophies;
+        base.progress = title.progress;
+        base.lastUpdatedDateTime = title.lastUpdatedDateTime;
+        outDetail.groups.push_back(std::move(base));
+
+        brls::Logger::info("Trophy detail {}: {} trophies, single group",
+            title.npCommunicationId, outDetail.trophies.size());
+        return {};
+    }
+
+    std::vector<psn::TrophyGroup> groups;
+    error = client.fetchGroupDefinitions(title.npCommunicationId, title.npServiceName, groups);
+    if (!error.ok())
+        return error;
+
+    std::vector<psn::TrophyGroup> groupProgress;
+    psn::Error progressError = client.fetchGroupProgress(title.npCommunicationId, title.npServiceName, groupProgress);
+
+    if (progressError.ok())
+    {
+        psn::mergeGroups(groups, groupProgress);
+    }
+    else
+    {
+        psn::tallyGroupEarned(groups, outDetail.trophies);
+        brls::Logger::warning("Trophy detail {}: group progress failed ({}), earned counts tallied from trophies",
+            title.npCommunicationId, progressError.message);
+    }
+
+    outDetail.groups = std::move(groups);
+
+    brls::Logger::info("Trophy detail {}: {} trophies across {} group(s)",
+        title.npCommunicationId, outDetail.trophies.size(), outDetail.groups.size());
+    return {};
+}
+
+void TrophyManager::fetchTitleDetail(const psn::TrophyTitle& title, bool forceRefresh,
+    Callback<psn::TitleDetail> onSuccess, ErrorCallback onError)
+{
+    HttpPool::instance().submit([this, title, forceRefresh, onSuccess, onError](HttpSession& session) {
+        const std::string& id = title.npCommunicationId;
+
+        if (!forceRefresh)
+        {
+            psn::TitleDetail cached;
+            bool haveCached = false;
+
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                auto entry = cachedDetails.find(id);
+                if (entry != cachedDetails.end() && entry->second.lastUpdatedDateTime == title.lastUpdatedDateTime)
+                {
+                    cached = entry->second;
+                    haveCached = true;
+                }
+            }
+
+            if (!haveCached)
+            {
+                int64_t savedAt = 0;
+                psn::TitleDetail fromDisk;
+
+                if (loadDetailFromDisk(id, fromDisk, savedAt))
+                {
+                    bool signalMatches = !title.lastUpdatedDateTime.empty() &&
+                        fromDisk.lastUpdatedDateTime == title.lastUpdatedDateTime;
+
+                    if (signalMatches || cacheEntryFresh(savedAt, DETAIL_TTL_MINUTES))
+                    {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        cachedDetails[id] = fromDisk;
+                        cached = std::move(fromDisk);
+                        haveCached = true;
+
+                        brls::Logger::info("Trophy detail {} served from disk cache ({})",
+                            id, signalMatches ? "unchanged since last fetch" : "within TTL");
+                    }
+                    else
+                    {
+                        brls::Logger::info("Trophy detail {} is stale, refetching", id);
+                    }
+                }
+            }
+
+            if (haveCached)
+            {
+                brls::sync([onSuccess, cached]() { if (onSuccess) onSuccess(cached); });
+                return;
+            }
+        }
+
+        psn::TitleDetail detail;
+        psn::Error error = fetchDetailBlocking(session, title, detail);
+
+        if (error.ok())
+        {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                cachedDetails[id] = detail;
+            }
+
+            ensureCacheDirs();
+            mkdir(DETAIL_CACHE_DIR, 0755);
+            saveDetailToDisk(detail);
+
+            brls::sync([onSuccess, detail]() { if (onSuccess) onSuccess(detail); });
+            return;
+        }
+
+        brls::Logger::error("Trophy: detail fetch for {} failed with {} ({})",
+            id, psn::statusName(error.status), error.message);
+
+        brls::sync([onError, error]() { if (onError) onError(error.status, error.message); });
+    });
+}
+
 void TrophyManager::fetchIcon(const std::string& url, IconCallback onSuccess)
 {
     if (url.empty())
@@ -813,9 +1036,6 @@ void TrophyManager::fetchIcon(const std::string& url, IconCallback onSuccess)
             return;
         }
 
-        // Every caller for a URL is queued, not just the first. Dropping later callers
-        // meant a prefetch with no callback could claim the slot and leave the card that
-        // actually wanted the image waiting for a result it never received.
         auto existing = iconWaiters.find(url);
         bool alreadyInFlight = existing != iconWaiters.end();
 
@@ -894,6 +1114,27 @@ void TrophyManager::fetchIcon(const std::string& url, IconCallback onSuccess)
     });
 }
 
+void TrophyManager::discardIcon(const std::string& url)
+{
+    {
+        std::lock_guard<std::mutex> lock(iconMutex);
+
+        auto entry = iconCache.find(url);
+        if (entry != iconCache.end())
+        {
+            iconCacheBytes -= entry->second.size();
+            iconCache.erase(entry);
+        }
+
+        auto position = std::find(iconOrder.begin(), iconOrder.end(), url);
+        if (position != iconOrder.end())
+            iconOrder.erase(position);
+    }
+
+    remove(iconCachePath(url).c_str());
+    brls::Logger::warning("Trophy: discarded the cached icon for {}", url);
+}
+
 void TrophyManager::setSummaryObserver(Callback<psn::TrophySummary> observer)
 {
     summaryObserver = std::move(observer);
@@ -924,9 +1165,6 @@ void TrophyManager::runStaleCheck()
     {
         std::lock_guard<std::mutex> lock(mutex);
 
-        // Only keep warm what has actually been loaded once. Nothing cached means the user
-        // has never opened the tab, and refreshing on their behalf would be traffic they
-        // never asked for.
         if (!hasCachedLibrary)
             return;
 
@@ -976,8 +1214,6 @@ void TrophyManager::prefetchIcons(const std::vector<psn::TrophyTitle>& titles)
         }
 
         queued++;
-        // No callback: this only warms the cache. A visible card asking for the same URL
-        // joins the in-flight request as a waiter and is served when it lands.
         fetchIcon(title.trophyTitleIconUrl, nullptr);
     }
 

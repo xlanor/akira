@@ -27,17 +27,8 @@ struct Error {
     bool ok() const { return status == Status::Ok; }
 };
 
-// Knows the trophy API: base URL, endpoint paths, query parameters, envelopes and paging.
-// It knows nothing about tokens, rate limits or caching — those reach it through the Fetch
-// callback, which is expected to arrive already governed.
-//
-// Every list endpoint that PSN paginates is paged here rather than at the call site, so a
-// caller receives a complete vector or an error. A short first page is indistinguishable
-// from a complete response, which is why this cannot be left to remember per endpoint.
 class Client {
 public:
-    // Performs one GET of an absolute URL and returns its body. The implementation owns
-    // authentication, the rate limiter, the circuit breaker and retries.
     using Fetch = std::function<Error(const std::string& url, std::string& outBody)>;
 
     explicit Client(Fetch fetch);
@@ -45,7 +36,6 @@ public:
     Error fetchSummary(TrophySummary& out) const;
     Error fetchTitles(std::vector<TrophyTitle>& out) const;
 
-    // Group listings are small (one entry per DLC pack) and PSN does not paginate them.
     Error fetchGroupDefinitions(const std::string& npCommunicationId,
         const std::string& npServiceName, std::vector<TrophyGroup>& out) const;
     Error fetchGroupProgress(const std::string& npCommunicationId,

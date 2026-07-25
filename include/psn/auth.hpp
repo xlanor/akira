@@ -37,9 +37,6 @@ struct ActionStatus {
 
 ActionStatus actionStatus(bool busy, std::chrono::steady_clock::time_point readyAt);
 
-// Owns the PSN OAuth session: the stored tokens, the refresh grant, and the single-flight
-// guard that keeps concurrent callers from each spending a refresh. Discovery and trophies
-// are both callers; neither owns it.
 class Auth {
 public:
     using ErrorCallback = std::function<void(AuthError, const std::string&)>;
@@ -50,13 +47,9 @@ public:
     bool tokenValid() const;
     std::string accessToken() const;
 
-    // Returns the shared result when a refresh is already running rather than starting a
-    // second one. Blocks, so it must be called from a pool thread.
     AuthResult refreshBlocking(HttpSession& session);
     void refresh(std::function<void()> onSuccess, ErrorCallback onError);
 
-    // Only for a grant PSN rejected outright. A transient failure keeps the tokens; a
-    // network blip is not a revoked session.
     void clearTokens(const std::string& reason);
 
     ActionStatus refreshStatus() const;

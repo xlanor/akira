@@ -13,9 +13,6 @@ enum class LogLevel {
     Error
 };
 
-// The client and its models are plain C++ over json-c so they can be built and tested on a
-// host, which borealis cannot. Logging therefore goes through a sink the app installs once
-// rather than a direct brls::Logger call.
 using LogSink = void (*)(LogLevel level, const std::string& message);
 
 void setLogSink(LogSink sink);

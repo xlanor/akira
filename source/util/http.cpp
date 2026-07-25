@@ -9,9 +9,6 @@
 
 #include "util/curl_wrappers.hpp"
 
-// DNS results are shared across every session so each worker does not repeat the same
-// lookups. Connections are deliberately NOT shared: curl's cross-thread connection cache
-// is fragile, and each session keeping its own connection is what bounds SSL contexts.
 static std::array<std::mutex, CURL_LOCK_DATA_LAST> g_shareLocks;
 
 static void curlShareLock(CURL*, curl_lock_data data, curl_lock_access, void*)
