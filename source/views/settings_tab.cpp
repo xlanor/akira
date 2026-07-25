@@ -38,9 +38,12 @@ static const brls::ButtonStyle BUTTONSTYLE_GREEN = {
     .disabledBorderColor     = "",
 };
 
+SettingsTab* SettingsTab::currentInstance = nullptr;
+
 SettingsTab::SettingsTab() {
     this->inflateFromXMLRes("xml/tabs/settings.xml");
 
+    currentInstance = this;
     settings = SettingsManager::getInstance();
 
     initLanguageSelector();
@@ -95,6 +98,22 @@ SettingsTab::SettingsTab() {
     });
 
     updateCredentialsDisplay();
+}
+
+SettingsTab::~SettingsTab() {
+    if (currentInstance == this) {
+        currentInstance = nullptr;
+    }
+}
+
+void SettingsTab::willAppear(bool resetState) {
+    Box::willAppear(resetState);
+    refreshTokenGate.start();
+}
+
+void SettingsTab::willDisappear(bool resetState) {
+    Box::willDisappear(resetState);
+    refreshTokenGate.stop();
 }
 
 brls::View* SettingsTab::create() {
@@ -905,9 +924,21 @@ void SettingsTab::initAuthSection() {
     });
 
     refreshTokenBtn->setStyle(&BUTTONSTYLE_GREEN);
-    refreshTokenBtn->setBackgroundColor(nvgRGBA(74, 222, 128, 255));
+
+    refreshTokenGate.attach(
+        refreshTokenBtn,
+        nvgRGBA(74, 222, 128, 255),
+        "akira/settings/refresh_token_btn"_i18n,
+        "akira/settings/refresh_token_busy"_i18n,
+        "akira/settings/refresh_token_wait",
+        []() { return DiscoveryManager::getInstance()->getTokenRefreshStatus(); }
+    );
 
     refreshTokenBtn->registerClickAction([this](brls::View* view) {
+        if (!refreshTokenGate.isReady()) {
+            return true;
+        }
+
         std::string refreshToken = settings->getPsnRefreshToken();
         if (refreshToken.empty()) {
             brls::Application::notify("akira/settings/no_refresh_token"_i18n);
@@ -917,20 +948,21 @@ void SettingsTab::initAuthSection() {
         brls::Application::notify("akira/settings/refreshing_token"_i18n);
 
         DiscoveryManager::getInstance()->refreshPsnToken(
-            [this]() {
-                brls::sync([this]() {
-                    brls::Application::notify("akira/settings/token_refreshed"_i18n);
-                    brls::Logger::info("PSN token refreshed");
-                    updateCredentialsDisplay();
-                });
+            []() {
+                brls::Application::notify("akira/settings/token_refreshed"_i18n);
+                brls::Logger::info("PSN token refreshed");
+                if (SettingsTab::currentInstance) {
+                    SettingsTab::currentInstance->updateCredentialsDisplay();
+                }
             },
-            [](const std::string& error) {
-                brls::sync([error]() {
-                    brls::Application::notify(brls::getStr("akira/settings/refresh_failed", error));
-                    brls::Logger::error("Failed to refresh PSN token: {}", error);
-                });
+            [](PsnAuthError kind, const std::string& error) {
+                brls::Application::notify(brls::getStr("akira/settings/refresh_failed", error));
+                brls::Logger::error("Failed to refresh PSN token ({}): {}",
+                    kind == PsnAuthError::Invalid ? "invalid" : "transient", error);
             }
         );
+
+        refreshTokenGate.apply();
 
         return true;
     });

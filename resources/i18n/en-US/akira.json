@@ -26,6 +26,8 @@
     "hosts": {
         "title": "PlayStation Consoles",
         "find_remote": "Find Remote",
+        "find_remote_busy": "Searching...",
+        "find_remote_wait": "Wait {}s",
         "no_consoles": "No consoles found",
         "no_consoles_hint": "Make sure your PlayStation is on the same network",
         "remote": "Remote",
@@ -331,7 +333,9 @@
         "token_refreshed": "Token refreshed successfully!",
         "refresh_failed": "Refresh failed: {}",
         "fetch_psn_btn": "Fetch PSN Credentials from Companion App",
-        "refresh_token_btn": "Refresh Token"
+        "refresh_token_btn": "Refresh Token",
+        "refresh_token_busy": "Refreshing...",
+        "refresh_token_wait": "Wait {}s"
     },
     "network": {
         "check_nat": "Check NAT Type",

@@ -5,12 +5,19 @@
 #include <chrono>
 
 #include "core/settings_manager.hpp"
+#include "views/psn_action_button.hpp"
 
 class SettingsTab : public brls::Box {
 public:
     SettingsTab();
+    ~SettingsTab() override;
 
     static brls::View* create();
+
+    void willAppear(bool resetState) override;
+    void willDisappear(bool resetState) override;
+
+    static SettingsTab* currentInstance;
 
 private:
     BRLS_BIND(brls::SelectorCell, languageSelector, "settings/language");
@@ -69,6 +76,8 @@ private:
     BRLS_BIND(brls::SliderCell, portGuessingSocksSlider, "settings/portGuessingSocks");
     BRLS_BIND(brls::BooleanCell, autoReconnectToggle, "settings/autoReconnect");
     BRLS_BIND(brls::Button, runBenchmarkBtn, "settings/runBenchmark");
+
+    PsnActionButton refreshTokenGate;
 
     SettingsManager* settings = nullptr;
     int powerUserClickCount = 0;

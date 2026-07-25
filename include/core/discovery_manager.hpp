@@ -1,10 +1,13 @@
 #ifndef AKIRA_DISCOVERY_MANAGER_HPP
 #define AKIRA_DISCOVERY_MANAGER_HPP
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
-#include <atomic>
 
 #include <chiaki/discoveryservice.h>
 #include <chiaki/log.h>
@@ -12,6 +15,7 @@
 #include <chiaki/remote/holepunch.h>
 
 #include "host.hpp"
+#include "util/serial_worker.hpp"
 
 class SettingsManager;
 
@@ -20,11 +24,41 @@ struct NetworkAddresses {
     uint32_t broadcast;
 };
 
+enum class PsnAuthError {
+    Transient,
+    Invalid
+};
+
+struct RemoteRefreshResult {
+    bool success = false;
+    PsnAuthError error = PsnAuthError::Transient;
+    std::string message;
+};
+
+enum class PsnActionState {
+    Ready,
+    Busy,
+    CoolingDown
+};
+
+struct PsnActionStatus {
+    PsnActionState state = PsnActionState::Ready;
+    int secondsRemaining = 0;
+};
+
 class DiscoveryManager {
 public:
     using HostDiscoveredCallback = std::function<void(Host*)>;
+    using PsnTokenErrorCallback = std::function<void(PsnAuthError, const std::string&)>;
+    using RemoteRefreshCallback = std::function<void(const RemoteRefreshResult&)>;
 
 private:
+    struct PsnRefreshResult {
+        bool success = false;
+        PsnAuthError error = PsnAuthError::Transient;
+        std::string message;
+    };
+
     SettingsManager* settings = nullptr;
     ChiakiLog* log = nullptr;
     ChiakiLog discoveryLog;
@@ -39,8 +73,32 @@ private:
 
     NetworkAddresses getIPv4BroadcastAddr();
 
-    void fetchRemoteDevicesFromPsn(std::function<void()> onComplete);
+    void fetchRemoteDevicesFromPsn();
     void processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType);
+
+    static constexpr int PSN_TOKEN_COOLDOWN_S = 60;
+    static constexpr int PSN_REMOTE_COOLDOWN_S = 15;
+    static constexpr int PSN_FAILED_COOLDOWN_S = 5;
+
+    SerialWorker psnWorker{"akira-psn"};
+
+    mutable std::mutex psnRefreshMutex;
+    std::condition_variable psnRefreshCond;
+    bool psnRefreshInFlight = false;
+    int psnRefreshQueued = 0;
+    PsnRefreshResult psnLastRefreshResult;
+    std::chrono::steady_clock::time_point psnRefreshReadyAt{};
+
+    mutable std::mutex remoteRefreshMutex;
+    bool remoteRefreshInFlight = false;
+    bool remoteRefreshUserRequested = false;
+    std::vector<RemoteRefreshCallback> remoteRefreshWaiters;
+    std::chrono::steady_clock::time_point remoteRefreshReadyAt{};
+
+    PsnRefreshResult awaitPsnTokenRefresh();
+    PsnRefreshResult performPsnTokenRefresh();
+    void runRemoteDeviceRefresh();
+    void finishRemoteDeviceRefresh(const RemoteRefreshResult& result);
 
     ChiakiThread remoteDiscoveryThread;
     ChiakiBoolPredCond remoteStopCond;
@@ -89,12 +147,15 @@ public:
 
     void refreshPsnToken(
         std::function<void()> onSuccess,
-        std::function<void(const std::string&)> onError
+        PsnTokenErrorCallback onError
     );
 
     bool isPsnTokenValid() const;
 
-    void refreshRemoteDevices(std::function<void()> onComplete = nullptr);
+    void refreshRemoteDevices(RemoteRefreshCallback onComplete = nullptr, bool userInitiated = false);
+
+    PsnActionStatus getTokenRefreshStatus() const;
+    PsnActionStatus getRemoteRefreshStatus() const;
 };
 
 #endif // AKIRA_DISCOVERY_MANAGER_HPP

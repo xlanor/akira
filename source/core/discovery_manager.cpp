@@ -13,9 +13,9 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
-#include <curl/curl.h>
-#include "util/curl_wrappers.hpp"
 #include <json-c/json.h>
+
+#include "util/http.hpp"
 
 static void discovery_log_cb(ChiakiLogLevel level, const char* msg, void* user)
 {
@@ -38,12 +38,6 @@ static void DiscoveryServiceCallback(ChiakiDiscoveryHost* discovered_hosts, size
     {
         dm->discoveryCallback(&discovered_hosts[i]);
     }
-}
-
-static size_t CurlWriteCallback(void* contents, size_t size, size_t nmemb, std::string* userp)
-{
-    userp->append(static_cast<char*>(contents), size * nmemb);
-    return size * nmemb;
 }
 
 DiscoveryManager* DiscoveryManager::getInstance()
@@ -352,13 +346,6 @@ void DiscoveryManager::fetchCompanionCredentials(
     )> onSuccess,
     std::function<void(const std::string&)> onError)
 {
-    CurlHandle curl;
-    if (!curl)
-    {
-        onError("Failed to initialize CURL");
-        return;
-    }
-
     std::string accountId;
     std::string onlineId;
     std::string accessToken;
@@ -366,34 +353,29 @@ void DiscoveryManager::fetchCompanionCredentials(
     int64_t expiresAt = 0;
     std::string duid;
 
-    std::string response_data;
-    long http_code = 0;
-    CURLcode res;
+    auto companionGet = [&host, port](const char* path) {
+        HttpRequest request;
+        request.url = std::format("http://{}:{}{}", host, port, path);
+        request.timeoutSec = 10;
+        request.connectTimeoutSec = 5;
+        return httpPerform(request);
+    };
 
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+    HttpResponse response = companionGet("/account");
 
-    std::string accountUrl = std::format("http://{}:{}/account", host, port);
-    curl_easy_setopt(curl, CURLOPT_URL, accountUrl.c_str());
-
-    res = curl_easy_perform(curl);
-
-    if (res != CURLE_OK)
+    if (response.transportFailed())
     {
-        onError(curl_easy_strerror(res));
+        onError(response.error);
         return;
     }
 
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (http_code != 200)
+    if (response.status != 200)
     {
-        onError(std::format("Account fetch HTTP error: {}", http_code));
+        onError(std::format("Account fetch HTTP error: {}", response.status));
         return;
     }
 
-    struct json_object* parsed_json = json_tokener_parse(response_data.c_str());
+    struct json_object* parsed_json = json_tokener_parse(response.body.c_str());
     if (parsed_json)
     {
         struct json_object* account_id_obj;
@@ -418,26 +400,21 @@ void DiscoveryManager::fetchCompanionCredentials(
         json_object_put(parsed_json);
     }
 
-    std::string tokenUrl = std::format("http://{}:{}/token", host, port);
-    response_data.clear();
-    curl_easy_setopt(curl, CURLOPT_URL, tokenUrl.c_str());
+    response = companionGet("/token");
 
-    res = curl_easy_perform(curl);
-
-    if (res != CURLE_OK)
+    if (response.transportFailed())
     {
-        onError(std::string("Token fetch failed: ") + curl_easy_strerror(res));
+        onError("Token fetch failed: " + response.error);
         return;
     }
 
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (http_code != 200)
+    if (response.status != 200)
     {
-        onError(std::format("Token fetch HTTP error: {}", http_code));
+        onError(std::format("Token fetch HTTP error: {}", response.status));
         return;
     }
 
-    parsed_json = json_tokener_parse(response_data.c_str());
+    parsed_json = json_tokener_parse(response.body.c_str());
     if (parsed_json)
     {
         struct json_object* access_token_obj;
@@ -467,26 +444,21 @@ void DiscoveryManager::fetchCompanionCredentials(
         json_object_put(parsed_json);
     }
 
-    std::string duidUrl = std::format("http://{}:{}/duid", host, port);
-    response_data.clear();
-    curl_easy_setopt(curl, CURLOPT_URL, duidUrl.c_str());
+    response = companionGet("/duid");
 
-    res = curl_easy_perform(curl);
-
-    if (res != CURLE_OK)
+    if (response.transportFailed())
     {
-        onError(std::string("DUID fetch failed: ") + curl_easy_strerror(res));
+        onError("DUID fetch failed: " + response.error);
         return;
     }
 
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (http_code != 200)
+    if (response.status != 200)
     {
-        onError(std::format("DUID fetch HTTP error: {}", http_code));
+        onError(std::format("DUID fetch HTTP error: {}", response.status));
         return;
     }
 
-    parsed_json = json_tokener_parse(response_data.c_str());
+    parsed_json = json_tokener_parse(response.body.c_str());
     if (parsed_json)
     {
         struct json_object* duid_obj;
@@ -517,115 +489,164 @@ static const char* PSN_REDIRECT_URI = "https://remoteplay.dl.playstation.net/rem
 
 void DiscoveryManager::refreshPsnToken(
     std::function<void()> onSuccess,
-    std::function<void(const std::string&)> onError)
+    PsnTokenErrorCallback onError)
+{
+    {
+        std::lock_guard<std::mutex> lock(psnRefreshMutex);
+        psnRefreshQueued++;
+    }
+
+    psnWorker.post([this, onSuccess = std::move(onSuccess), onError = std::move(onError)]() {
+        PsnRefreshResult result = awaitPsnTokenRefresh();
+
+        {
+            std::lock_guard<std::mutex> lock(psnRefreshMutex);
+            psnRefreshQueued--;
+        }
+
+        brls::sync([result, onSuccess, onError]() {
+            if (result.success)
+            {
+                if (onSuccess)
+                    onSuccess();
+            }
+            else if (onError)
+            {
+                onError(result.error, result.message);
+            }
+        });
+    });
+}
+
+DiscoveryManager::PsnRefreshResult DiscoveryManager::awaitPsnTokenRefresh()
+{
+    std::unique_lock<std::mutex> lock(psnRefreshMutex);
+
+    if (psnRefreshInFlight)
+    {
+        brls::Logger::info("PSN token refresh already in flight, awaiting its result");
+        psnRefreshCond.wait(lock, [this]() { return !psnRefreshInFlight; });
+        return psnLastRefreshResult;
+    }
+
+    psnRefreshInFlight = true;
+    lock.unlock();
+
+    PsnRefreshResult result = performPsnTokenRefresh();
+
+    lock.lock();
+    psnLastRefreshResult = result;
+    psnRefreshInFlight = false;
+    psnRefreshReadyAt = std::chrono::steady_clock::now() +
+        std::chrono::seconds(result.success ? PSN_TOKEN_COOLDOWN_S : PSN_FAILED_COOLDOWN_S);
+    psnRefreshCond.notify_all();
+
+    return result;
+}
+
+static PsnActionStatus psnActionStatus(bool busy, std::chrono::steady_clock::time_point readyAt)
+{
+    if (busy)
+        return {PsnActionState::Busy, 0};
+
+    auto now = std::chrono::steady_clock::now();
+    if (readyAt <= now)
+        return {PsnActionState::Ready, 0};
+
+    auto remainingMs = std::chrono::duration_cast<std::chrono::milliseconds>(readyAt - now).count();
+    return {PsnActionState::CoolingDown, static_cast<int>((remainingMs + 999) / 1000)};
+}
+
+PsnActionStatus DiscoveryManager::getTokenRefreshStatus() const
+{
+    std::lock_guard<std::mutex> lock(psnRefreshMutex);
+    return psnActionStatus(psnRefreshInFlight || psnRefreshQueued > 0, psnRefreshReadyAt);
+}
+
+PsnActionStatus DiscoveryManager::getRemoteRefreshStatus() const
+{
+    std::lock_guard<std::mutex> lock(remoteRefreshMutex);
+    return psnActionStatus(remoteRefreshInFlight, remoteRefreshReadyAt);
+}
+
+DiscoveryManager::PsnRefreshResult DiscoveryManager::performPsnTokenRefresh()
 {
     std::string refreshToken = settings->getPsnRefreshToken();
     if (refreshToken.empty())
     {
-        onError("No refresh token stored");
-        return;
+        return {false, PsnAuthError::Invalid, "No refresh token stored"};
     }
 
-    CurlHandle curl;
-    if (!curl)
-    {
-        onError("Failed to initialize CURL");
-        return;
-    }
-
-    std::string credentials = std::string(PSN_CLIENT_ID) + ":" + PSN_CLIENT_SECRET;
-    size_t credLen = credentials.length();
-    size_t b64Len = ((4 * credLen / 3) + 3) & ~3;
-    std::string b64Credentials(b64Len, '\0');
-
-    static const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t i = 0, j = 0;
-    for (i = 0; i < credLen - 2; i += 3) {
-        b64Credentials[j++] = b64chars[(credentials[i] >> 2) & 0x3F];
-        b64Credentials[j++] = b64chars[((credentials[i] & 0x3) << 4) | ((credentials[i + 1] >> 4) & 0xF)];
-        b64Credentials[j++] = b64chars[((credentials[i + 1] & 0xF) << 2) | ((credentials[i + 2] >> 6) & 0x3)];
-        b64Credentials[j++] = b64chars[credentials[i + 2] & 0x3F];
-    }
-    if (i < credLen) {
-        b64Credentials[j++] = b64chars[(credentials[i] >> 2) & 0x3F];
-        if (i == credLen - 1) {
-            b64Credentials[j++] = b64chars[(credentials[i] & 0x3) << 4];
-            b64Credentials[j++] = '=';
-        } else {
-            b64Credentials[j++] = b64chars[((credentials[i] & 0x3) << 4) | ((credentials[i + 1] >> 4) & 0xF)];
-            b64Credentials[j++] = b64chars[(credentials[i + 1] & 0xF) << 2];
-        }
-        b64Credentials[j++] = '=';
-    }
-    b64Credentials.resize(j);
-
-    std::string authHeader = "Authorization: Basic " + b64Credentials;
-
-    std::string postData = "grant_type=refresh_token"
+    HttpRequest request;
+    request.url = PSN_TOKEN_URL;
+    request.basicUser = PSN_CLIENT_ID;
+    request.basicPassword = PSN_CLIENT_SECRET;
+    request.headers = {"Content-Type: application/x-www-form-urlencoded"};
+    request.postFields = "grant_type=refresh_token"
         "&refresh_token=" + refreshToken +
         "&scope=" + std::string(PSN_SCOPES) +
         "&redirect_uri=" + std::string(PSN_REDIRECT_URI);
+    request.post = true;
+    request.timeoutSec = 30;
 
-    std::string response_data;
+    HttpResponse response = httpPerform(request);
 
-    CurlSlist headers;
-    headers.append(authHeader.c_str());
-    headers.append("Content-Type: application/x-www-form-urlencoded");
-
-    curl_easy_setopt(curl, CURLOPT_URL, PSN_TOKEN_URL);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, static_cast<curl_slist*>(headers));
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_data);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-
-    CURLcode res = curl_easy_perform(curl);
-
-    if (res != CURLE_OK)
+    if (response.transportFailed())
     {
-        onError(curl_easy_strerror(res));
-        return;
+        brls::Logger::error("PSN token refresh transport failure: {}", response.error);
+        return {false, PsnAuthError::Transient, response.error};
     }
 
-    long http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    struct json_object* parsed_json = json_tokener_parse(response.body.c_str());
 
-    if (http_code != 200)
-    {
-        brls::Logger::error("PSN token refresh failed with HTTP {}: {}", http_code, response_data);
-        onError(std::format("HTTP error: {}", http_code));
-        return;
-    }
-
-    struct json_object* parsed_json = json_tokener_parse(response_data.c_str());
-    if (!parsed_json)
-    {
-        onError("Failed to parse JSON response");
-        return;
-    }
-
-    struct json_object* access_token_obj;
-    struct json_object* refresh_token_obj;
+    std::string errorCode;
+    std::string errorMessage;
     struct json_object* error_obj;
 
-    if (json_object_object_get_ex(parsed_json, "error", &error_obj))
+    if (parsed_json && json_object_object_get_ex(parsed_json, "error", &error_obj))
     {
-        std::string errorMsg = json_object_get_string(error_obj);
+        errorCode = json_object_get_string(error_obj);
+        errorMessage = errorCode;
+
         struct json_object* error_desc_obj;
         if (json_object_object_get_ex(parsed_json, "error_description", &error_desc_obj))
         {
-            errorMsg += ": " + std::string(json_object_get_string(error_desc_obj));
+            errorMessage += ": " + std::string(json_object_get_string(error_desc_obj));
         }
-        onError(errorMsg);
+    }
+
+    if (response.status != 200)
+    {
+        if (parsed_json)
+            json_object_put(parsed_json);
+
+        brls::Logger::error("PSN token refresh failed with HTTP {}: {}", response.status, response.body);
+
+        bool tokenRejected = (response.status == 400 || response.status == 401) && errorCode == "invalid_grant";
+        if (errorMessage.empty())
+            errorMessage = std::format("HTTP error: {}", response.status);
+
+        return {false, tokenRejected ? PsnAuthError::Invalid : PsnAuthError::Transient, errorMessage};
+    }
+
+    if (!parsed_json)
+    {
+        return {false, PsnAuthError::Transient, "Failed to parse JSON response"};
+    }
+
+    if (!errorCode.empty())
+    {
         json_object_put(parsed_json);
-        return;
+        return {false, PsnAuthError::Transient, errorMessage};
     }
 
     std::string newAccessToken;
     std::string newRefreshToken;
     int expiresIn = 0;
+
+    struct json_object* access_token_obj;
+    struct json_object* refresh_token_obj;
+    struct json_object* expires_in_obj;
 
     if (json_object_object_get_ex(parsed_json, "access_token", &access_token_obj))
     {
@@ -635,8 +656,6 @@ void DiscoveryManager::refreshPsnToken(
     {
         newRefreshToken = json_object_get_string(refresh_token_obj);
     }
-
-    struct json_object* expires_in_obj;
     if (json_object_object_get_ex(parsed_json, "expires_in", &expires_in_obj))
     {
         expiresIn = json_object_get_int(expires_in_obj);
@@ -646,8 +665,7 @@ void DiscoveryManager::refreshPsnToken(
 
     if (newAccessToken.empty() || newRefreshToken.empty())
     {
-        onError("Missing tokens in response");
-        return;
+        return {false, PsnAuthError::Transient, "Missing tokens in response"};
     }
 
     settings->setPsnAccessToken(newAccessToken);
@@ -662,7 +680,7 @@ void DiscoveryManager::refreshPsnToken(
     settings->writeFile();
 
     brls::Logger::info("PSN token refreshed successfully");
-    onSuccess();
+    return {true, PsnAuthError::Transient, ""};
 }
 
 bool DiscoveryManager::isPsnTokenValid() const
@@ -683,10 +701,33 @@ bool DiscoveryManager::isPsnTokenValid() const
     return (expiresAt - 60) > now;
 }
 
-void DiscoveryManager::refreshRemoteDevices(std::function<void()> onComplete)
+void DiscoveryManager::refreshRemoteDevices(RemoteRefreshCallback onComplete, bool userInitiated)
 {
     brls::Logger::info("DiscoveryManager::refreshRemoteDevices() called");
 
+    {
+        std::lock_guard<std::mutex> lock(remoteRefreshMutex);
+
+        if (onComplete)
+            remoteRefreshWaiters.push_back(std::move(onComplete));
+
+        if (userInitiated)
+            remoteRefreshUserRequested = true;
+
+        if (remoteRefreshInFlight)
+        {
+            brls::Logger::info("Remote device refresh already running, joining in-flight request");
+            return;
+        }
+
+        remoteRefreshInFlight = true;
+    }
+
+    psnWorker.post([this]() { runRemoteDeviceRefresh(); });
+}
+
+void DiscoveryManager::runRemoteDeviceRefresh()
+{
     if (!isPsnTokenValid())
     {
         brls::Logger::info("PSN token not valid, attempting to refresh...");
@@ -695,37 +736,71 @@ void DiscoveryManager::refreshRemoteDevices(std::function<void()> onComplete)
         if (refreshToken.empty())
         {
             brls::Logger::warning("No PSN refresh token available, cannot discover remote devices");
-            if (onComplete) onComplete();
+            finishRemoteDeviceRefresh({false, PsnAuthError::Invalid, "No refresh token stored"});
             return;
         }
 
-        refreshPsnToken(
-            [this, onComplete]() {
-                brls::Logger::info("Token refresh successful, now fetching remote devices");
-                fetchRemoteDevicesFromPsn(onComplete);
-            },
-            [this, onComplete](const std::string& error) {
-                brls::Logger::error("Failed to refresh PSN token: {}", error);
-                brls::Logger::info("Clearing invalid PSN token data from config");
+        PsnRefreshResult result = awaitPsnTokenRefresh();
+        if (!result.success)
+        {
+            if (result.error == PsnAuthError::Invalid)
+            {
+                brls::Logger::error("PSN refresh token rejected ({}), clearing stored PSN token data", result.message);
                 settings->clearPsnTokenData();
                 settings->writeFile();
-                if (onComplete) onComplete();
             }
-        );
-        return;
+            else
+            {
+                brls::Logger::error("PSN token refresh failed transiently ({}), keeping stored tokens", result.message);
+            }
+
+            finishRemoteDeviceRefresh({false, result.error, result.message});
+            return;
+        }
+
+        brls::Logger::info("Token refresh successful, now fetching remote devices");
+    }
+    else
+    {
+        brls::Logger::info("PSN token is valid, fetching remote devices");
     }
 
-    brls::Logger::info("PSN token is valid, fetching remote devices");
-    fetchRemoteDevicesFromPsn(onComplete);
+    fetchRemoteDevicesFromPsn();
+    finishRemoteDeviceRefresh({true, PsnAuthError::Transient, ""});
 }
 
-void DiscoveryManager::fetchRemoteDevicesFromPsn(std::function<void()> onComplete)
+void DiscoveryManager::finishRemoteDeviceRefresh(const RemoteRefreshResult& result)
+{
+    std::vector<RemoteRefreshCallback> waiters;
+
+    {
+        std::lock_guard<std::mutex> lock(remoteRefreshMutex);
+        waiters.swap(remoteRefreshWaiters);
+        remoteRefreshInFlight = false;
+
+        if (remoteRefreshUserRequested)
+        {
+            remoteRefreshReadyAt = std::chrono::steady_clock::now() +
+                std::chrono::seconds(result.success ? PSN_REMOTE_COOLDOWN_S : PSN_FAILED_COOLDOWN_S);
+            remoteRefreshUserRequested = false;
+        }
+    }
+
+    if (waiters.empty())
+        return;
+
+    brls::sync([waiters, result]() {
+        for (const auto& waiter : waiters)
+            waiter(result);
+    });
+}
+
+void DiscoveryManager::fetchRemoteDevicesFromPsn()
 {
     std::string accessToken = settings->getPsnAccessToken();
     if (accessToken.empty())
     {
         brls::Logger::error("No access token available for remote device discovery");
-        if (onComplete) onComplete();
         return;
     }
 
@@ -777,13 +852,6 @@ void DiscoveryManager::fetchRemoteDevicesFromPsn(std::function<void()> onComplet
     else
     {
         brls::Logger::error("Failed to list PS4 devices: {}", chiaki_error_string(ps4Err));
-    }
-
-    if (onComplete)
-    {
-        brls::sync([onComplete]() {
-            onComplete();
-        });
     }
 }
 

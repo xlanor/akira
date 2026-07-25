@@ -26,6 +26,8 @@
     "hosts": {
         "title": "PlayStation 主机",
         "find_remote": "查找远程设备",
+        "find_remote_busy": "正在查找...",
+        "find_remote_wait": "等待 {} 秒",
         "no_consoles": "未找到主机",
         "no_consoles_hint": "请确保您的 PlayStation 与本设备在同一网络中",
         "remote": "远程",
@@ -331,7 +333,9 @@
         "token_refreshed": "令牌刷新成功！",
         "refresh_failed": "刷新失败：{}",
         "fetch_psn_btn": "从伴侣应用获取 PSN 信息",
-        "refresh_token_btn": "刷新令牌"
+        "refresh_token_btn": "刷新令牌",
+        "refresh_token_busy": "正在刷新...",
+        "refresh_token_wait": "等待 {} 秒"
     },
     "network": {
         "check_nat": "检测 NAT 类型",

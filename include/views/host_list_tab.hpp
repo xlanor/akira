@@ -6,6 +6,7 @@
 
 #include "core/discovery_manager.hpp"
 #include "core/settings_manager.hpp"
+#include "views/psn_action_button.hpp"
 
 class HostItemView;
 
@@ -31,6 +32,8 @@ private:
     BRLS_BIND(brls::Button, findRemoteBtn, "host/findRemoteBtn");
 
     void initFindRemoteButton();
+
+    PsnActionButton findRemoteGate;
 
     SettingsManager* settings = nullptr;
     DiscoveryManager* discovery = nullptr;

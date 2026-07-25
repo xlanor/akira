@@ -567,9 +567,21 @@ HostListTab::HostListTab() {
 
 void HostListTab::initFindRemoteButton() {
     findRemoteBtn->setStyle(&BUTTONSTYLE_BLUE);
-    findRemoteBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
+
+    findRemoteGate.attach(
+        findRemoteBtn,
+        nvgRGBA(92, 157, 255, 255),
+        "akira/hosts/find_remote"_i18n,
+        "akira/hosts/find_remote_busy"_i18n,
+        "akira/hosts/find_remote_wait",
+        []() { return DiscoveryManager::getInstance()->getRemoteRefreshStatus(); }
+    );
 
     findRemoteBtn->registerClickAction([this](brls::View* view) {
+        if (!findRemoteGate.isReady()) {
+            return true;
+        }
+
         std::string refreshToken = settings->getPsnRefreshToken();
 
         if (refreshToken.empty()) {
@@ -577,35 +589,28 @@ void HostListTab::initFindRemoteButton() {
             return true;
         }
 
-        int64_t expiresAt = settings->getPsnTokenExpiresAt();
-        int64_t now = std::time(nullptr);
+        auto onComplete = [](const RemoteRefreshResult& result) {
+            if (!result.success) {
+                brls::Application::notify(brls::getStr("akira/hosts/token_refresh_failed", result.message));
+            }
 
-        auto onComplete = [this]() {
-            syncHostList();
-            if (findRemoteBtn) {
-                brls::Application::giveFocus(findRemoteBtn);
+            if (!HostListTab::currentInstance) {
+                return;
+            }
+            HostListTab::currentInstance->syncHostList();
+            if (HostListTab::currentInstance->findRemoteBtn) {
+                brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
             }
         };
 
-        if (expiresAt > 0 && now > expiresAt) {
-            brls::Application::notify("akira/hosts/token_expired_refreshing"_i18n);
-            discovery->refreshPsnToken(
-                [this, onComplete]() {
-                    brls::sync([this, onComplete]() {
-                        brls::Application::notify("akira/hosts/finding_remote"_i18n);
-                        discovery->refreshRemoteDevices(onComplete);
-                    });
-                },
-                [](const std::string& error) {
-                    brls::sync([error]() {
-                        brls::Application::notify(brls::getStr("akira/hosts/token_refresh_failed", error));
-                    });
-                }
-            );
-        } else {
+        if (discovery->isPsnTokenValid()) {
             brls::Application::notify("akira/hosts/finding_remote"_i18n);
-            discovery->refreshRemoteDevices(onComplete);
+        } else {
+            brls::Application::notify("akira/hosts/token_expired_refreshing"_i18n);
         }
+
+        discovery->refreshRemoteDevices(onComplete, true);
+        findRemoteGate.apply();
 
         return true;
     });
@@ -625,13 +630,15 @@ void HostListTab::willAppear(bool resetState) {
     Box::willAppear(resetState);
     isActive = true;
     brls::Logger::debug("HostListTab::willAppear - resuming discovery callbacks");
-    syncHostList();  
+    findRemoteGate.start();
+    syncHostList();
 }
 
 void HostListTab::willDisappear(bool resetState) {
     Box::willDisappear(resetState);
     isActive = false;
     brls::Logger::debug("HostListTab::willDisappear - pausing discovery callbacks");
+    findRemoteGate.stop();
 }
 
 brls::View* HostListTab::create() {
