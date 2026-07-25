@@ -154,5 +154,5 @@ jobs:
             Please read the [README](https://github.com/${{ github.repository }}#readme) before getting started.
 
             - [Features](https://github.com/${{ github.repository }}/wiki/Additional-changes)
-            - [Registering and Connecting (Local Network)](https://github.com/${{ github.repository }}/wiki/Registering-and-Connecting-(Local-Network))
-            - [Registering and Connecting (Remote Network)](https://github.com/${{ github.repository }}/wiki/Registering-and-Connecting-(Remote-Network))
+
+            **For setup and connection, please read the [Registering and Connecting (Unified)](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Unified)) guide carefully.**
