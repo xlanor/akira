@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"akira-companion/internal/i18n"
+	"akira-companion/internal/psn"
 	"akira-companion/internal/state"
 	"akira-companion/tui"
 
@@ -21,6 +22,11 @@ func main() {
 	appState := state.NewAppState()
 	if err := appState.Load(); err != nil {
 		fmt.Printf("%s\n", i18n.Tf("app.warning_load_state", map[string]interface{}{"Error": err}))
+	}
+
+	if appState.GetDUID() == "" {
+		appState.SetDUID(psn.GenerateRandomDUID())
+		appState.Save()
 	}
 
 	model := tui.NewModel(appState)

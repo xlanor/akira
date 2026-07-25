@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"bytes"
 	"strings"
 
 	"akira-companion/internal/i18n"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/mdp/qrterminal/v3"
 )
 
 type loginState int
@@ -28,48 +26,35 @@ type LoginModel struct {
 	loginState    loginState
 	redirectInput textinput.Model
 	loginURL      string
-	qrCode        string
 	message       string
 	accountInfo   *state.AccountInfo
 }
 
 func NewLoginModel(s *state.AppState) LoginModel {
 	redirectInput := textinput.New()
-	redirectInput.Placeholder = i18n.T("login.placeholder_redirect")
+	redirectInput.Placeholder = i18n.T("login.placeholder_npsso")
 	redirectInput.CharLimit = 2048
 	redirectInput.Width = 60
 
-	duid := s.GetDUID()
-	loginURL := psn.GenerateLoginURL(duid)
+	loginURL := psn.SSOCookieURL
 
-	var qrBuf bytes.Buffer
-	qrCfg := qrterminal.Config{
-		Level:          qrterminal.L,
-		Writer:         &qrBuf,
-		QuietZone:      1,
-		HalfBlocks:     true,
-		BlackChar:      qrterminal.BLACK_BLACK,
-		WhiteChar:      qrterminal.WHITE_WHITE,
-		WhiteBlackChar: qrterminal.WHITE_BLACK,
-		BlackWhiteChar: qrterminal.BLACK_WHITE,
+	loginState := loginStateShowURL
+	var accountInfo *state.AccountInfo
+	if tokenInfo := s.GetTokenInfo(); tokenInfo.HasAccessToken && !tokenInfo.IsExpired {
+		loginState = loginStateSuccess
+		accountInfo = s.GetAccountInfo()
 	}
-	qrterminal.GenerateWithConfig(loginURL, qrCfg)
 
 	return LoginModel{
 		state:         s,
-		loginState:    loginStateShowURL,
+		loginState:    loginState,
 		redirectInput: redirectInput,
 		loginURL:      loginURL,
-		qrCode:        qrBuf.String(),
+		accountInfo:   accountInfo,
 	}
 }
 
 func (m LoginModel) Init() tea.Cmd {
-	tokenInfo := m.state.GetTokenInfo()
-	if tokenInfo.HasAccessToken && !tokenInfo.IsExpired {
-		m.loginState = loginStateSuccess
-		m.accountInfo = m.state.GetAccountInfo()
-	}
 	return nil
 }
 
@@ -107,6 +92,8 @@ func (m LoginModel) handleKeyMsg(msg tea.KeyMsg) (LoginModel, tea.Cmd) {
 			m.loginState = loginStateWaitingForRedirect
 			m.redirectInput.Focus()
 			return m, textinput.Blink
+		case "b":
+			return m, GoBackStep
 		}
 
 	case loginStateWaitingForRedirect:
@@ -116,10 +103,10 @@ func (m LoginModel) handleKeyMsg(msg tea.KeyMsg) (LoginModel, tea.Cmd) {
 			m.redirectInput.Blur()
 			return m, nil
 		case "enter":
-			redirectURL := m.redirectInput.Value()
-			if redirectURL != "" {
+			npsso := strings.TrimSpace(m.redirectInput.Value())
+			if npsso != "" {
 				m.loginState = loginStateExchanging
-				return m, m.exchangeToken(redirectURL)
+				return m, m.loginWithNpsso(npsso)
 			}
 		default:
 			var cmd tea.Cmd
@@ -154,9 +141,9 @@ type tokenExchangeResultMsg struct {
 	err error
 }
 
-func (m LoginModel) exchangeToken(redirectURL string) tea.Cmd {
+func (m LoginModel) loginWithNpsso(npsso string) tea.Cmd {
 	return func() tea.Msg {
-		code, err := psn.ExtractCodeFromRedirect(redirectURL)
+		code, err := psn.GetAuthCodeFromNpsso(npsso, m.state.GetDUID())
 		if err != nil {
 			return tokenExchangeResultMsg{err: err}
 		}
@@ -167,6 +154,7 @@ func (m LoginModel) exchangeToken(redirectURL string) tea.Cmd {
 		}
 
 		m.state.SetTokens(tokens)
+		m.state.SetNpsso(npsso)
 
 		accountInfo, err := psn.GetAccountInfo(tokens.AccessToken)
 		if err != nil {
@@ -186,15 +174,13 @@ func (m LoginModel) View() string {
 	switch m.loginState {
 	case loginStateShowURL:
 		b.WriteString(i18n.T("login.title") + "\n\n")
-		b.WriteString(WarningStyle.Render(i18n.T("login.url_warning")))
+		b.WriteString(i18n.T("login.url_prompt"))
 		b.WriteString("\n\n")
 		b.WriteString(m.loginURL)
 		b.WriteString("\n\n")
-		b.WriteString(WarningStyle.Render(i18n.T("login.qr_warning")))
-		b.WriteString("\n")
-		b.WriteString(m.qrCode)
-		b.WriteString("\n")
 		b.WriteString(MutedStyle.Render(i18n.T("login.press_enter_ready")))
+		b.WriteString("\n")
+		b.WriteString(MutedStyle.Render(i18n.T("login.back_help")))
 
 	case loginStateWaitingForRedirect:
 		b.WriteString(i18n.T("login.paste_prompt") + "\n\n")
@@ -234,4 +220,3 @@ func (m LoginModel) View() string {
 
 	return b.String()
 }
-

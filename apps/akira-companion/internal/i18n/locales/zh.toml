@@ -97,26 +97,26 @@ other = "输入48位十六进制 DUID..."
 [login.title]
 other = "登录 PlayStation Network"
 
-[login.url_warning]
-other = ">>> 请在 Windows 浏览器中打开此链接（Sony 屏蔽了 Linux）<<<"
-
-[login.qr_warning]
-other = ">>> 或用手机扫描此二维码 <<<"
+[login.url_prompt]
+other = "先登录 PSN，然后在浏览器中打开此链接："
 
 [login.press_enter_ready]
-other = "准备好粘贴重定向链接后按 Enter"
+other = "准备好粘贴 npsso 令牌后按 Enter"
+
+[login.back_help]
+other = "按 'b' 返回 DUID 设置"
 
 [login.paste_prompt]
-other = "登录后请粘贴重定向链接："
+other = "请粘贴你的 npsso 令牌："
 
 [login.redirect_hint]
-other = "链接以此开头：https://remoteplay.dl.playstation.net/remoteplay/redirect?..."
+other = "页面会显示形如 {\"npsso\":\"...\"} 的 JSON，复制引号之间的值"
 
 [login.submit_help]
 other = "按 Enter 提交，Esc 返回"
 
 [login.exchanging]
-other = "正在交换授权码获取令牌..."
+other = "正在使用 npsso 令牌进行认证..."
 
 [login.please_wait]
 other = "请稍候..."
@@ -148,8 +148,8 @@ other = "✗ 登录失败"
 [login.retry_help]
 other = "按 Enter 或 'r' 重试"
 
-[login.placeholder_redirect]
-other = "在此粘贴重定向链接..."
+[login.placeholder_npsso]
+other = "在此粘贴你的 npsso 令牌..."
 
 [server.credentials_title]
 other = "PSN 凭证"
@@ -209,10 +209,10 @@ other = "  GET /token   - 获取 PSN 令牌"
 other = "  GET /duid    - 获取当前 DUID"
 
 [server.help_running]
-other = "按 's' 停止服务器，'r' 刷新 IP"
+other = "按 's' 停止服务器，'r' 刷新 IP，'b' 返回"
 
 [server.help_stopped]
-other = "按 's' 启动服务器，'r' 刷新 IP"
+other = "按 's' 启动服务器，'r' 刷新 IP，'b' 返回"
 
 [server.msg_started]
 other = "服务器已在端口 {{.Port}} 启动"

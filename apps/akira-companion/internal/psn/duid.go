@@ -39,7 +39,3 @@ func ValidateDUID(duid string) error {
 
 	return nil
 }
-
-func GenerateLoginURL(duid string) string {
-	return BuildLoginURL(duid)
-}

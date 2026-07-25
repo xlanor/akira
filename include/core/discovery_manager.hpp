@@ -73,12 +73,6 @@ public:
         onHostDiscovered = std::move(callback);
     }
 
-    void lookupPsnAccountId(
-        const std::string& username,
-        std::function<void(const std::string&)> onSuccess,
-        std::function<void(const std::string&)> onError
-    );
-
     void fetchCompanionCredentials(
         const std::string& host,
         int port,

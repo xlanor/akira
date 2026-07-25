@@ -10,26 +10,32 @@ const (
 
 	TokenURL = "https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/token"
 
+	NpssoAuthorizeURL = "https://ca.account.sony.com/api/authz/v3/oauth/authorize"
+	NpssoTokenURL     = "https://ca.account.sony.com/api/authz/v3/oauth/token"
+
+	SSOCookieURL = "https://ca.account.sony.com/api/v1/ssocookie"
+
 	RedirectURI = "https://remoteplay.dl.playstation.net/remoteplay/redirect"
 
 	Scopes = "psn:clientapp referenceDataService:countryConfig.read pushNotification:webSocket.desktop.connect sessionManager:remotePlaySession.system.update"
 )
 
-func BuildLoginURL(duid string) string {
+var npssoAuthorizeURL = NpssoAuthorizeURL
+
+func BuildNpssoAuthorizeURL(duid, cid string) string {
 	params := url.Values{}
-	params.Set("service_entity", "urn:service-entity:psn")
-	params.Set("response_type", "code")
 	params.Set("client_id", ClientID)
 	params.Set("redirect_uri", RedirectURI)
 	params.Set("scope", Scopes)
-	params.Set("request_locale", "en_US")
-	params.Set("ui", "pr")
-	params.Set("service_logo", "ps")
-	params.Set("layout_type", "popup")
-	params.Set("smcid", "remoteplay")
-	params.Set("prompt", "always")
-	params.Set("PlatformPrivacyWs1", "minimal")
+	params.Set("response_type", "code")
+	params.Set("service_entity", "urn:service-entity:psn")
+	params.Set("access_type", "offline")
 	params.Set("duid", duid)
+	params.Set("smcid", "remoteplay")
+	params.Set("layout_type", "popup")
+	params.Set("PlatformPrivacyWs1", "minimal")
+	params.Set("no_captcha", "true")
+	params.Set("cid", cid)
 
-	return "https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/authorize?" + params.Encode()
+	return npssoAuthorizeURL + "?" + params.Encode()
 }

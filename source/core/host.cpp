@@ -215,8 +215,9 @@ void Host::copyRegistrationFrom(const Host* other)
     rpKeyType = other->rpKeyType;
     memcpy(rpKey, other->rpKey, sizeof(rpKey));
 
-    psnAccountId = other->psnAccountId;
-    psnOnlineId = other->psnOnlineId;
+    Host* otherMut = const_cast<Host*>(other);
+    psnAccountId = other->psnAccountId.empty() ? settings->getPsnAccountId(otherMut) : other->psnAccountId;
+    psnOnlineId = other->psnOnlineId.empty() ? settings->getPsnOnlineId(otherMut) : other->psnOnlineId;
     consolePIN = other->consolePIN;
 
     registered = true;
