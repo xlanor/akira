@@ -20,11 +20,77 @@ static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
 };
 
 TrophyListTab* TrophyListTab::currentInstance = nullptr;
+TitleSort TrophyListTab::sortMode = TitleSort::Recent;
+TitleFilter TrophyListTab::filterMode = TitleFilter::All;
 std::unordered_set<TrophyCardCell*> TrophyCardCell::liveCells;
 std::unordered_set<std::string> TrophyCardCell::retriedIcons;
 
 static constexpr float CARD_COVER_HEIGHT = 128;
 static constexpr float CARD_ROW_HEIGHT = 216;
+
+const char* titleSortLabelKey(TitleSort sort)
+{
+    switch (sort)
+    {
+        case TitleSort::Recent: return "akira/trophies/tsort_recent";
+        case TitleSort::Progress: return "akira/trophies/tsort_progress";
+        case TitleSort::Name: return "akira/trophies/tsort_name";
+        case TitleSort::Earned: return "akira/trophies/tsort_earned";
+    }
+    return "akira/trophies/tsort_recent";
+}
+
+const char* titleFilterLabelKey(TitleFilter filter)
+{
+    switch (filter)
+    {
+        case TitleFilter::All: return "akira/trophies/tfilter_all";
+        case TitleFilter::InProgress: return "akira/trophies/tfilter_in_progress";
+        case TitleFilter::Completed: return "akira/trophies/tfilter_completed";
+        case TitleFilter::Unstarted: return "akira/trophies/tfilter_unstarted";
+        case TitleFilter::Hidden: return "akira/trophies/tfilter_hidden";
+    }
+    return "akira/trophies/tfilter_all";
+}
+
+static bool titleMatchesFilter(const psn::TrophyTitle& title, TitleFilter filter)
+{
+    int earned = title.earnedTrophies.total();
+    int defined = title.definedTrophies.total();
+
+    switch (filter)
+    {
+        case TitleFilter::All: return !title.hiddenFlag;
+        case TitleFilter::InProgress: return !title.hiddenFlag && earned > 0 && earned < defined;
+        case TitleFilter::Completed: return !title.hiddenFlag && defined > 0 && earned >= defined;
+        case TitleFilter::Unstarted: return !title.hiddenFlag && earned == 0;
+        case TitleFilter::Hidden: return title.hiddenFlag;
+    }
+    return true;
+}
+
+std::string formatRelativeAge(int64_t savedAt)
+{
+    if (savedAt <= 0)
+        return std::string();
+
+    int64_t now = static_cast<int64_t>(std::time(nullptr));
+    int64_t age = now - savedAt;
+
+    if (age < 0)
+        return brls::getStr("akira/trophies/updated_just_now");
+
+    if (age < 90)
+        return brls::getStr("akira/trophies/updated_just_now");
+
+    if (age < 3600)
+        return brls::getStr("akira/trophies/updated_minutes", static_cast<int>(age / 60));
+
+    if (age < 86400)
+        return brls::getStr("akira/trophies/updated_hours", static_cast<int>(age / 3600));
+
+    return brls::getStr("akira/trophies/updated_days", static_cast<int>(age / 86400));
+}
 
 std::string formatTrophyPlatforms(const std::string& raw)
 {
@@ -228,7 +294,23 @@ TrophyListTab::TrophyListTab()
     grid->registerCell("TrophyCard", TrophyCardCell::create);
     grid->estimatedRowHeight = CARD_ROW_HEIGHT;
 
-    forceRefreshBtn->setStyle(&BUTTONSTYLE_BLUE);
+    for (brls::Button* button : {forceRefreshBtn.getView(), sortBtn.getView(), filterBtn.getView()})
+        button->setStyle(&BUTTONSTYLE_BLUE);
+
+    sortBtn->setBackgroundColor(nvgRGBA(72, 76, 84, 255));
+    filterBtn->setBackgroundColor(nvgRGBA(72, 76, 84, 255));
+
+    sortBtn->registerClickAction([this](brls::View* view) {
+        showSortPicker();
+        return true;
+    });
+
+    filterBtn->registerClickAction([this](brls::View* view) {
+        showFilterPicker();
+        return true;
+    });
+
+    refreshControlLabels();
 
     forceRefreshGate.attach(
         forceRefreshBtn,
@@ -296,6 +378,15 @@ void TrophyListTab::willAppear(bool resetState)
     Box::willAppear(resetState);
 
     forceRefreshGate.start();
+    statusTimer.setCallback([this]() { refreshStatusLine(); });
+    statusTimer.start(30 * 1000);
+    refreshStatusLine();
+
+    if (!gate->evaluate())
+    {
+        loadRequested = false;
+        return;
+    }
 
     if (!loadRequested)
         load(false);
@@ -304,6 +395,7 @@ void TrophyListTab::willAppear(bool resetState)
 void TrophyListTab::willDisappear(bool resetState)
 {
     forceRefreshGate.stop();
+    statusTimer.stop();
 
     Box::willDisappear(resetState);
 }
@@ -319,33 +411,184 @@ void TrophyListTab::applySummary(const psn::TrophySummary& summary)
 
 void TrophyListTab::applyTitles(const std::vector<psn::TrophyTitle>& titles)
 {
-    this->titles.clear();
-    this->titles.reserve(titles.size());
+    this->titles = titles;
+    rebuildGrid();
+}
+
+void TrophyListTab::rebuildGrid()
+{
+    std::vector<psn::TrophyTitle> rows;
+    rows.reserve(titles.size());
 
     for (const psn::TrophyTitle& title : titles)
     {
-        if (title.hiddenFlag)
-            continue;
-
-        this->titles.push_back(title);
+        if (titleMatchesFilter(title, filterMode))
+            rows.push_back(title);
     }
 
-    std::stable_sort(this->titles.begin(), this->titles.end(),
-        [](const psn::TrophyTitle& a, const psn::TrophyTitle& b) {
-            return a.lastUpdatedDateTime > b.lastUpdatedDateTime;
-        });
-
-    size_t hidden = titles.size() - this->titles.size();
-    if (hidden > 0)
-        brls::Logger::info("Trophy grid: {} hidden title(s) filtered out", hidden);
-
-    if (this->titles.empty())
+    switch (sortMode)
     {
-        grid->setEmpty("akira/trophies/empty"_i18n);
+        case TitleSort::Recent:
+            std::stable_sort(rows.begin(), rows.end(),
+                [](const psn::TrophyTitle& a, const psn::TrophyTitle& b) {
+                    return a.lastUpdatedDateTime > b.lastUpdatedDateTime;
+                });
+            break;
+
+        case TitleSort::Progress:
+            std::stable_sort(rows.begin(), rows.end(),
+                [](const psn::TrophyTitle& a, const psn::TrophyTitle& b) {
+                    if (a.progress != b.progress)
+                        return a.progress > b.progress;
+                    return a.lastUpdatedDateTime > b.lastUpdatedDateTime;
+                });
+            break;
+
+        case TitleSort::Name:
+            std::stable_sort(rows.begin(), rows.end(),
+                [](const psn::TrophyTitle& a, const psn::TrophyTitle& b) {
+                    return a.trophyTitleName < b.trophyTitleName;
+                });
+            break;
+
+        case TitleSort::Earned:
+            std::stable_sort(rows.begin(), rows.end(),
+                [](const psn::TrophyTitle& a, const psn::TrophyTitle& b) {
+                    int aEarned = a.earnedTrophies.total();
+                    int bEarned = b.earnedTrophies.total();
+
+                    if (aEarned != bEarned)
+                        return aEarned > bEarned;
+
+                    return a.lastUpdatedDateTime > b.lastUpdatedDateTime;
+                });
+            break;
+    }
+
+    refreshControlLabels();
+    refreshStatusLine();
+
+    if (rows.empty())
+    {
+        grid->setEmpty(filterMode == TitleFilter::All
+            ? "akira/trophies/empty"_i18n
+            : "akira/trophies/empty_filter"_i18n);
         return;
     }
 
-    grid->setDataSource(new TrophyGridDataSource(this->titles));
+    grid->setDataSource(new TrophyGridDataSource(std::move(rows)));
+}
+
+void TrophyListTab::refreshControlLabels()
+{
+    sortBtn->setText(brls::getStr("akira/trophies/sort_btn_value",
+        brls::getStr(titleSortLabelKey(sortMode))));
+
+    filterBtn->setText(brls::getStr("akira/trophies/filter_btn_value",
+        brls::getStr(titleFilterLabelKey(filterMode))));
+}
+
+void TrophyListTab::refreshStatusLine()
+{
+    TrophyManager* manager = TrophyManager::getInstance();
+    PersistedRateLimiter::Status budget = manager->budgetStatus();
+
+    int64_t now = static_cast<int64_t>(std::time(nullptr));
+
+    if (budget.breakerOpen(now))
+    {
+        statusLabel->setText(brls::getStr("akira/trophies/status_breaker",
+            static_cast<int>((budget.breakerUntil - now + 59) / 60)));
+        statusLabel->setTextColor(nvgRGB(248, 113, 113));
+        return;
+    }
+
+    if (budget.remaining() <= 0)
+    {
+        statusLabel->setText(brls::getStr("akira/trophies/status_budget_spent",
+            static_cast<int>((budget.bucketResetsAt - now + 59) / 60)));
+        statusLabel->setTextColor(nvgRGB(248, 113, 113));
+        return;
+    }
+
+    std::string age = formatRelativeAge(manager->librarySavedAtSeconds());
+
+    statusLabel->setText(age.empty()
+        ? brls::getStr("akira/trophies/status_budget", budget.used, budget.limit)
+        : brls::getStr("akira/trophies/status_line", age, budget.used, budget.limit));
+
+    statusLabel->setTextColor(budget.remaining() <= budget.limit / 5
+        ? nvgRGB(251, 191, 36)
+        : nvgRGB(122, 127, 136));
+}
+
+void TrophyListTab::showSortPicker()
+{
+    static const TitleSort options[] = {
+        TitleSort::Recent,
+        TitleSort::Progress,
+        TitleSort::Name,
+        TitleSort::Earned
+    };
+
+    std::vector<std::string> labels;
+    int selected = 0;
+
+    for (size_t i = 0; i < std::size(options); i++)
+    {
+        labels.push_back(brls::getStr(titleSortLabelKey(options[i])));
+        if (options[i] == sortMode)
+            selected = static_cast<int>(i);
+    }
+
+    auto* dropdown = new brls::Dropdown(
+        "akira/trophies/sort_picker"_i18n,
+        labels,
+        [](int chosen) {
+            if (!currentInstance || chosen < 0 || chosen >= static_cast<int>(std::size(options)))
+                return;
+
+            sortMode = options[chosen];
+            currentInstance->rebuildGrid();
+        },
+        selected);
+
+    brls::Application::pushActivity(new brls::Activity(dropdown));
+}
+
+void TrophyListTab::showFilterPicker()
+{
+    static const TitleFilter options[] = {
+        TitleFilter::All,
+        TitleFilter::InProgress,
+        TitleFilter::Completed,
+        TitleFilter::Unstarted,
+        TitleFilter::Hidden
+    };
+
+    std::vector<std::string> labels;
+    int selected = 0;
+
+    for (size_t i = 0; i < std::size(options); i++)
+    {
+        labels.push_back(brls::getStr(titleFilterLabelKey(options[i])));
+        if (options[i] == filterMode)
+            selected = static_cast<int>(i);
+    }
+
+    auto* dropdown = new brls::Dropdown(
+        "akira/trophies/filter_picker"_i18n,
+        labels,
+        [](int chosen) {
+            if (!currentInstance || chosen < 0 || chosen >= static_cast<int>(std::size(options)))
+                return;
+
+            filterMode = options[chosen];
+            currentInstance->rebuildGrid();
+        },
+        selected);
+
+    brls::Application::pushActivity(new brls::Activity(dropdown));
 }
 
 void TrophyListTab::load(bool forceRefresh)

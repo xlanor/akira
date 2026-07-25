@@ -9,6 +9,7 @@
 
 #include "core/trophy_manager.hpp"
 #include "views/psn_action_button.hpp"
+#include "views/psn_gated_box.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
 
 class TrophyRowCell : public RecyclingGridItem {
@@ -87,6 +88,7 @@ private:
     BRLS_BIND(brls::Button, filterBtn, "detail/filterBtn");
     BRLS_BIND(brls::Button, refreshBtn, "detail/refreshBtn");
     BRLS_BIND(RecyclingGrid, list, "detail/list");
+    BRLS_BIND(PsnGatedBox, gate, "detail/gate");
 
     void load(bool forceRefresh);
     void applyDetail(const psn::TitleDetail& detail);

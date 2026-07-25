@@ -6,26 +6,9 @@
 #include <vector>
 
 #include "psn/models.hpp"
+#include "psn/status.hpp"
 
 namespace psn {
-
-enum class Status {
-    Ok,
-    NotLinked,
-    SessionExpired,
-    Offline,
-    RateLimited,
-    ServerError
-};
-
-const char* statusName(Status status);
-
-struct Error {
-    Status status = Status::Ok;
-    std::string message;
-
-    bool ok() const { return status == Status::Ok; }
-};
 
 class Client {
 public:

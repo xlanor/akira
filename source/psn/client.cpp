@@ -7,20 +7,6 @@
 
 namespace psn {
 
-const char* statusName(Status status)
-{
-    switch (status)
-    {
-        case Status::Ok: return "Ok";
-        case Status::NotLinked: return "NotLinked";
-        case Status::SessionExpired: return "SessionExpired";
-        case Status::Offline: return "Offline";
-        case Status::RateLimited: return "RateLimited";
-        case Status::ServerError: return "ServerError";
-    }
-    return "Unknown";
-}
-
 Client::Client(Fetch fetch)
     : fetch(std::move(fetch))
 {

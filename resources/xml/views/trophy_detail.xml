@@ -3,99 +3,109 @@
     height="auto"
     axis="column"
     grow="1.0">
-
-    <brls:Box
+    <PsnGatedBox
+        id="detail/gate"
         width="auto"
         height="auto"
-        axis="row"
-        justifyContent="spaceBetween"
-        alignItems="center"
-        backgroundColor="@theme/color/card"
-        cornerRadius="8"
-        paddingTop="12"
-        paddingBottom="12"
-        paddingLeft="15"
-        paddingRight="15"
-        marginTop="20"
-        marginLeft="@style/brls/tab_frame/content_padding_sides"
-        marginRight="@style/brls/tab_frame/content_padding_sides"
-        marginBottom="10">
+        axis="column"
+        grow="1.0">
+
 
         <brls:Box
             width="auto"
             height="auto"
-            axis="column"
-            grow="1.0">
+            axis="row"
+            justifyContent="spaceBetween"
+            alignItems="center"
+            backgroundColor="@theme/color/card"
+            cornerRadius="8"
+            paddingTop="12"
+            paddingBottom="12"
+            paddingLeft="15"
+            paddingRight="15"
+            marginTop="20"
+            marginLeft="@style/brls/tab_frame/content_padding_sides"
+            marginRight="@style/brls/tab_frame/content_padding_sides"
+            marginBottom="10">
 
-            <brls:Label
-                id="detail/title"
-                text=""
-                fontSize="22"
-                singleLine="true"/>
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0">
 
-            <brls:Label
-                id="detail/subtitle"
-                text="@i18n/akira/trophies/loading"
-                fontSize="15"
-                textColor="#888888"
-                marginTop="4"/>
+                <brls:Label
+                    id="detail/title"
+                    text=""
+                    fontSize="22"
+                    singleLine="true"/>
 
-            <brls:Label
-                id="detail/counts"
-                text=""
-                fontSize="14"
-                textColor="#AAAAAA"
-                marginTop="4"/>
+                <brls:Label
+                    id="detail/subtitle"
+                    text="@i18n/akira/trophies/loading"
+                    fontSize="15"
+                    textColor="#888888"
+                    marginTop="4"/>
+
+                <brls:Label
+                    id="detail/counts"
+                    text=""
+                    fontSize="14"
+                    textColor="#AAAAAA"
+                    marginTop="4"/>
+
+            </brls:Box>
+
+            <brls:Button
+                id="detail/refreshBtn"
+                text="@i18n/akira/trophies/force_refresh_btn"
+                style="bordered"
+                marginLeft="12"/>
 
         </brls:Box>
 
-        <brls:Button
-            id="detail/refreshBtn"
-            text="@i18n/akira/trophies/force_refresh_btn"
-            style="bordered"
-            marginLeft="12"/>
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            alignItems="center"
+            marginLeft="@style/brls/tab_frame/content_padding_sides"
+            marginRight="@style/brls/tab_frame/content_padding_sides"
+            marginBottom="6">
 
-    </brls:Box>
+            <brls:Button
+                id="detail/groupBtn"
+                text="@i18n/akira/trophies/group_all"
+                style="bordered"
+                marginRight="10"/>
 
-    <brls:Box
-        width="auto"
-        height="auto"
-        axis="row"
-        alignItems="center"
-        marginLeft="@style/brls/tab_frame/content_padding_sides"
-        marginRight="@style/brls/tab_frame/content_padding_sides"
-        marginBottom="6">
+            <brls:Button
+                id="detail/sortBtn"
+                text="@i18n/akira/trophies/sort_btn"
+                style="bordered"
+                marginRight="10"/>
 
-        <brls:Button
-            id="detail/groupBtn"
-            text="@i18n/akira/trophies/group_all"
-            style="bordered"
-            marginRight="10"/>
+            <brls:Button
+                id="detail/filterBtn"
+                text="@i18n/akira/trophies/filter_btn"
+                style="bordered"/>
 
-        <brls:Button
-            id="detail/sortBtn"
-            text="@i18n/akira/trophies/sort_btn"
-            style="bordered"
-            marginRight="10"/>
+        </brls:Box>
 
-        <brls:Button
-            id="detail/filterBtn"
-            text="@i18n/akira/trophies/filter_btn"
-            style="bordered"/>
+        <RecyclingGrid
+            id="detail/list"
+            width="auto"
+            height="auto"
+            grow="1.0"
+            spanCount="1"
+            itemHeight="92"
+            itemSpace="10"
+            paddingTop="6"
+            paddingBottom="20"
+            paddingLeft="@style/brls/tab_frame/content_padding_sides"
+            paddingRight="@style/brls/tab_frame/content_padding_sides"/>
 
-    </brls:Box>
 
-    <RecyclingGrid
-        id="detail/list"
-        width="auto"
-        height="auto"
-        grow="1.0"
-        spanCount="1"
-        itemHeight="92"
-        itemSpace="10"
-        paddingTop="6"
-        paddingBottom="20"
-        paddingLeft="@style/brls/tab_frame/content_padding_sides"
-        paddingRight="@style/brls/tab_frame/content_padding_sides"/>
+    </PsnGatedBox>
 
 </brls:Box>

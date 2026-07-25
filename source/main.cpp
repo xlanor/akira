@@ -19,6 +19,7 @@
 
 #include "views/host_list_tab.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
+#include "views/psn_gated_box.hpp"
 #include "views/trophy_list_tab.hpp"
 #include "views/settings_tab.hpp"
 #include "views/add_host_tab.hpp"
@@ -283,6 +284,7 @@ int main(int argc, char* argv[])
     Session::GetInstance()->SetMesaConfig();
 
     brls::Application::registerXMLView("HostListTab", HostListTab::create);
+    brls::Application::registerXMLView("PsnGatedBox", PsnGatedBox::create);
     brls::Application::registerXMLView("RecyclingGrid", RecyclingGrid::create);
     brls::Application::registerXMLView("TrophyListTab", TrophyListTab::create);
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);

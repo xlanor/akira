@@ -50,6 +50,7 @@ public:
     void setLibraryObserver(Callback<std::vector<psn::TrophyTitle>> observer);
 
     PersistedRateLimiter::Status budgetStatus() const;
+    int64_t librarySavedAtSeconds() const;
 
     static constexpr const char* SCOPE_LIBRARY = "library";
 
@@ -85,7 +86,6 @@ private:
     TrophyManager();
 
     bool hasConnectivity() const;
-    psn::Status ensureToken(HttpSession& session, std::string& outToken, std::string& outMessage);
     void awaitBurstSlot();
     bool breakerOpen(int& outSecondsRemaining) const;
     void tripBreaker(int seconds);

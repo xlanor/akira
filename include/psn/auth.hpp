@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 
+#include "psn/status.hpp"
 #include "util/http.hpp"
 
 class SettingsManager;
@@ -35,6 +36,13 @@ struct ActionStatus {
     int secondsRemaining = 0;
 };
 
+enum class SessionState {
+    NotLinked,
+    Valid,
+    Expired,
+    Refreshing
+};
+
 ActionStatus actionStatus(bool busy, std::chrono::steady_clock::time_point readyAt);
 
 class Auth {
@@ -43,9 +51,17 @@ public:
 
     static Auth& instance();
 
+    using StateObserver = std::function<void()>;
+
     bool linked() const;
     bool tokenValid() const;
     std::string accessToken() const;
+
+    SessionState state() const;
+
+    Error ensureSession(HttpSession& session, bool forceRefresh = false);
+
+    void setStateObserver(StateObserver observer);
 
     AuthResult refreshBlocking(HttpSession& session);
     void refresh(std::function<void()> onSuccess, ErrorCallback onError);
@@ -62,7 +78,10 @@ private:
     static constexpr int COOLDOWN_S = 60;
     static constexpr int FAILED_COOLDOWN_S = 5;
 
+    void notifyStateChanged();
+
     SettingsManager* settings = nullptr;
+    StateObserver stateObserver;
 
     mutable std::mutex mutex;
     std::condition_variable cond;

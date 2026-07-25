@@ -487,6 +487,12 @@ void TrophyDetailView::willAppear(bool resetState)
 
     refreshGate.start();
 
+    if (!gate->evaluate())
+    {
+        loadRequested = false;
+        return;
+    }
+
     if (!loadRequested)
         load(false);
 }

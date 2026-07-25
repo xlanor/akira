@@ -525,40 +525,17 @@ void DiscoveryManager::refreshRemoteDevices(RemoteRefreshCallback onComplete, bo
 
 void DiscoveryManager::runRemoteDeviceRefresh(HttpSession& session)
 {
-    psn::Auth& auth = psn::Auth::instance();
-
-    if (!auth.tokenValid())
+    psn::Error sessionError = psn::Auth::instance().ensureSession(session);
+    if (!sessionError.ok())
     {
-        brls::Logger::info("PSN token not valid, attempting to refresh...");
+        brls::Logger::warning("Cannot discover remote devices: {}", sessionError.message);
 
-        if (settings->getPsnRefreshToken().empty())
-        {
-            brls::Logger::warning("No PSN refresh token available, cannot discover remote devices");
-            finishRemoteDeviceRefresh({false, psn::AuthError::Invalid, "No refresh token stored"});
-            return;
-        }
+        psn::AuthError kind = sessionError.status == psn::Status::Offline
+            ? psn::AuthError::Transient
+            : psn::AuthError::Invalid;
 
-        psn::AuthResult result = auth.refreshBlocking(session);
-        if (!result.success)
-        {
-            if (result.error == psn::AuthError::Invalid)
-            {
-                auth.clearTokens(result.message);
-            }
-            else
-            {
-                brls::Logger::error("PSN token refresh failed transiently ({}), keeping stored tokens", result.message);
-            }
-
-            finishRemoteDeviceRefresh({false, result.error, result.message});
-            return;
-        }
-
-        brls::Logger::info("Token refresh successful, now fetching remote devices");
-    }
-    else
-    {
-        brls::Logger::info("PSN token is valid, fetching remote devices");
+        finishRemoteDeviceRefresh({false, kind, sessionError.message});
+        return;
     }
 
     fetchRemoteDevicesFromPsn();

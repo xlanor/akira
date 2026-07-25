@@ -282,6 +282,12 @@ PersistedRateLimiter::Status TrophyManager::budgetStatus() const
     return limiter.status();
 }
 
+int64_t TrophyManager::librarySavedAtSeconds() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return hasCachedLibrary ? librarySavedAt : 0;
+}
+
 void TrophyManager::loadForceStateLocked()
 {
     if (forceStateLoaded)
@@ -461,48 +467,6 @@ bool TrophyManager::hasConnectivity() const
     return status == NifmInternetConnectionStatus_Connected;
 }
 
-psn::Status TrophyManager::ensureToken(HttpSession& session, std::string& outToken, std::string& outMessage)
-{
-    psn::Auth& auth = psn::Auth::instance();
-
-    if (auth.tokenValid())
-    {
-        outToken = auth.accessToken();
-        if (outToken.empty())
-        {
-            outMessage = "No PSN access token stored";
-            return psn::Status::NotLinked;
-        }
-        return psn::Status::Ok;
-    }
-
-    if (settings->getPsnRefreshToken().empty())
-    {
-        outMessage = "PSN account not linked";
-        return psn::Status::NotLinked;
-    }
-
-    brls::Logger::info("Trophy: access token expired, refreshing");
-    psn::AuthResult refresh = auth.refreshBlocking(session);
-
-    if (refresh.success)
-    {
-        outToken = auth.accessToken();
-        return psn::Status::Ok;
-    }
-
-    outMessage = refresh.message;
-
-    if (refresh.error == psn::AuthError::Invalid)
-    {
-        auth.clearTokens(refresh.message);
-        return psn::Status::SessionExpired;
-    }
-
-    brls::Logger::warning("Trophy: token refresh failed transiently ({}), keeping stored tokens", refresh.message);
-    return psn::Status::Offline;
-}
-
 void TrophyManager::awaitBurstSlot()
 {
     while (true)
@@ -563,7 +527,7 @@ psn::Error TrophyManager::governedGet(HttpSession& session, const std::string& u
         return blocked;
     }
 
-    if (!psn::Auth::instance().linked())
+    if (psn::Auth::instance().state() == psn::SessionState::NotLinked)
         return {psn::Status::NotLinked, "PSN account not linked"};
 
     if (!hasConnectivity())
@@ -572,11 +536,11 @@ psn::Error TrophyManager::governedGet(HttpSession& session, const std::string& u
         return {psn::Status::Offline, "No network connection"};
     }
 
-    std::string token;
-    std::string tokenMessage;
-    psn::Status tokenStatus = ensureToken(session, token, tokenMessage);
-    if (tokenStatus != psn::Status::Ok)
-        return {tokenStatus, tokenMessage};
+    psn::Error sessionError = psn::Auth::instance().ensureSession(session);
+    if (!sessionError.ok())
+        return sessionError;
+
+    std::string token = psn::Auth::instance().accessToken();
 
     psn::Error result;
     bool refreshedOn401 = false;
@@ -612,17 +576,9 @@ psn::Error TrophyManager::governedGet(HttpSession& session, const std::string& u
             refreshedOn401 = true;
             brls::Logger::info("Trophy: {} returned 401, refreshing token once", url);
 
-            psn::AuthResult refresh = psn::Auth::instance().refreshBlocking(session);
-            if (!refresh.success)
-            {
-                if (refresh.error == psn::AuthError::Invalid)
-                {
-                    psn::Auth::instance().clearTokens(refresh.message);
-                    return {psn::Status::SessionExpired, refresh.message};
-                }
-
-                return {psn::Status::Offline, refresh.message};
-            }
+            psn::Error refreshError = psn::Auth::instance().ensureSession(session, true);
+            if (!refreshError.ok())
+                return refreshError;
 
             token = psn::Auth::instance().accessToken();
             continue;

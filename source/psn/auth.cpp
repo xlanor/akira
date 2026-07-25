@@ -69,6 +69,67 @@ void Auth::clearTokens(const std::string& reason)
     brls::Logger::error("PSN: refresh token rejected ({}), clearing stored PSN token data", reason);
     settings->clearPsnTokenData();
     settings->writeFile();
+    notifyStateChanged();
+}
+
+void Auth::setStateObserver(StateObserver observer)
+{
+    stateObserver = std::move(observer);
+}
+
+void Auth::notifyStateChanged()
+{
+    if (stateObserver)
+        stateObserver();
+}
+
+SessionState Auth::state() const
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (inFlight || queued > 0)
+            return SessionState::Refreshing;
+    }
+
+    if (tokenValid())
+        return SessionState::Valid;
+
+    if (settings->getPsnRefreshToken().empty())
+        return SessionState::NotLinked;
+
+    return SessionState::Expired;
+}
+
+Error Auth::ensureSession(HttpSession& session, bool forceRefresh)
+{
+    if (!forceRefresh && tokenValid())
+        return {};
+
+    if (settings->getPsnRefreshToken().empty())
+    {
+        if (settings->getPsnAccessToken().empty())
+            return {Status::NotLinked, "PSN account not linked"};
+
+        return {Status::SessionExpired, "No PSN refresh token stored"};
+    }
+
+    brls::Logger::info("PSN: session needs a refresh ({})", forceRefresh ? "forced" : "expired");
+
+    AuthResult result = refreshBlocking(session);
+    if (result.success)
+    {
+        notifyStateChanged();
+        return {};
+    }
+
+    if (result.error == AuthError::Invalid)
+    {
+        clearTokens(result.message);
+        return {Status::SessionExpired, result.message};
+    }
+
+    brls::Logger::warning("PSN: session refresh failed transiently ({}), keeping stored tokens", result.message);
+    return {Status::Offline, result.message};
 }
 
 ActionStatus Auth::refreshStatus() const
