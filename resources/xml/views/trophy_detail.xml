@@ -50,16 +50,38 @@
         </brls:Box>
 
         <brls:Button
-            id="detail/groupBtn"
-            text="@i18n/akira/trophies/group_all"
-            style="bordered"
-            marginLeft="12"/>
-
-        <brls:Button
             id="detail/refreshBtn"
             text="@i18n/akira/trophies/force_refresh_btn"
             style="bordered"
             marginLeft="12"/>
+
+    </brls:Box>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="row"
+        alignItems="center"
+        marginLeft="@style/brls/tab_frame/content_padding_sides"
+        marginRight="@style/brls/tab_frame/content_padding_sides"
+        marginBottom="6">
+
+        <brls:Button
+            id="detail/groupBtn"
+            text="@i18n/akira/trophies/group_all"
+            style="bordered"
+            marginRight="10"/>
+
+        <brls:Button
+            id="detail/sortBtn"
+            text="@i18n/akira/trophies/sort_btn"
+            style="bordered"
+            marginRight="10"/>
+
+        <brls:Button
+            id="detail/filterBtn"
+            text="@i18n/akira/trophies/filter_btn"
+            style="bordered"/>
 
     </brls:Box>
 

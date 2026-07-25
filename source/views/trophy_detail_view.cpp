@@ -20,6 +20,8 @@ static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
 };
 
 TrophyDetailView* TrophyDetailView::currentInstance = nullptr;
+TrophySort TrophyDetailView::sortMode = TrophySort::Progress;
+TrophyFilter TrophyDetailView::filterMode = TrophyFilter::All;
 std::unordered_set<TrophyRowCell*> TrophyRowCell::liveCells;
 std::unordered_set<std::string> TrophyRowCell::retriedIcons;
 
@@ -29,6 +31,143 @@ static constexpr float ROW_HEIGHT = 92;
 static const NVGcolor EARNED_COLOR = nvgRGB(74, 222, 128);
 static const NVGcolor PROGRESS_COLOR = nvgRGB(92, 157, 255);
 static const NVGcolor MUTED_COLOR = nvgRGB(150, 150, 150);
+
+const char* trophySortLabelKey(TrophySort sort)
+{
+    switch (sort)
+    {
+        case TrophySort::Progress: return "akira/trophies/sort_progress";
+        case TrophySort::DateObtained: return "akira/trophies/sort_date";
+        case TrophySort::Grade: return "akira/trophies/sort_grade";
+        case TrophySort::Rarity: return "akira/trophies/sort_rarity";
+        case TrophySort::Name: return "akira/trophies/sort_name";
+    }
+    return "akira/trophies/sort_progress";
+}
+
+const char* trophyFilterLabelKey(TrophyFilter filter)
+{
+    switch (filter)
+    {
+        case TrophyFilter::All: return "akira/trophies/filter_all";
+        case TrophyFilter::Earned: return "akira/trophies/filter_earned";
+        case TrophyFilter::Unearned: return "akira/trophies/filter_unearned";
+        case TrophyFilter::Hidden: return "akira/trophies/filter_hidden";
+    }
+    return "akira/trophies/filter_all";
+}
+
+bool trophyMatchesFilter(const psn::Trophy& trophy, TrophyFilter filter)
+{
+    switch (filter)
+    {
+        case TrophyFilter::All: return true;
+        case TrophyFilter::Earned: return trophy.earned;
+        case TrophyFilter::Unearned: return !trophy.earned;
+        case TrophyFilter::Hidden: return trophy.trophyHidden;
+    }
+    return true;
+}
+
+static int gradeRank(const std::string& type)
+{
+    if (type == "platinum")
+        return 0;
+    if (type == "gold")
+        return 1;
+    if (type == "silver")
+        return 2;
+    if (type == "bronze")
+        return 3;
+
+    return 4;
+}
+
+void sortTrophies(std::vector<psn::Trophy>& trophies, TrophySort sort)
+{
+    switch (sort)
+    {
+        case TrophySort::Progress:
+            std::stable_sort(trophies.begin(), trophies.end(),
+                [](const psn::Trophy& a, const psn::Trophy& b) {
+                    bool aInProgress = !a.earned && a.hasProgress && a.progressRate > 0;
+                    bool bInProgress = !b.earned && b.hasProgress && b.progressRate > 0;
+
+                    if (aInProgress != bInProgress)
+                        return aInProgress;
+
+                    if (aInProgress && bInProgress)
+                        return a.progressRate > b.progressRate;
+
+                    if (a.earned != b.earned)
+                        return !a.earned;
+
+                    return a.trophyId < b.trophyId;
+                });
+            return;
+
+        case TrophySort::DateObtained:
+            std::stable_sort(trophies.begin(), trophies.end(),
+                [](const psn::Trophy& a, const psn::Trophy& b) {
+                    bool aDated = a.earned && !a.earnedDateTime.empty();
+                    bool bDated = b.earned && !b.earnedDateTime.empty();
+
+                    if (aDated != bDated)
+                        return aDated;
+
+                    if (aDated && bDated)
+                        return a.earnedDateTime > b.earnedDateTime;
+
+                    if (a.earned != b.earned)
+                        return a.earned;
+
+                    return a.trophyId < b.trophyId;
+                });
+            return;
+
+        case TrophySort::Grade:
+            std::stable_sort(trophies.begin(), trophies.end(),
+                [](const psn::Trophy& a, const psn::Trophy& b) {
+                    int aRank = gradeRank(a.trophyType);
+                    int bRank = gradeRank(b.trophyType);
+
+                    if (aRank != bRank)
+                        return aRank < bRank;
+
+                    return a.trophyId < b.trophyId;
+                });
+            return;
+
+        case TrophySort::Rarity:
+            std::stable_sort(trophies.begin(), trophies.end(),
+                [](const psn::Trophy& a, const psn::Trophy& b) {
+                    bool aRated = a.trophyEarnedRate > 0.0;
+                    bool bRated = b.trophyEarnedRate > 0.0;
+
+                    if (aRated != bRated)
+                        return aRated;
+
+                    if (aRated && bRated && a.trophyEarnedRate != b.trophyEarnedRate)
+                        return a.trophyEarnedRate < b.trophyEarnedRate;
+
+                    if (a.trophyRare != b.trophyRare)
+                        return a.trophyRare < b.trophyRare;
+
+                    return a.trophyId < b.trophyId;
+                });
+            return;
+
+        case TrophySort::Name:
+            std::stable_sort(trophies.begin(), trophies.end(),
+                [](const psn::Trophy& a, const psn::Trophy& b) {
+                    if (a.trophyName != b.trophyName)
+                        return a.trophyName < b.trophyName;
+
+                    return a.trophyId < b.trophyId;
+                });
+            return;
+    }
+}
 
 std::string formatTrophyRarity(const psn::Trophy& trophy)
 {
@@ -271,13 +410,29 @@ TrophyDetailView::TrophyDetailView(const psn::TrophyTitle& title)
     subtitleLabel->setText("akira/trophies/loading"_i18n);
     countsLabel->setText("");
 
-    groupBtn->setStyle(&BUTTONSTYLE_BLUE);
-    groupBtn->setBackgroundColor(nvgRGBA(72, 76, 84, 255));
+    for (brls::Button* button : {groupBtn.getView(), sortBtn.getView(), filterBtn.getView()})
+    {
+        button->setStyle(&BUTTONSTYLE_BLUE);
+        button->setBackgroundColor(nvgRGBA(72, 76, 84, 255));
+    }
+
     groupBtn->setVisibility(brls::Visibility::GONE);
     groupBtn->registerClickAction([this](brls::View* view) {
         showGroupPicker();
         return true;
     });
+
+    sortBtn->registerClickAction([this](brls::View* view) {
+        showSortPicker();
+        return true;
+    });
+
+    filterBtn->registerClickAction([this](brls::View* view) {
+        showFilterPicker();
+        return true;
+    });
+
+    refreshControlLabels();
 
     refreshBtn->setStyle(&BUTTONSTYLE_BLUE);
 
@@ -419,34 +574,103 @@ void TrophyDetailView::applyGroup(size_t index)
     bool singleGroup = detail.groups.size() <= 1;
     for (const psn::Trophy& trophy : detail.trophies)
     {
-        if (singleGroup || trophy.trophyGroupId == group.trophyGroupId)
+        if (!singleGroup && trophy.trophyGroupId != group.trophyGroupId)
+            continue;
+
+        if (trophyMatchesFilter(trophy, filterMode))
             rows.push_back(trophy);
     }
 
-    std::stable_sort(rows.begin(), rows.end(),
-        [](const psn::Trophy& a, const psn::Trophy& b) {
-            bool aInProgress = !a.earned && a.hasProgress && a.progressRate > 0;
-            bool bInProgress = !b.earned && b.hasProgress && b.progressRate > 0;
-
-            if (aInProgress != bInProgress)
-                return aInProgress;
-
-            if (aInProgress && bInProgress)
-                return a.progressRate > b.progressRate;
-
-            if (a.earned != b.earned)
-                return !a.earned;
-
-            return a.trophyId < b.trophyId;
-        });
+    sortTrophies(rows, sortMode);
+    refreshControlLabels();
 
     if (rows.empty())
     {
-        list->setEmpty("akira/trophies/empty_group"_i18n);
+        list->setEmpty(filterMode == TrophyFilter::All
+            ? "akira/trophies/empty_group"_i18n
+            : "akira/trophies/empty_filter"_i18n);
         return;
     }
 
     list->setDataSource(new TrophyRowDataSource(std::move(rows)));
+}
+
+void TrophyDetailView::refreshControlLabels()
+{
+    sortBtn->setText(brls::getStr("akira/trophies/sort_btn_value",
+        brls::getStr(trophySortLabelKey(sortMode))));
+
+    filterBtn->setText(brls::getStr("akira/trophies/filter_btn_value",
+        brls::getStr(trophyFilterLabelKey(filterMode))));
+}
+
+void TrophyDetailView::showSortPicker()
+{
+    static const TrophySort options[] = {
+        TrophySort::Progress,
+        TrophySort::DateObtained,
+        TrophySort::Grade,
+        TrophySort::Rarity,
+        TrophySort::Name
+    };
+
+    std::vector<std::string> labels;
+    int selected = 0;
+
+    for (size_t i = 0; i < std::size(options); i++)
+    {
+        labels.push_back(brls::getStr(trophySortLabelKey(options[i])));
+        if (options[i] == sortMode)
+            selected = static_cast<int>(i);
+    }
+
+    auto* dropdown = new brls::Dropdown(
+        "akira/trophies/sort_picker"_i18n,
+        labels,
+        [](int chosen) {
+            if (!currentInstance || chosen < 0 || chosen >= static_cast<int>(std::size(options)))
+                return;
+
+            sortMode = options[chosen];
+            currentInstance->applyGroup(currentInstance->selectedGroup);
+        },
+        selected);
+
+    brls::Application::pushActivity(new brls::Activity(dropdown));
+}
+
+void TrophyDetailView::showFilterPicker()
+{
+    static const TrophyFilter options[] = {
+        TrophyFilter::All,
+        TrophyFilter::Earned,
+        TrophyFilter::Unearned,
+        TrophyFilter::Hidden
+    };
+
+    std::vector<std::string> labels;
+    int selected = 0;
+
+    for (size_t i = 0; i < std::size(options); i++)
+    {
+        labels.push_back(brls::getStr(trophyFilterLabelKey(options[i])));
+        if (options[i] == filterMode)
+            selected = static_cast<int>(i);
+    }
+
+    auto* dropdown = new brls::Dropdown(
+        "akira/trophies/filter_picker"_i18n,
+        labels,
+        [](int chosen) {
+            if (!currentInstance || chosen < 0 || chosen >= static_cast<int>(std::size(options)))
+                return;
+
+            filterMode = options[chosen];
+            currentInstance->applyGroup(currentInstance->selectedGroup);
+        },
+        selected);
+
+    brls::Application::pushActivity(new brls::Activity(dropdown));
 }
 
 void TrophyDetailView::showGroupPicker()

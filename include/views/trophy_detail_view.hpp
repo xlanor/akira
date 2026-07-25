@@ -48,6 +48,26 @@ public:
     void clearData() override;
 };
 
+enum class TrophySort {
+    Progress,
+    DateObtained,
+    Grade,
+    Rarity,
+    Name
+};
+
+enum class TrophyFilter {
+    All,
+    Earned,
+    Unearned,
+    Hidden
+};
+
+const char* trophySortLabelKey(TrophySort sort);
+const char* trophyFilterLabelKey(TrophyFilter filter);
+bool trophyMatchesFilter(const psn::Trophy& trophy, TrophyFilter filter);
+void sortTrophies(std::vector<psn::Trophy>& trophies, TrophySort sort);
+
 class TrophyDetailView : public brls::Box {
 public:
     explicit TrophyDetailView(const psn::TrophyTitle& title);
@@ -63,6 +83,8 @@ private:
     BRLS_BIND(brls::Label, subtitleLabel, "detail/subtitle");
     BRLS_BIND(brls::Label, countsLabel, "detail/counts");
     BRLS_BIND(brls::Button, groupBtn, "detail/groupBtn");
+    BRLS_BIND(brls::Button, sortBtn, "detail/sortBtn");
+    BRLS_BIND(brls::Button, filterBtn, "detail/filterBtn");
     BRLS_BIND(brls::Button, refreshBtn, "detail/refreshBtn");
     BRLS_BIND(RecyclingGrid, list, "detail/list");
 
@@ -70,12 +92,17 @@ private:
     void applyDetail(const psn::TitleDetail& detail);
     void applyGroup(size_t index);
     void showGroupPicker();
+    void showSortPicker();
+    void showFilterPicker();
+    void refreshControlLabels();
 
     psn::TrophyTitle title;
     psn::TitleDetail detail;
     PsnActionButton refreshGate;
 
     size_t selectedGroup = 0;
+    static TrophySort sortMode;
+    static TrophyFilter filterMode;
     bool loadRequested = false;
     bool loading = false;
 };
