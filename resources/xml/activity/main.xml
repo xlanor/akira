@@ -8,6 +8,10 @@
             <HostListTab/>
         </brls:Tab>
 
+        <brls:Tab label="@i18n/akira/tabs/trophies">
+            <TrophyListTab/>
+        </brls:Tab>
+
         <brls:Tab label="@i18n/akira/tabs/settings">
             <SettingsTab/>
         </brls:Tab>

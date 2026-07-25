@@ -7,11 +7,15 @@
 #   make shell                           Open shell in build container
 #   make clean-libs                      Clean library build artifacts
 #   make build MUTE_CHIAKI=true          Build with chiaki library logs muted
+#   make crash SWITCH_IP=192.168.x.x     Pull + symbolicate the latest crash report
+#   make crash LOG=path/to/report.log    Symbolicate a crash report already on disk
 
-.PHONY: help build deploy rebuild shell clean-libs docker-image submodules
+.PHONY: help build deploy crash rebuild shell clean-libs docker-image submodules
 
 DOCKER_IMAGE := akira-builder
 NRO_FILE     := $(CURDIR)/build/akira.nro
+ELF_FILE     := build/akira.elf
+FTP_PORT     ?= 5000
 MUTE_CHIAKI  ?= false
 SWITCH_IP    ?=
 
@@ -29,17 +33,42 @@ help:
 	@echo "  deploy       Build and deploy to Switch (requires SWITCH_IP)"
 	@echo "  rebuild      Force full rebuild (clean libs + rebuild docker image)"
 	@echo "  shell        Open shell in build container"
+	@echo "  crash        Symbolicate the latest Switch crash report (SWITCH_IP or LOG)"
 	@echo "  clean-libs   Clean library build artifacts"
 	@echo "  help         Show this help"
 	@echo ""
 	@echo "Environment:"
 	@echo "  SWITCH_IP      IP address of Nintendo Switch"
+	@echo "  FTP_PORT       sys-ftpd port for 'make crash' (default 5000)"
+	@echo "  LOG            Local crash report path for 'make crash'"
 	@echo "  MUTE_CHIAKI    Set to 'true' to mute chiaki library logs"
 	@echo ""
 	@echo "On your Switch:"
 	@echo "  1. Open Homebrew Menu"
 	@echo "  2. Press Y for NetLoader mode"
 	@echo "  3. Note the IP address shown"
+
+crash:
+	@if [ ! -f "$(ELF_FILE)" ]; then \
+		printf "$(RED)[x]$(NC) $(ELF_FILE) not found - run 'make build' first\n"; \
+		exit 1; \
+	fi
+	@if [ -n "$(LOG)" ]; then \
+		printf "$(GREEN)[*]$(NC) Symbolicating local report: $(LOG)\n"; \
+		"$(CURDIR)/scripts/ns_debug.sh" local "$(ELF_FILE)" "$(LOG)"; \
+	elif [ -n "$(SWITCH_IP)" ]; then \
+		printf "$(GREEN)[*]$(NC) Pulling latest crash report from $(SWITCH_IP):$(FTP_PORT)\n"; \
+		"$(CURDIR)/scripts/ns_debug.sh" "ftp://$(SWITCH_IP):$(FTP_PORT)" "$(ELF_FILE)"; \
+	else \
+		printf "$(YELLOW)[!]$(NC) Provide SWITCH_IP or LOG\n"; \
+		echo ""; \
+		echo "  make crash SWITCH_IP=192.168.1.5"; \
+		echo "  make crash SWITCH_IP=192.168.1.5 FTP_PORT=5000"; \
+		echo "  make crash LOG=01785002094_010015f005c8e000.log"; \
+		echo ""; \
+		echo "Requires sys-ftpd running on the Switch."; \
+		exit 1; \
+	fi
 
 submodules:
 	@if [ ! -f "$(CURDIR)/library/borealis/README.md" ]; then \

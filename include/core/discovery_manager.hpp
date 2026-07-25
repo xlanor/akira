@@ -29,7 +29,7 @@ enum class PsnAuthError {
     Invalid
 };
 
-struct RemoteRefreshResult {
+struct PsnResult {
     bool success = false;
     PsnAuthError error = PsnAuthError::Transient;
     std::string message;
@@ -50,15 +50,9 @@ class DiscoveryManager {
 public:
     using HostDiscoveredCallback = std::function<void(Host*)>;
     using PsnTokenErrorCallback = std::function<void(PsnAuthError, const std::string&)>;
-    using RemoteRefreshCallback = std::function<void(const RemoteRefreshResult&)>;
+    using RemoteRefreshCallback = std::function<void(const PsnResult&)>;
 
 private:
-    struct PsnRefreshResult {
-        bool success = false;
-        PsnAuthError error = PsnAuthError::Transient;
-        std::string message;
-    };
-
     SettingsManager* settings = nullptr;
     ChiakiLog* log = nullptr;
     ChiakiLog discoveryLog;
@@ -86,7 +80,7 @@ private:
     std::condition_variable psnRefreshCond;
     bool psnRefreshInFlight = false;
     int psnRefreshQueued = 0;
-    PsnRefreshResult psnLastRefreshResult;
+    PsnResult psnLastRefreshResult;
     std::chrono::steady_clock::time_point psnRefreshReadyAt{};
 
     mutable std::mutex remoteRefreshMutex;
@@ -95,10 +89,9 @@ private:
     std::vector<RemoteRefreshCallback> remoteRefreshWaiters;
     std::chrono::steady_clock::time_point remoteRefreshReadyAt{};
 
-    PsnRefreshResult awaitPsnTokenRefresh();
-    PsnRefreshResult performPsnTokenRefresh();
+    PsnResult performPsnTokenRefresh();
     void runRemoteDeviceRefresh();
-    void finishRemoteDeviceRefresh(const RemoteRefreshResult& result);
+    void finishRemoteDeviceRefresh(const PsnResult& result);
 
     ChiakiThread remoteDiscoveryThread;
     ChiakiBoolPredCond remoteStopCond;
@@ -149,6 +142,8 @@ public:
         std::function<void()> onSuccess,
         PsnTokenErrorCallback onError
     );
+
+    PsnResult refreshPsnTokenBlocking();
 
     bool isPsnTokenValid() const;
 

@@ -497,7 +497,7 @@ void DiscoveryManager::refreshPsnToken(
     }
 
     psnWorker.post([this, onSuccess = std::move(onSuccess), onError = std::move(onError)]() {
-        PsnRefreshResult result = awaitPsnTokenRefresh();
+        PsnResult result = refreshPsnTokenBlocking();
 
         {
             std::lock_guard<std::mutex> lock(psnRefreshMutex);
@@ -518,7 +518,7 @@ void DiscoveryManager::refreshPsnToken(
     });
 }
 
-DiscoveryManager::PsnRefreshResult DiscoveryManager::awaitPsnTokenRefresh()
+PsnResult DiscoveryManager::refreshPsnTokenBlocking()
 {
     std::unique_lock<std::mutex> lock(psnRefreshMutex);
 
@@ -532,7 +532,7 @@ DiscoveryManager::PsnRefreshResult DiscoveryManager::awaitPsnTokenRefresh()
     psnRefreshInFlight = true;
     lock.unlock();
 
-    PsnRefreshResult result = performPsnTokenRefresh();
+    PsnResult result = performPsnTokenRefresh();
 
     lock.lock();
     psnLastRefreshResult = result;
@@ -569,7 +569,7 @@ PsnActionStatus DiscoveryManager::getRemoteRefreshStatus() const
     return psnActionStatus(remoteRefreshInFlight, remoteRefreshReadyAt);
 }
 
-DiscoveryManager::PsnRefreshResult DiscoveryManager::performPsnTokenRefresh()
+PsnResult DiscoveryManager::performPsnTokenRefresh()
 {
     std::string refreshToken = settings->getPsnRefreshToken();
     if (refreshToken.empty())
@@ -740,7 +740,7 @@ void DiscoveryManager::runRemoteDeviceRefresh()
             return;
         }
 
-        PsnRefreshResult result = awaitPsnTokenRefresh();
+        PsnResult result = refreshPsnTokenBlocking();
         if (!result.success)
         {
             if (result.error == PsnAuthError::Invalid)
@@ -769,7 +769,7 @@ void DiscoveryManager::runRemoteDeviceRefresh()
     finishRemoteDeviceRefresh({true, PsnAuthError::Transient, ""});
 }
 
-void DiscoveryManager::finishRemoteDeviceRefresh(const RemoteRefreshResult& result)
+void DiscoveryManager::finishRemoteDeviceRefresh(const PsnResult& result)
 {
     std::vector<RemoteRefreshCallback> waiters;
 

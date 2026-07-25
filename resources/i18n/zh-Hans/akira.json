@@ -1,6 +1,7 @@
 {
     "tabs": {
         "hosts": "主机",
+        "trophies": "奖杯",
         "settings": "设置",
         "add_host": "添加主机",
         "build_info": "构建信息",
@@ -62,6 +63,24 @@
         "error_psn_online_id": "错误：PS4 < 7.0 需要 PSN 在线 ID。",
         "error_console_type": "错误：无法识别的主机类型。",
         "error_registration_failed": "错误：注册失败。"
+    },
+    "trophies": {
+        "title": "奖杯",
+        "loading": "正在加载奖杯...",
+        "refresh": "刷新",
+        "summary_level": "等级 {} · 阶层 {} · 距下一级 {}%",
+        "summary_counts": "已获得 {} 个 — {}",
+        "empty": "此账号暂无奖杯游戏",
+        "error_not_linked": "请在设置中关联 PSN 账号以查看奖杯",
+        "error_session_expired": "PSN 会话已过期 — 请使用配套应用重新关联",
+        "error_offline": "离线 — 无法连接 PSN",
+        "error_rate_limited": "PSN 正在限流，请稍后再试",
+        "error_generic": "无法加载奖杯",
+        "count_platinum": "白金 {}",
+        "count_gold": "金 {}",
+        "count_silver": "银 {}",
+        "count_bronze": "铜 {}",
+        "summary_unavailable": "无法获取总览"
     },
     "add_host": {
         "title": "添加 PlayStation 主机",

@@ -18,6 +18,8 @@
 #include "crypto/libnx/gmac.h"
 
 #include "views/host_list_tab.hpp"
+#include "views/vendored/switchfin/recycling_grid.hpp"
+#include "views/trophy_list_tab.hpp"
 #include "views/settings_tab.hpp"
 #include "views/add_host_tab.hpp"
 #include "views/build_info_tab.hpp"
@@ -87,6 +89,8 @@ void initCustomTheme()
 {
     brls::Theme::getLightTheme().addColor("color/card", nvgRGB(245, 246, 247));
     brls::Theme::getDarkTheme().addColor("color/card", nvgRGB(51, 52, 53));
+    brls::Theme::getLightTheme().addColor("color/grey_3", nvgRGB(225, 226, 227));
+    brls::Theme::getDarkTheme().addColor("color/grey_3", nvgRGB(71, 72, 73));
 }
 
 static void chiaki_to_brls_log(ChiakiLogLevel level, const char* msg, void* user)
@@ -279,6 +283,8 @@ int main(int argc, char* argv[])
     Session::GetInstance()->SetMesaConfig();
 
     brls::Application::registerXMLView("HostListTab", HostListTab::create);
+    brls::Application::registerXMLView("RecyclingGrid", RecyclingGrid::create);
+    brls::Application::registerXMLView("TrophyListTab", TrophyListTab::create);
     brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
     brls::Application::registerXMLView("AddHostTab", AddHostTab::create);
     brls::Application::registerXMLView("BuildInfoTab", BuildInfoTab::create);

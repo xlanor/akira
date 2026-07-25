@@ -589,7 +589,7 @@ void HostListTab::initFindRemoteButton() {
             return true;
         }
 
-        auto onComplete = [](const RemoteRefreshResult& result) {
+        auto onComplete = [](const PsnResult& result) {
             if (!result.success) {
                 brls::Application::notify(brls::getStr("akira/hosts/token_refresh_failed", result.message));
             }

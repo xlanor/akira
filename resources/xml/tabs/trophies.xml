@@ -1,0 +1,49 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    grow="1.0">
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="column"
+        backgroundColor="@theme/color/card"
+        cornerRadius="8"
+        paddingTop="12"
+        paddingBottom="12"
+        paddingLeft="15"
+        paddingRight="15"
+        marginTop="20"
+        marginLeft="@style/brls/tab_frame/content_padding_sides"
+        marginRight="@style/brls/tab_frame/content_padding_sides"
+        marginBottom="10">
+
+        <brls:Label
+            id="trophies/summaryTitle"
+            text="@i18n/akira/trophies/title"
+            fontSize="22"/>
+
+        <brls:Label
+            id="trophies/summaryDetail"
+            text="@i18n/akira/trophies/loading"
+            fontSize="15"
+            textColor="#888888"
+            marginTop="4"/>
+
+    </brls:Box>
+
+    <RecyclingGrid
+        id="trophies/grid"
+        width="auto"
+        height="auto"
+        grow="1.0"
+        spanCount="4"
+        itemHeight="216"
+        itemSpace="18"
+        paddingTop="10"
+        paddingBottom="20"
+        paddingLeft="@style/brls/tab_frame/content_padding_sides"
+        paddingRight="@style/brls/tab_frame/content_padding_sides"/>
+
+</brls:Box>

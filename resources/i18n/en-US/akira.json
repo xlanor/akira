@@ -1,6 +1,7 @@
 {
     "tabs": {
         "hosts": "Hosts",
+        "trophies": "Trophies",
         "settings": "Settings",
         "add_host": "Add Host",
         "build_info": "Build Info",
@@ -62,6 +63,24 @@
         "error_psn_online_id": "Error: PSN Online ID is required for PS4 < 7.0.",
         "error_console_type": "Error: Console type not recognized.",
         "error_registration_failed": "Error: Registration failed."
+    },
+    "trophies": {
+        "title": "Trophies",
+        "loading": "Loading trophies...",
+        "refresh": "Refresh",
+        "summary_level": "Level {} · Tier {} · {}% to next",
+        "summary_counts": "{} earned — {}",
+        "empty": "No trophy titles on this account yet",
+        "error_not_linked": "Link your PSN account in Settings to see trophies",
+        "error_session_expired": "PSN session expired — re-link with the companion app",
+        "error_offline": "Offline — could not reach PSN",
+        "error_rate_limited": "PSN is rate-limiting; try again shortly",
+        "error_generic": "Could not load trophies",
+        "count_platinum": "{} platinum",
+        "count_gold": "{} gold",
+        "count_silver": "{} silver",
+        "count_bronze": "{} bronze",
+        "summary_unavailable": "Summary unavailable"
     },
     "add_host": {
         "title": "Add PlayStation Console",
