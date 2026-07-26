@@ -25,8 +25,21 @@ TitleFilter TrophyListTab::filterMode = TitleFilter::All;
 std::unordered_set<TrophyCardCell*> TrophyCardCell::liveCells;
 std::unordered_set<std::string> TrophyCardCell::retriedIcons;
 
-static constexpr float CARD_COVER_HEIGHT = 128;
-static constexpr float CARD_ROW_HEIGHT = 216;
+static constexpr float CARD_COVER_HEIGHT = 196;
+static constexpr float CARD_ROW_HEIGHT = 330;
+static const NVGcolor PLAY_COLOR = nvgRGB(92, 157, 255);
+
+std::string formatPlayDuration(int64_t seconds)
+{
+    if (seconds <= 0)
+        return std::string();
+
+    int64_t hours = seconds / 3600;
+    if (hours >= 1)
+        return brls::getStr("akira/trophies/play_hours", static_cast<int>(hours));
+
+    return brls::getStr("akira/trophies/play_minutes", static_cast<int>((seconds + 59) / 60));
+}
 
 const char* titleSortLabelKey(TitleSort sort)
 {
@@ -144,7 +157,7 @@ TrophyCardCell::TrophyCardCell()
     this->setAxis(brls::Axis::COLUMN);
     this->setCornerRadius(8);
     this->setBackgroundColor(brls::Application::getTheme().getColor("color/card"));
-    this->setPadding(10, 10, 10, 10);
+    this->setPadding(12, 12, 12, 12);
     this->setFocusable(true);
 
     cover = new brls::Image();
@@ -155,13 +168,21 @@ TrophyCardCell::TrophyCardCell()
     this->addView(cover);
 
     nameLabel = new brls::Label();
-    nameLabel->setFontSize(16);
+    nameLabel->setFontSize(19);
     nameLabel->setSingleLine(true);
     nameLabel->setMarginTop(8);
     this->addView(nameLabel);
 
+    playLabel = new brls::Label();
+    playLabel->setFontSize(14);
+    playLabel->setTextColor(PLAY_COLOR);
+    playLabel->setSingleLine(true);
+    playLabel->setMarginTop(4);
+    playLabel->setVisibility(brls::Visibility::GONE);
+    this->addView(playLabel);
+
     detailLabel = new brls::Label();
-    detailLabel->setFontSize(13);
+    detailLabel->setFontSize(14);
     detailLabel->setTextColor(nvgRGB(150, 150, 150));
     detailLabel->setSingleLine(true);
     detailLabel->setMarginTop(3);
@@ -198,6 +219,23 @@ void TrophyCardCell::bindTitle(const psn::TrophyTitle& title)
         title.progress,
         title.earnedTrophies.total(),
         title.definedTrophies.total()));
+
+    TrophyManager::GameProgress play = TrophyManager::getInstance()->gameProgressFor(title.npCommunicationId);
+
+    if (play.valid && play.playDurationSeconds > 0)
+    {
+        std::string age = formatRelativeAge(psn::parseIso8601Timestamp(play.lastPlayedDateTime));
+
+        playLabel->setText(age.empty()
+            ? formatPlayDuration(play.playDurationSeconds)
+            : std::format("{}  ·  {}", formatPlayDuration(play.playDurationSeconds), age));
+
+        playLabel->setVisibility(brls::Visibility::VISIBLE);
+    }
+    else
+    {
+        playLabel->setVisibility(brls::Visibility::GONE);
+    }
 
     float ratio = std::clamp(title.progress / 100.0f, 0.0f, 1.0f);
     progressFill->setWidthPercentage(ratio * 100.0f);
@@ -477,6 +515,11 @@ void TrophyListTab::rebuildGrid()
     }
 
     grid->setDataSource(new TrophyGridDataSource(std::move(rows)));
+
+    TrophyManager::getInstance()->resolveGameProgress(titles, []() {
+        if (currentInstance)
+            currentInstance->rebuildGrid();
+    });
 }
 
 void TrophyListTab::refreshControlLabels()

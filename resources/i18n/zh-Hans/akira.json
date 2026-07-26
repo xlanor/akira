@@ -132,7 +132,9 @@
         "status_line": "{}  ·  已用 {}/{} 次请求",
         "status_budget": "已用 {}/{} 次请求",
         "status_budget_spent": "请求配额已用完 — {} 分钟后重置",
-        "status_breaker": "PSN 已限流 — {} 分钟后恢复刷新"
+        "status_breaker": "PSN 已限流 — {} 分钟后恢复刷新",
+        "play_hours": "已游玩 {} 小时",
+        "play_minutes": "已游玩 {} 分钟"
     },
     "add_host": {
         "title": "添加 PlayStation 主机",

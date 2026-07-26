@@ -18,6 +18,11 @@ const (
 	RedirectURI = "https://remoteplay.dl.playstation.net/remoteplay/redirect"
 
 	Scopes = "psn:clientapp referenceDataService:countryConfig.read pushNotification:webSocket.desktop.connect sessionManager:remotePlaySession.system.update"
+
+	MobileClientID     = "09515159-7237-4370-9b40-3806e67c0891"
+	MobileClientSecret = "ucPjka5tntB2KqsP"
+	MobileRedirectURI  = "com.scee.psxandroid.scecompcall://redirect"
+	MobileScopes       = "psn:mobile.v2.core psn:clientapp"
 )
 
 var npssoAuthorizeURL = NpssoAuthorizeURL
@@ -36,6 +41,17 @@ func BuildNpssoAuthorizeURL(duid, cid string) string {
 	params.Set("PlatformPrivacyWs1", "minimal")
 	params.Set("no_captcha", "true")
 	params.Set("cid", cid)
+
+	return npssoAuthorizeURL + "?" + params.Encode()
+}
+
+func BuildMobileNpssoAuthorizeURL() string {
+	params := url.Values{}
+	params.Set("access_type", "offline")
+	params.Set("client_id", MobileClientID)
+	params.Set("redirect_uri", MobileRedirectURI)
+	params.Set("response_type", "code")
+	params.Set("scope", MobileScopes)
 
 	return npssoAuthorizeURL + "?" + params.Encode()
 }

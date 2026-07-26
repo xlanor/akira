@@ -113,6 +113,21 @@ struct Trophy {
     std::string progressedDateTime;
 };
 
+struct PlayedGame {
+    std::string titleId;
+    std::string name;
+    std::string imageUrl;
+    std::string category;
+    int playCount = 0;
+    int64_t playDurationSeconds = 0;
+    std::string firstPlayedDateTime;
+    std::string lastPlayedDateTime;
+};
+
+int64_t parseIso8601Duration(const std::string& value);
+int64_t parseIso8601Timestamp(const std::string& value);
+bool parsePlayedGame(json_object* obj, PlayedGame& out);
+
 struct TitleDetail {
     std::string npCommunicationId;
     std::string npServiceName;

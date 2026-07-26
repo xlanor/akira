@@ -502,3 +502,86 @@ TEST(group_round_trips_through_the_detail_cache_format)
     CHECK_EQ(decoded.progress, original.progress);
     CHECK_EQ(decoded.lastUpdatedDateTime, original.lastUpdatedDateTime);
 }
+
+TEST(iso8601_durations_parse_to_seconds)
+{
+    CHECK_EQ(parseIso8601Duration("PT228H56M33S"), int64_t(228 * 3600 + 56 * 60 + 33));
+    CHECK_EQ(parseIso8601Duration("PT1H"), int64_t(3600));
+    CHECK_EQ(parseIso8601Duration("PT45M"), int64_t(2700));
+    CHECK_EQ(parseIso8601Duration("PT30S"), int64_t(30));
+    CHECK_EQ(parseIso8601Duration("P2DT3H"), int64_t(2 * 86400 + 3 * 3600));
+    CHECK_EQ(parseIso8601Duration("PT0S"), int64_t(0));
+}
+
+TEST(malformed_durations_are_zero_not_garbage)
+{
+    CHECK_EQ(parseIso8601Duration(""), int64_t(0));
+    CHECK_EQ(parseIso8601Duration("228H"), int64_t(0));
+    CHECK_EQ(parseIso8601Duration("PTH"), int64_t(0));
+    CHECK_EQ(parseIso8601Duration("PTXYZ"), int64_t(0));
+}
+
+TEST(minutes_mean_different_things_either_side_of_the_T)
+{
+    CHECK_EQ(parseIso8601Duration("PT5M"), int64_t(300));
+    CHECK_EQ(parseIso8601Duration("P5M"), int64_t(5 * 2592000));
+}
+
+TEST(parse_played_game_prefers_localized_fields)
+{
+    Doc doc(R"({
+        "titleId": "PPSA20599_00",
+        "name": "Rocket League",
+        "localizedName": "Rocket League Deluxe",
+        "imageUrl": "https://image/a.png",
+        "localizedImageUrl": "https://image/b.png",
+        "category": "ps5_native_game",
+        "playCount": 100,
+        "playDuration": "PT228H56M33S",
+        "firstPlayedDateTime": "2015-07-10T19:40:19Z",
+        "lastPlayedDateTime": "2024-08-03T19:28:27.12Z"
+    })");
+
+    PlayedGame game;
+    CHECK(parsePlayedGame(doc.get(), game));
+    CHECK_EQ(game.titleId, std::string("PPSA20599_00"));
+    CHECK_EQ(game.name, std::string("Rocket League Deluxe"));
+    CHECK_EQ(game.imageUrl, std::string("https://image/b.png"));
+    CHECK_EQ(game.playCount, 100);
+    CHECK_EQ(game.playDurationSeconds, int64_t(228 * 3600 + 56 * 60 + 33));
+}
+
+TEST(parse_played_game_falls_back_when_unlocalized)
+{
+    Doc doc(R"({"titleId": "CUSA01433_00", "name": "Bloodborne", "imageUrl": "https://x/y.png", "playDuration": "PT47H"})");
+
+    PlayedGame game;
+    CHECK(parsePlayedGame(doc.get(), game));
+    CHECK_EQ(game.name, std::string("Bloodborne"));
+    CHECK_EQ(game.imageUrl, std::string("https://x/y.png"));
+    CHECK_EQ(game.playDurationSeconds, int64_t(47 * 3600));
+}
+
+TEST(parse_played_game_rejects_a_row_without_a_title_id)
+{
+    Doc doc(R"({"name": "Nameless"})");
+
+    PlayedGame game;
+    CHECK(!parsePlayedGame(doc.get(), game));
+}
+
+TEST(iso8601_timestamps_parse_to_unix_epoch)
+{
+    CHECK_EQ(parseIso8601Timestamp("1970-01-01T00:00:00Z"), int64_t(0));
+    CHECK_EQ(parseIso8601Timestamp("2000-01-01T00:00:00Z"), int64_t(946684800));
+    CHECK_EQ(parseIso8601Timestamp("2024-08-03T19:28:27.12Z"), int64_t(1722713307));
+    CHECK_EQ(parseIso8601Timestamp("2026-07-25T16:17:58Z"), int64_t(1784996278));
+}
+
+TEST(malformed_timestamps_are_zero)
+{
+    CHECK_EQ(parseIso8601Timestamp(""), int64_t(0));
+    CHECK_EQ(parseIso8601Timestamp("2024-08-03"), int64_t(0));
+    CHECK_EQ(parseIso8601Timestamp("not-a-date-at-all!!"), int64_t(0));
+    CHECK_EQ(parseIso8601Timestamp("2024-13-03T00:00:00Z"), int64_t(0));
+}

@@ -23,10 +23,10 @@ std::string Client::titlePath(const std::string& prefix, const std::string& npCo
     return path;
 }
 
-Error Client::fetchDocument(const std::string& path, Json& out) const
+Error Client::fetchDocument(const char* base, const std::string& path, Json& out) const
 {
     std::string body;
-    Error error = fetch(std::string(API_BASE) + path, body);
+    Error error = fetch(std::string(base) + path, body);
     if (!error.ok())
         return error;
 
@@ -41,10 +41,10 @@ Error Client::fetchDocument(const std::string& path, Json& out) const
     return {};
 }
 
-Error Client::fetchList(const std::string& path, const char* arrayKey, const RowSink& onRow) const
+Error Client::fetchList(const char* base, const std::string& path, const char* arrayKey, const RowSink& onRow) const
 {
     Json doc;
-    Error error = fetchDocument(path, doc);
+    Error error = fetchDocument(base, path, doc);
     if (!error.ok())
         return error;
 
@@ -69,7 +69,7 @@ Error Client::fetchList(const std::string& path, const char* arrayKey, const Row
     return {};
 }
 
-Error Client::fetchPaged(const std::string& path, const char* arrayKey, const RowSink& onRow) const
+Error Client::fetchPaged(const char* base, const std::string& path, const char* arrayKey, const RowSink& onRow) const
 {
     const char* separator = path.find('?') == std::string::npos ? "?" : "&";
 
@@ -83,7 +83,7 @@ Error Client::fetchPaged(const std::string& path, const char* arrayKey, const Ro
         page++;
 
         Json doc;
-        Error error = fetchDocument(
+        Error error = fetchDocument(base,
             std::format("{}{}limit={}&offset={}", path, separator, PAGE_SIZE, offset), doc);
         if (!error.ok())
             return error;
@@ -148,7 +148,7 @@ Error Client::fetchPaged(const std::string& path, const char* arrayKey, const Ro
 Error Client::fetchSummary(TrophySummary& out) const
 {
     Json doc;
-    Error error = fetchDocument("/users/me/trophySummary", doc);
+    Error error = fetchDocument(API_BASE, "/users/me/trophySummary", doc);
     if (!error.ok())
         return error;
 
@@ -160,7 +160,7 @@ Error Client::fetchSummary(TrophySummary& out) const
 
 Error Client::fetchTitles(std::vector<TrophyTitle>& out) const
 {
-    return fetchPaged("/users/me/trophyTitles", "trophyTitles", [&out](json_object* row) {
+    return fetchPaged(API_BASE, "/users/me/trophyTitles", "trophyTitles", [&out](json_object* row) {
         TrophyTitle title;
         if (!parseTitle(row, title))
         {
@@ -176,7 +176,7 @@ Error Client::fetchTitles(std::vector<TrophyTitle>& out) const
 Error Client::fetchGroupDefinitions(const std::string& npCommunicationId,
     const std::string& npServiceName, std::vector<TrophyGroup>& out) const
 {
-    return fetchList(titlePath("", npCommunicationId, "/trophyGroups", npServiceName),
+    return fetchList(API_BASE, titlePath("", npCommunicationId, "/trophyGroups", npServiceName),
         "trophyGroups", [&out](json_object* row) {
             TrophyGroup group;
             if (!parseGroupDefinition(row, group))
@@ -190,7 +190,7 @@ Error Client::fetchGroupDefinitions(const std::string& npCommunicationId,
 Error Client::fetchGroupProgress(const std::string& npCommunicationId,
     const std::string& npServiceName, std::vector<TrophyGroup>& out) const
 {
-    return fetchList(titlePath("/users/me", npCommunicationId, "/trophyGroups", npServiceName),
+    return fetchList(API_BASE, titlePath("/users/me", npCommunicationId, "/trophyGroups", npServiceName),
         "trophyGroups", [&out](json_object* row) {
             TrophyGroup group;
             if (!parseGroupProgress(row, group))
@@ -204,7 +204,7 @@ Error Client::fetchGroupProgress(const std::string& npCommunicationId,
 Error Client::fetchTrophyDefinitions(const std::string& npCommunicationId,
     const std::string& npServiceName, std::vector<Trophy>& out) const
 {
-    return fetchPaged(titlePath("", npCommunicationId, "/trophyGroups/all/trophies", npServiceName),
+    return fetchPaged(API_BASE, titlePath("", npCommunicationId, "/trophyGroups/all/trophies", npServiceName),
         "trophies", [&out](json_object* row) {
             Trophy trophy;
             if (!parseTrophyDefinition(row, trophy))
@@ -218,13 +218,69 @@ Error Client::fetchTrophyDefinitions(const std::string& npCommunicationId,
 Error Client::fetchTrophyProgress(const std::string& npCommunicationId,
     const std::string& npServiceName, std::vector<Trophy>& out) const
 {
-    return fetchPaged(titlePath("/users/me", npCommunicationId, "/trophyGroups/all/trophies", npServiceName),
+    return fetchPaged(API_BASE, titlePath("/users/me", npCommunicationId, "/trophyGroups/all/trophies", npServiceName),
         "trophies", [&out](json_object* row) {
             Trophy trophy;
             if (!parseTrophyProgress(row, trophy))
                 return false;
 
             out.push_back(std::move(trophy));
+            return true;
+        });
+}
+
+Error Client::fetchPlayedGames(std::vector<PlayedGame>& out) const
+{
+    return fetchPaged(GAMELIST_BASE, "/me/titles", "titles", [&out](json_object* row) {
+        PlayedGame game;
+        if (!parsePlayedGame(row, game))
+            return false;
+
+        out.push_back(std::move(game));
+        return true;
+    });
+}
+
+Error Client::fetchTitleMapping(const std::vector<std::string>& titleIds,
+    std::vector<std::pair<std::string, std::string>>& out) const
+{
+    if (titleIds.empty())
+        return {};
+
+    if (titleIds.size() > TITLE_MAP_BATCH)
+    {
+        Error tooMany{Status::ServerError,
+            std::format("npTitleIds accepts at most {} ids, got {}", TITLE_MAP_BATCH, titleIds.size())};
+        logError("PSN: {}", tooMany.message);
+        return tooMany;
+    }
+
+    std::string joined;
+    for (size_t i = 0; i < titleIds.size(); i++)
+    {
+        if (i > 0)
+            joined += ",";
+        joined += titleIds[i];
+    }
+
+    return fetchList(API_BASE, "/users/me/titles/trophyTitles?npTitleIds=" + joined,
+        "titles", [&out](json_object* row) {
+            std::string npTitleId = jsonString(row, "npTitleId");
+            if (npTitleId.empty())
+                return false;
+
+            json_object* sets = nullptr;
+            if (!jsonField(row, "trophyTitles", &sets) || !json_object_is_type(sets, json_type_array))
+                return false;
+
+            if (json_object_array_length(sets) == 0)
+                return false;
+
+            std::string npCommunicationId = jsonString(json_object_array_get_idx(sets, 0), "npCommunicationId");
+            if (npCommunicationId.empty())
+                return false;
+
+            out.emplace_back(npTitleId, npCommunicationId);
             return true;
         });
 }

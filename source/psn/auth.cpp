@@ -11,11 +11,37 @@
 
 namespace psn {
 
-static const char* CLIENT_ID = "ba495a24-818c-472b-b12d-ff231c1b5745";
-static const char* CLIENT_SECRET = "mvaiZkRsAsI1IBkY";
-static const char* TOKEN_URL = "https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/token";
-static const char* SCOPES = "psn:clientapp referenceDataService:countryConfig.read pushNotification:webSocket.desktop.connect sessionManager:remotePlaySession.system.update";
-static const char* REDIRECT_URI = "https://remoteplay.dl.playstation.net/remoteplay/redirect";
+struct CredentialProfile {
+    const char* label;
+    const char* clientId;
+    const char* clientSecret;
+    const char* tokenUrl;
+    const char* scopes;
+    const char* extraFields;
+};
+
+static const CredentialProfile REMOTE_PLAY_PROFILE = {
+    "remote play",
+    "ba495a24-818c-472b-b12d-ff231c1b5745",
+    "mvaiZkRsAsI1IBkY",
+    "https://auth.api.sonyentertainmentnetwork.com/2.0/oauth/token",
+    "psn:clientapp referenceDataService:countryConfig.read pushNotification:webSocket.desktop.connect sessionManager:remotePlaySession.system.update",
+    "&redirect_uri=https://remoteplay.dl.playstation.net/remoteplay/redirect"
+};
+
+static const CredentialProfile MOBILE_SSO_PROFILE = {
+    "mobile sso",
+    "09515159-7237-4370-9b40-3806e67c0891",
+    "ucPjka5tntB2KqsP",
+    "https://ca.account.sony.com/api/authz/v3/oauth/token",
+    "psn:mobile.v2.core psn:clientapp",
+    "&token_format=jwt"
+};
+
+static const CredentialProfile& profileFor(Credential credential)
+{
+    return credential == Credential::MobileSso ? MOBILE_SSO_PROFILE : REMOTE_PLAY_PROFILE;
+}
 
 ActionStatus actionStatus(bool busy, std::chrono::steady_clock::time_point readyAt)
 {
@@ -32,31 +58,103 @@ ActionStatus actionStatus(bool busy, std::chrono::steady_clock::time_point ready
 
 Auth& Auth::instance()
 {
-    static Auth instance;
+    static Auth instance(Credential::RemotePlay);
     return instance;
 }
 
-Auth::Auth()
+Auth& Auth::mobile()
+{
+    static Auth instance(Credential::MobileSso);
+    return instance;
+}
+
+Auth& Auth::forCredential(Credential credential)
+{
+    return credential == Credential::MobileSso ? mobile() : instance();
+}
+
+Auth::Auth(Credential credential)
+    : credential(credential)
 {
     settings = SettingsManager::getInstance();
 }
 
+const char* Auth::label() const
+{
+    return profileFor(credential).label;
+}
+
+std::string Auth::storedAccessToken() const
+{
+    return credential == Credential::MobileSso
+        ? settings->getPsnMobileSsoAccessToken()
+        : settings->getPsnAccessToken();
+}
+
+std::string Auth::storedRefreshToken() const
+{
+    return credential == Credential::MobileSso
+        ? settings->getPsnMobileSsoRefreshToken()
+        : settings->getPsnRefreshToken();
+}
+
+int64_t Auth::storedExpiresAt() const
+{
+    return credential == Credential::MobileSso
+        ? settings->getPsnMobileSsoExpiresAt()
+        : settings->getPsnTokenExpiresAt();
+}
+
+void Auth::storeTokens(const std::string& access, const std::string& refresh, int expiresIn)
+{
+    int64_t expiresAt = expiresIn > 0
+        ? static_cast<int64_t>(std::time(nullptr)) + expiresIn
+        : 0;
+
+    if (credential == Credential::MobileSso)
+    {
+        settings->setPsnMobileSsoAccessToken(access);
+        settings->setPsnMobileSsoRefreshToken(refresh);
+        if (expiresAt > 0)
+            settings->setPsnMobileSsoExpiresAt(expiresAt);
+    }
+    else
+    {
+        settings->setPsnAccessToken(access);
+        settings->setPsnRefreshToken(refresh);
+        if (expiresAt > 0)
+            settings->setPsnTokenExpiresAt(expiresAt);
+    }
+
+    settings->writeFile();
+}
+
+void Auth::clearStoredTokens()
+{
+    if (credential == Credential::MobileSso)
+        settings->clearPsnMobileSsoData();
+    else
+        settings->clearPsnTokenData();
+
+    settings->writeFile();
+}
+
 bool Auth::linked() const
 {
-    return !settings->getPsnAccessToken().empty() || !settings->getPsnRefreshToken().empty();
+    return !storedAccessToken().empty() || !storedRefreshToken().empty();
 }
 
 std::string Auth::accessToken() const
 {
-    return settings->getPsnAccessToken();
+    return storedAccessToken();
 }
 
 bool Auth::tokenValid() const
 {
-    if (settings->getPsnAccessToken().empty())
+    if (storedAccessToken().empty())
         return false;
 
-    int64_t expiresAt = settings->getPsnTokenExpiresAt();
+    int64_t expiresAt = storedExpiresAt();
     if (expiresAt <= 0)
         return false;
 
@@ -66,9 +164,8 @@ bool Auth::tokenValid() const
 
 void Auth::clearTokens(const std::string& reason)
 {
-    brls::Logger::error("PSN: refresh token rejected ({}), clearing stored PSN token data", reason);
-    settings->clearPsnTokenData();
-    settings->writeFile();
+    brls::Logger::error("PSN {}: refresh token rejected ({}), clearing stored token data", label(), reason);
+    clearStoredTokens();
     notifyStateChanged();
 }
 
@@ -94,7 +191,7 @@ SessionState Auth::state() const
     if (tokenValid())
         return SessionState::Valid;
 
-    if (settings->getPsnRefreshToken().empty())
+    if (storedRefreshToken().empty())
         return SessionState::NotLinked;
 
     return SessionState::Expired;
@@ -105,15 +202,15 @@ Error Auth::ensureSession(HttpSession& session, bool forceRefresh)
     if (!forceRefresh && tokenValid())
         return {};
 
-    if (settings->getPsnRefreshToken().empty())
+    if (storedRefreshToken().empty())
     {
-        if (settings->getPsnAccessToken().empty())
+        if (storedAccessToken().empty())
             return {Status::NotLinked, "PSN account not linked"};
 
         return {Status::SessionExpired, "No PSN refresh token stored"};
     }
 
-    brls::Logger::info("PSN: session needs a refresh ({})", forceRefresh ? "forced" : "expired");
+    brls::Logger::info("PSN {}: session needs a refresh ({})", label(), forceRefresh ? "forced" : "expired");
 
     AuthResult result = refreshBlocking(session);
     if (result.success)
@@ -195,21 +292,23 @@ AuthResult Auth::refreshBlocking(HttpSession& session)
 
 AuthResult Auth::performRefresh(HttpSession& session)
 {
-    std::string refreshToken = settings->getPsnRefreshToken();
+    std::string refreshToken = storedRefreshToken();
     if (refreshToken.empty())
     {
         return {false, AuthError::Invalid, "No refresh token stored"};
     }
 
+    const CredentialProfile& profile = profileFor(credential);
+
     HttpRequest request;
-    request.url = TOKEN_URL;
-    request.basicUser = CLIENT_ID;
-    request.basicPassword = CLIENT_SECRET;
+    request.url = profile.tokenUrl;
+    request.basicUser = profile.clientId;
+    request.basicPassword = profile.clientSecret;
     request.headers = {"Content-Type: application/x-www-form-urlencoded"};
     request.postFields = "grant_type=refresh_token"
         "&refresh_token=" + refreshToken +
-        "&scope=" + std::string(SCOPES) +
-        "&redirect_uri=" + std::string(REDIRECT_URI);
+        "&scope=" + std::string(profile.scopes) +
+        std::string(profile.extraFields);
     request.post = true;
     request.timeoutSec = 30;
 
@@ -292,18 +391,9 @@ AuthResult Auth::performRefresh(HttpSession& session)
         return {false, AuthError::Transient, "Missing tokens in response"};
     }
 
-    settings->setPsnAccessToken(newAccessToken);
-    settings->setPsnRefreshToken(newRefreshToken);
+    storeTokens(newAccessToken, newRefreshToken, expiresIn);
 
-    if (expiresIn > 0)
-    {
-        int64_t expiresAt = static_cast<int64_t>(std::time(nullptr)) + expiresIn;
-        settings->setPsnTokenExpiresAt(expiresAt);
-    }
-
-    settings->writeFile();
-
-    brls::Logger::info("PSN token refreshed successfully");
+    brls::Logger::info("PSN {}: token refreshed successfully", label());
     return {true, AuthError::Transient, ""};
 }
 

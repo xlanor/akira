@@ -444,6 +444,25 @@ void DiscoveryManager::fetchCompanionCredentials(
         {
             refreshToken = json_object_get_string(refresh_token_obj);
         }
+        struct json_object* mobile_obj;
+        if (json_object_object_get_ex(parsed_json, "psn_mobile_sso_access_token", &mobile_obj))
+        {
+            SettingsManager* settings = SettingsManager::getInstance();
+            settings->setPsnMobileSsoAccessToken(json_object_get_string(mobile_obj));
+
+            if (json_object_object_get_ex(parsed_json, "psn_mobile_sso_refresh_token", &mobile_obj))
+                settings->setPsnMobileSsoRefreshToken(json_object_get_string(mobile_obj));
+
+            if (json_object_object_get_ex(parsed_json, "psn_mobile_sso_expires_at", &mobile_obj))
+                settings->setPsnMobileSsoExpiresAt(json_object_get_int64(mobile_obj));
+
+            brls::Logger::info("Companion supplied PSN mobile SSO credentials");
+        }
+        else
+        {
+            brls::Logger::info("Companion supplied no PSN mobile SSO credentials; game progression will be unavailable");
+        }
+
         if (json_object_object_get_ex(parsed_json, "expires_at", &expires_at_obj))
         {
             expiresAt = json_object_get_int64(expires_at_obj);

@@ -58,6 +58,10 @@ type TokenResponse struct {
 	ExpiresIn    int    `json:"expires_in"`
 	ExpiresAt    int64  `json:"expires_at"`
 	IsExpired    bool   `json:"is_expired"`
+
+	MobileAccessToken  string `json:"psn_mobile_sso_access_token,omitempty"`
+	MobileRefreshToken string `json:"psn_mobile_sso_refresh_token,omitempty"`
+	MobileExpiresAt    int64  `json:"psn_mobile_sso_expires_at,omitempty"`
 }
 
 func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
@@ -72,13 +76,23 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, TokenResponse{
+	response := TokenResponse{
 		AccessToken:  tokenInfo.AccessToken,
 		RefreshToken: tokenInfo.RefreshToken,
 		ExpiresIn:    tokenInfo.ExpiresIn,
 		ExpiresAt:    tokenInfo.ExpiresAt,
 		IsExpired:    tokenInfo.IsExpired,
-	})
+	}
+
+	if mobile := s.state.GetMobileTokens(); mobile != nil {
+		response.MobileAccessToken = mobile.AccessToken
+		response.MobileRefreshToken = mobile.RefreshToken
+		if mobile.ObtainedAt > 0 && mobile.ExpiresIn > 0 {
+			response.MobileExpiresAt = mobile.ObtainedAt + int64(mobile.ExpiresIn)
+		}
+	}
+
+	writeJSON(w, response)
 }
 
 type AccountResponse struct {

@@ -181,6 +181,120 @@ TrophyRarity rarityOf(int trophyRare)
     }
 }
 
+int64_t parseIso8601Duration(const std::string& value)
+{
+    if (value.size() < 2 || value[0] != 'P')
+        return 0;
+
+    int64_t total = 0;
+    int64_t number = 0;
+    bool haveNumber = false;
+    bool inTime = false;
+
+    for (size_t i = 1; i < value.size(); i++)
+    {
+        char c = value[i];
+
+        if (c == 'T')
+        {
+            inTime = true;
+            number = 0;
+            haveNumber = false;
+            continue;
+        }
+
+        if (c >= '0' && c <= '9')
+        {
+            number = number * 10 + (c - '0');
+            haveNumber = true;
+            continue;
+        }
+
+        if (!haveNumber)
+            return 0;
+
+        switch (c)
+        {
+            case 'D': total += number * 86400; break;
+            case 'W': total += number * 604800; break;
+            case 'H': total += inTime ? number * 3600 : 0; break;
+            case 'M': total += inTime ? number * 60 : number * 2592000; break;
+            case 'S': total += inTime ? number : 0; break;
+            default: return 0;
+        }
+
+        number = 0;
+        haveNumber = false;
+    }
+
+    return total;
+}
+
+static int64_t daysFromCivil(int64_t y, int64_t m, int64_t d)
+{
+    y -= m <= 2;
+    int64_t era = (y >= 0 ? y : y - 399) / 400;
+    int64_t yoe = y - era * 400;
+    int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+int64_t parseIso8601Timestamp(const std::string& value)
+{
+    if (value.size() < 19 || value[4] != '-' || value[7] != '-' || value[10] != 'T')
+        return 0;
+
+    auto number = [&value](size_t offset, size_t length) -> int64_t {
+        int64_t result = 0;
+        for (size_t i = offset; i < offset + length; i++)
+        {
+            if (value[i] < '0' || value[i] > '9')
+                return -1;
+            result = result * 10 + (value[i] - '0');
+        }
+        return result;
+    };
+
+    int64_t year = number(0, 4);
+    int64_t month = number(5, 2);
+    int64_t day = number(8, 2);
+    int64_t hour = number(11, 2);
+    int64_t minute = number(14, 2);
+    int64_t second = number(17, 2);
+
+    if (year <= 0 || month < 1 || month > 12 || day < 1 || day > 31 ||
+        hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 60)
+        return 0;
+
+    return daysFromCivil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second;
+}
+
+bool parsePlayedGame(json_object* obj, PlayedGame& out)
+{
+    if (!obj)
+        return false;
+
+    out.titleId = jsonString(obj, "titleId");
+    if (out.titleId.empty())
+        return false;
+
+    out.name = jsonString(obj, "localizedName");
+    if (out.name.empty())
+        out.name = jsonString(obj, "name");
+
+    out.imageUrl = jsonString(obj, "localizedImageUrl");
+    if (out.imageUrl.empty())
+        out.imageUrl = jsonString(obj, "imageUrl");
+
+    out.category = jsonString(obj, "category");
+    out.playCount = jsonInt(obj, "playCount");
+    out.playDurationSeconds = parseIso8601Duration(jsonString(obj, "playDuration"));
+    out.firstPlayedDateTime = jsonString(obj, "firstPlayedDateTime");
+    out.lastPlayedDateTime = jsonString(obj, "lastPlayedDateTime");
+    return true;
+}
+
 bool parseSummary(json_object* obj, TrophySummary& out)
 {
     if (!obj)

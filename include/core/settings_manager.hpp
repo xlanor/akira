@@ -57,6 +57,9 @@ private:
     std::string globalPsnRefreshToken;
     std::string globalPsnAccessToken;
     int64_t globalPsnTokenExpiresAt = 0;
+    std::string globalPsnMobileSsoRefreshToken;
+    std::string globalPsnMobileSsoAccessToken;
+    int64_t globalPsnMobileSsoExpiresAt = 0;
     std::string globalDuid;
     HapticPreset globalHaptic = HapticPreset::Disabled;
     float rumbleFreqLow = 140.0f;
@@ -176,6 +179,17 @@ public:
     int64_t getPsnTokenExpiresAt() const;
     void setPsnTokenExpiresAt(int64_t expiresAt);
     void clearPsnTokenData();
+
+    std::string getPsnMobileSsoRefreshToken() const;
+    void setPsnMobileSsoRefreshToken(const std::string& token);
+
+    std::string getPsnMobileSsoAccessToken() const;
+    void setPsnMobileSsoAccessToken(const std::string& token);
+
+    int64_t getPsnMobileSsoExpiresAt() const;
+    void setPsnMobileSsoExpiresAt(int64_t expiresAt);
+
+    void clearPsnMobileSsoData();
 
     std::string getGlobalDuid() const;
     void setGlobalDuid(const std::string& duid);

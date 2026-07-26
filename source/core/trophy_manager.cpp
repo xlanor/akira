@@ -10,6 +10,7 @@
 #include <cstring>
 #include <format>
 #include <thread>
+#include <unordered_set>
 
 #include <sys/stat.h>
 #include <switch.h>
@@ -320,6 +321,195 @@ void TrophyManager::saveForceStateLocked() const
     json_object_put(root);
 }
 
+void TrophyManager::loadTitleMapLocked()
+{
+    if (titleMapLoaded)
+        return;
+
+    titleMapLoaded = true;
+
+    psn::Json doc(readWholeFile(TITLE_MAP_PATH));
+    if (!doc)
+        return;
+
+    json_object_object_foreach(doc.get(), key, value)
+    {
+        if (!value || !json_object_is_type(value, json_type_object))
+            continue;
+
+        GameProgress entry;
+        entry.playDurationSeconds = psn::jsonInt64(value, "playDurationSeconds");
+        entry.lastPlayedDateTime = psn::jsonString(value, "lastPlayedDateTime");
+        entry.valid = true;
+        gameProgress[key] = std::move(entry);
+    }
+
+    brls::Logger::info("Trophy: {} game progression entr(ies) restored", gameProgress.size());
+}
+
+void TrophyManager::saveTitleMapLocked() const
+{
+    json_object* root = json_object_new_object();
+
+    for (const auto& entry : gameProgress)
+    {
+        json_object* row = json_object_new_object();
+        json_object_object_add(row, "playDurationSeconds", json_object_new_int64(entry.second.playDurationSeconds));
+        json_object_object_add(row, "lastPlayedDateTime",
+            json_object_new_string(entry.second.lastPlayedDateTime.c_str()));
+        json_object_object_add(root, entry.first.c_str(), row);
+    }
+
+    const char* text = json_object_to_json_string(root);
+    if (!writeWholeFile(TITLE_MAP_PATH, text ? text : ""))
+        brls::Logger::warning("Trophy: could not write {}", TITLE_MAP_PATH);
+
+    json_object_put(root);
+}
+
+TrophyManager::GameProgress TrophyManager::gameProgressFor(const std::string& npCommunicationId) const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    const_cast<TrophyManager*>(this)->loadTitleMapLocked();
+
+    auto entry = gameProgress.find(npCommunicationId);
+    return entry == gameProgress.end() ? GameProgress{} : entry->second;
+}
+
+void TrophyManager::resolveGameProgress(const std::vector<psn::TrophyTitle>& titles, std::function<void()> onUpdated)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        loadTitleMapLocked();
+
+        if (gameProgressResolving)
+            return;
+
+        size_t missing = 0;
+        for (const psn::TrophyTitle& title : titles)
+        {
+            if (gameProgress.find(title.npCommunicationId) == gameProgress.end())
+                missing++;
+        }
+
+        if (missing == 0)
+            return;
+
+        gameProgressResolving = true;
+        brls::Logger::info("Trophy: {} title(s) have no game progression yet, resolving", missing);
+    }
+
+    HttpPool::instance().submit([this, titles, onUpdated](HttpSession& session) {
+        psn::Client client = clientFor(session);
+
+        std::vector<psn::PlayedGame> games;
+        psn::Error error = client.fetchPlayedGames(games);
+
+        if (!error.ok())
+        {
+            brls::Logger::warning("Trophy: game progression unavailable [{}] {}",
+                psn::statusName(error.status), error.message);
+
+            std::lock_guard<std::mutex> lock(mutex);
+            gameProgressResolving = false;
+            return;
+        }
+
+        std::unordered_set<std::string> wanted;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            for (const psn::TrophyTitle& title : titles)
+            {
+                if (gameProgress.find(title.npCommunicationId) == gameProgress.end())
+                    wanted.insert(title.npCommunicationId);
+            }
+        }
+
+        std::unordered_map<std::string, const psn::PlayedGame*> byTitleId;
+        for (const psn::PlayedGame& game : games)
+            byTitleId[game.titleId] = &game;
+
+        int resolved = 0;
+        int batches = 0;
+        std::vector<std::string> batch;
+
+        auto flush = [&]() {
+            if (batch.empty() || wanted.empty())
+            {
+                batch.clear();
+                return true;
+            }
+
+            std::vector<std::pair<std::string, std::string>> mapping;
+            psn::Error mapError = client.fetchTitleMapping(batch, mapping);
+            batches++;
+
+            if (!mapError.ok())
+            {
+                brls::Logger::warning("Trophy: title mapping failed [{}] {}",
+                    psn::statusName(mapError.status), mapError.message);
+                batch.clear();
+                return false;
+            }
+
+            std::lock_guard<std::mutex> lock(mutex);
+
+            for (const auto& pair : mapping)
+            {
+                auto game = byTitleId.find(pair.first);
+                if (game == byTitleId.end())
+                    continue;
+
+                GameProgress entry;
+                entry.playDurationSeconds = game->second->playDurationSeconds;
+                entry.lastPlayedDateTime = game->second->lastPlayedDateTime;
+                entry.valid = true;
+
+                gameProgress[pair.second] = std::move(entry);
+                wanted.erase(pair.second);
+                resolved++;
+            }
+
+            batch.clear();
+            return true;
+        };
+
+        for (const psn::PlayedGame& game : games)
+        {
+            if (wanted.empty())
+                break;
+
+            batch.push_back(game.titleId);
+
+            if (batch.size() < psn::Client::TITLE_MAP_BATCH)
+                continue;
+
+            if (!flush())
+                break;
+        }
+
+        if (!wanted.empty())
+            flush();
+
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            gameProgressResolving = false;
+
+            if (resolved > 0)
+            {
+                ensureCacheDirs();
+                saveTitleMapLocked();
+            }
+        }
+
+        brls::Logger::info("Trophy: resolved game progression for {} title(s) over {} mapping call(s), {} unmatched",
+            resolved, batches, wanted.size());
+
+        if (resolved > 0 && onUpdated)
+            brls::sync([onUpdated]() { onUpdated(); });
+    });
+}
+
 psn::ActionStatus TrophyManager::forceRefreshStatus(const std::string& scope)
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -516,8 +706,17 @@ void TrophyManager::tripBreaker(int seconds)
         breakerUntil = until;
 }
 
+static psn::Credential credentialForUrl(const std::string& url)
+{
+    return url.find("/api/gamelist/") != std::string::npos
+        ? psn::Credential::MobileSso
+        : psn::Credential::RemotePlay;
+}
+
 psn::Error TrophyManager::governedGet(HttpSession& session, const std::string& url, std::string& outBody)
 {
+    psn::Auth& auth = psn::Auth::forCredential(credentialForUrl(url));
+
     int breakerSeconds = 0;
     if (breakerOpen(breakerSeconds))
     {
@@ -527,7 +726,7 @@ psn::Error TrophyManager::governedGet(HttpSession& session, const std::string& u
         return blocked;
     }
 
-    if (psn::Auth::instance().state() == psn::SessionState::NotLinked)
+    if (auth.state() == psn::SessionState::NotLinked)
         return {psn::Status::NotLinked, "PSN account not linked"};
 
     if (!hasConnectivity())
@@ -536,11 +735,11 @@ psn::Error TrophyManager::governedGet(HttpSession& session, const std::string& u
         return {psn::Status::Offline, "No network connection"};
     }
 
-    psn::Error sessionError = psn::Auth::instance().ensureSession(session);
+    psn::Error sessionError = auth.ensureSession(session);
     if (!sessionError.ok())
         return sessionError;
 
-    std::string token = psn::Auth::instance().accessToken();
+    std::string token = auth.accessToken();
 
     psn::Error result;
     bool refreshedOn401 = false;
@@ -576,11 +775,11 @@ psn::Error TrophyManager::governedGet(HttpSession& session, const std::string& u
             refreshedOn401 = true;
             brls::Logger::info("Trophy: {} returned 401, refreshing token once", url);
 
-            psn::Error refreshError = psn::Auth::instance().ensureSession(session, true);
+            psn::Error refreshError = auth.ensureSession(session, true);
             if (!refreshError.ok())
                 return refreshError;
 
-            token = psn::Auth::instance().accessToken();
+            token = auth.accessToken();
             continue;
         }
 

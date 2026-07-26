@@ -132,7 +132,9 @@
         "status_line": "{}  ·  {}/{} requests used",
         "status_budget": "{}/{} requests used",
         "status_budget_spent": "Request budget used up — resets in {}m",
-        "status_breaker": "PSN throttled us — refreshes resume in {}m"
+        "status_breaker": "PSN throttled us — refreshes resume in {}m",
+        "play_hours": "{}h played",
+        "play_minutes": "{}m played"
     },
     "add_host": {
         "title": "Add PlayStation Console",

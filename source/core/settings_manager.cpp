@@ -295,6 +295,12 @@ void SettingsManager::parseTomlFile() {
             globalPsnRefreshToken = *val;
         if (auto val = config["psn_access_token"].value<std::string>())
             globalPsnAccessToken = *val;
+        if (auto val = config["psn_mobile_sso_refresh_token"].value<std::string>())
+            globalPsnMobileSsoRefreshToken = *val;
+        if (auto val = config["psn_mobile_sso_access_token"].value<std::string>())
+            globalPsnMobileSsoAccessToken = *val;
+        if (auto val = config["psn_mobile_sso_expires_at"].value<int64_t>())
+            globalPsnMobileSsoExpiresAt = *val;
         if (auto val = config["psn_token_expires_at"].value<int64_t>())
             globalPsnTokenExpiresAt = *val;
         if (auto val = config["global_duid"].value<std::string>())
@@ -658,6 +664,12 @@ int SettingsManager::writeFile() {
         config.insert("psn_refresh_token", globalPsnRefreshToken);
     if (!globalPsnAccessToken.empty())
         config.insert("psn_access_token", globalPsnAccessToken);
+    if (!globalPsnMobileSsoRefreshToken.empty())
+        config.insert("psn_mobile_sso_refresh_token", globalPsnMobileSsoRefreshToken);
+    if (!globalPsnMobileSsoAccessToken.empty())
+        config.insert("psn_mobile_sso_access_token", globalPsnMobileSsoAccessToken);
+    if (globalPsnMobileSsoExpiresAt > 0)
+        config.insert("psn_mobile_sso_expires_at", globalPsnMobileSsoExpiresAt);
     if (globalPsnTokenExpiresAt > 0)
         config.insert("psn_token_expires_at", globalPsnTokenExpiresAt);
     if (!globalDuid.empty())
@@ -1268,6 +1280,37 @@ int64_t SettingsManager::getPsnTokenExpiresAt() const {
 
 void SettingsManager::setPsnTokenExpiresAt(int64_t expiresAt) {
     globalPsnTokenExpiresAt = expiresAt;
+}
+
+std::string SettingsManager::getPsnMobileSsoRefreshToken() const {
+    return globalPsnMobileSsoRefreshToken;
+}
+
+void SettingsManager::setPsnMobileSsoRefreshToken(const std::string& token) {
+    globalPsnMobileSsoRefreshToken = token;
+}
+
+std::string SettingsManager::getPsnMobileSsoAccessToken() const {
+    return globalPsnMobileSsoAccessToken;
+}
+
+void SettingsManager::setPsnMobileSsoAccessToken(const std::string& token) {
+    globalPsnMobileSsoAccessToken = token;
+}
+
+int64_t SettingsManager::getPsnMobileSsoExpiresAt() const {
+    return globalPsnMobileSsoExpiresAt;
+}
+
+void SettingsManager::setPsnMobileSsoExpiresAt(int64_t expiresAt) {
+    globalPsnMobileSsoExpiresAt = expiresAt;
+}
+
+void SettingsManager::clearPsnMobileSsoData() {
+    globalPsnMobileSsoAccessToken.clear();
+    globalPsnMobileSsoRefreshToken.clear();
+    globalPsnMobileSsoExpiresAt = 0;
+    brls::Logger::info("PSN mobile SSO token data cleared");
 }
 
 void SettingsManager::clearPsnTokenData() {

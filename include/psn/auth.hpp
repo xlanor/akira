@@ -36,6 +36,11 @@ struct ActionStatus {
     int secondsRemaining = 0;
 };
 
+enum class Credential {
+    RemotePlay,
+    MobileSso
+};
+
 enum class SessionState {
     NotLinked,
     Valid,
@@ -50,6 +55,8 @@ public:
     using ErrorCallback = std::function<void(AuthError, const std::string&)>;
 
     static Auth& instance();
+    static Auth& mobile();
+    static Auth& forCredential(Credential credential);
 
     using StateObserver = std::function<void()>;
 
@@ -71,7 +78,14 @@ public:
     ActionStatus refreshStatus() const;
 
 private:
-    Auth();
+    explicit Auth(Credential credential);
+
+    std::string storedAccessToken() const;
+    std::string storedRefreshToken() const;
+    int64_t storedExpiresAt() const;
+    void storeTokens(const std::string& access, const std::string& refresh, int expiresIn);
+    void clearStoredTokens();
+    const char* label() const;
 
     AuthResult performRefresh(HttpSession& session);
 
@@ -80,6 +94,7 @@ private:
 
     void notifyStateChanged();
 
+    Credential credential = Credential::RemotePlay;
     SettingsManager* settings = nullptr;
     StateObserver stateObserver;
 

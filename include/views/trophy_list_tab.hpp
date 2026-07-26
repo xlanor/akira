@@ -26,6 +26,7 @@ public:
 private:
     brls::Image* cover = nullptr;
     brls::Label* nameLabel = nullptr;
+    brls::Label* playLabel = nullptr;
     brls::Label* detailLabel = nullptr;
     brls::Box* progressTrack = nullptr;
     brls::Rectangle* progressFill = nullptr;

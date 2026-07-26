@@ -52,6 +52,15 @@ public:
     PersistedRateLimiter::Status budgetStatus() const;
     int64_t librarySavedAtSeconds() const;
 
+    struct GameProgress {
+        int64_t playDurationSeconds = 0;
+        std::string lastPlayedDateTime;
+        bool valid = false;
+    };
+
+    GameProgress gameProgressFor(const std::string& npCommunicationId) const;
+    void resolveGameProgress(const std::vector<psn::TrophyTitle>& titles, std::function<void()> onUpdated);
+
     static constexpr const char* SCOPE_LIBRARY = "library";
 
     psn::ActionStatus forceRefreshStatus(const std::string& scope = SCOPE_LIBRARY);
@@ -81,6 +90,8 @@ private:
     static constexpr const char* LIBRARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/library.json";
     static constexpr const char* SUMMARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/summary.json";
     static constexpr const char* DETAIL_CACHE_DIR = "sdmc:/switch/akira/cache/trophies/detail";
+    static constexpr int GAME_LIST_PAGE_CAP = 6;
+    static constexpr const char* TITLE_MAP_PATH = "sdmc:/switch/akira/cache/trophies/title_map.json";
     static constexpr const char* FORCE_STATE_PATH = "sdmc:/switch/akira/cache/trophies/refresh_state.json";
 
     TrophyManager();
@@ -107,6 +118,8 @@ private:
         psn::TitleDetail& outDetail);
     void saveSummaryToDisk(const psn::TrophySummary& summary) const;
     static bool cacheEntryFresh(int64_t savedAt, int ttlMinutes);
+    void loadTitleMapLocked();
+    void saveTitleMapLocked() const;
     void loadForceStateLocked();
     void saveForceStateLocked() const;
     std::string iconCachePath(const std::string& url) const;
@@ -145,6 +158,10 @@ private:
     bool forceStateLoaded = false;
 
     std::unordered_map<std::string, psn::TitleDetail> cachedDetails;
+
+    std::unordered_map<std::string, GameProgress> gameProgress;
+    bool titleMapLoaded = false;
+    bool gameProgressResolving = false;
 
     std::vector<psn::TrophyTitle> cachedLibrary;
     bool hasCachedLibrary = false;
