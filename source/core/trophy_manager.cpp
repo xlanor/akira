@@ -590,13 +590,16 @@ bool TrophyManager::readIconFromDisk(const std::string& path, std::vector<uint8_
     return true;
 }
 
-void TrophyManager::writeIconToDisk(const std::string& path, const std::vector<uint8_t>& bytes) const
+void TrophyManager::writeIconToDisk(const std::string& path, const std::vector<uint8_t>& bytes)
 {
     std::string temp = path + ".tmp";
 
     FILE* file = fopen(temp.c_str(), "wb");
     if (!file)
+    {
+        stopIconDiskWrites(std::format("could not open {}: {}", temp, strerror(errno)));
         return;
+    }
 
     size_t written = fwrite(bytes.data(), 1, bytes.size(), file);
     fclose(file);
@@ -604,10 +607,20 @@ void TrophyManager::writeIconToDisk(const std::string& path, const std::vector<u
     if (written != bytes.size())
     {
         remove(temp.c_str());
+        stopIconDiskWrites(std::format("short write to {} ({}/{} bytes)", temp, written, bytes.size()));
         return;
     }
 
-    replaceFile(temp, path);
+    if (!replaceFile(temp, path))
+        stopIconDiskWrites(std::format("could not replace {}", path));
+}
+
+void TrophyManager::stopIconDiskWrites(const std::string& reason)
+{
+    if (!iconDiskWritable.exchange(false))
+        return;
+
+    brls::Logger::error("Trophy: icon disk cache disabled for this session ({}); icons will still load from memory", reason);
 }
 
 void TrophyManager::storeIconInMemory(const std::string& url, const std::vector<uint8_t>& bytes)

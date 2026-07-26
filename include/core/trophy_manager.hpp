@@ -90,7 +90,6 @@ private:
     static constexpr const char* LIBRARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/library.json";
     static constexpr const char* SUMMARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/summary.json";
     static constexpr const char* DETAIL_CACHE_DIR = "sdmc:/switch/akira/cache/trophies/detail";
-    static constexpr int GAME_LIST_PAGE_CAP = 6;
     static constexpr const char* TITLE_MAP_PATH = "sdmc:/switch/akira/cache/trophies/title_map.json";
     static constexpr const char* FORCE_STATE_PATH = "sdmc:/switch/akira/cache/trophies/refresh_state.json";
 
@@ -124,7 +123,8 @@ private:
     void saveForceStateLocked() const;
     std::string iconCachePath(const std::string& url) const;
     bool readIconFromDisk(const std::string& path, std::vector<uint8_t>& outBytes) const;
-    void writeIconToDisk(const std::string& path, const std::vector<uint8_t>& bytes) const;
+    void writeIconToDisk(const std::string& path, const std::vector<uint8_t>& bytes);
+    void stopIconDiskWrites(const std::string& reason);
     void storeIconInMemory(const std::string& url, const std::vector<uint8_t>& bytes);
     void prefetchIcons(const std::vector<psn::TrophyTitle>& titles);
     void logLibrary(const std::vector<psn::TrophyTitle>& titles) const;
