@@ -1,0 +1,14 @@
+{
+  "settings/companionHost":     { "title": "Companion host", "body": "Address of the companion helper that fetches your credentials.", "image": "" },
+  "settings/companionPort":     { "title": "Companion port", "body": "Port the companion helper listens on.", "image": "" },
+  "settings/fetchPsnBtn":       { "title": "Fetch from PSN", "body": "Pull your online ID, tokens and DUID from the companion.", "image": "" },
+  "settings/revealCredentials": { "title": "Reveal secrets", "body": "Unmask the stored tokens below.", "image": "" },
+  "settings/psnAccountId":      { "title": "PSN account ID", "body": "Your PlayStation Network account identifier.", "image": "" },
+  "settings/credOnlineId":      { "title": "Online ID", "body": "The PSN online ID linked to your credentials.", "image": "" },
+  "settings/credAccessToken":   { "title": "Access token", "body": "Short-lived PSN access token.", "image": "" },
+  "settings/credRefreshToken":  { "title": "Refresh token", "body": "Long-lived token used to renew access.", "image": "" },
+  "settings/credTokenExpiry":   { "title": "Token expiry", "body": "When the current access token expires.", "image": "" },
+  "settings/credDuid":          { "title": "DUID", "body": "Device identifier used for remote registration.", "image": "" },
+  "settings/clearPsnBtn":       { "title": "Clear credentials", "body": "Remove all stored PSN token data.", "image": "" },
+  "settings/refreshTokenBtn":   { "title": "Refresh token", "body": "Renew the access token using the refresh token.", "image": "" }
+}

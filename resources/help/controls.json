@@ -1,0 +1,10 @@
+{
+  "settings/haptic":               { "title": "Haptic feedback", "body": "Rumble intensity mapped from the DualSense haptics.", "image": "" },
+  "settings/rumbleFreqLow":        { "title": "Rumble low frequency", "body": "Low-frequency motor tuning, in 5-Hz steps.", "image": "" },
+  "settings/rumbleFreqHigh":       { "title": "Rumble high frequency", "body": "High-frequency motor tuning, in 5-Hz steps.", "image": "" },
+  "settings/rumbleEnvelopeAttack": { "title": "Rumble attack", "body": "How quickly rumble ramps up, in 1% steps.", "image": "" },
+  "settings/rumbleEnvelopeDecay":  { "title": "Rumble sustain", "body": "How long rumble holds before fading, in 1% steps.", "image": "" },
+  "settings/gyroSource":           { "title": "Gyro source", "body": "Which motion source drives gyro aim.", "image": "" },
+  "settings/sleepOnExit":          { "title": "Sleep on exit", "body": "Put the console to sleep when you leave a session.", "image": "" },
+  "settings/buttonMapping":        { "title": "Button mapping", "body": "Remap controller buttons on a dedicated screen.", "image": "" }
+}

@@ -1,0 +1,9 @@
+{
+  "settings/language": { "title": "Language", "body": "Interface language. 'System' follows the console setting.", "image": "" },
+  "settings/version":  { "title": "App version", "body": "Current build. Tap seven times to unlock the Power User menu.", "image": "" },
+
+  "settings/enableThreadAffinity":   { "title": "Thread affinity", "body": "Pin stream threads to specific CPU cores. Applies after a restart.", "image": "" },
+  "settings/holepunchRetry":         { "title": "Holepunch retry", "body": "Retry NAT traversal when the first attempt fails.", "image": "" },
+  "settings/requestIdrOnFecFailure": { "title": "Request IDR on FEC failure", "body": "Ask the console for a fresh keyframe when error-correction can't recover a frame.", "image": "" },
+  "settings/packetLossMax":          { "title": "Max packet loss", "body": "Upper packet-loss bound before the stream lowers quality to keep up.", "image": "" }
+}

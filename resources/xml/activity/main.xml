@@ -12,10 +12,6 @@
             <TrophyListTab/>
         </brls:Tab>
 
-        <brls:Tab label="@i18n/akira/tabs/settings">
-            <SettingsTab/>
-        </brls:Tab>
-
         <brls:Separator/>
 
         <brls:Tab label="@i18n/akira/tabs/add_host">

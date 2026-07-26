@@ -1,0 +1,171 @@
+<brls:Box
+    width="100%"
+    height="100%"
+    axis="column"
+    backgroundColor="@theme/brls/background"
+    paddingTop="30"
+    paddingLeft="40"
+    paddingRight="40"
+    paddingBottom="30">
+
+    <brls:Label
+        text="Picture"
+        fontSize="30"
+        marginBottom="20"/>
+
+    <brls:ScrollingFrame
+        width="auto"
+        height="auto"
+        grow="1.0">
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column">
+
+            <brls:Header
+                title="@i18n/akira/settings/local_network"
+                marginBottom="10"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"
+                backgroundColor="@theme/color/card"
+                cornerRadius="8"
+                marginBottom="30">
+
+                <brls:SelectorCell
+                    id="settings/localResolution"
+                    title="@i18n/akira/settings/resolution"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SelectorCell
+                    id="settings/localFps"
+                    title="@i18n/akira/settings/frame_rate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SliderCell
+                    id="settings/localBitrate"
+                    title="@i18n/akira/settings/bitrate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+            </brls:Box>
+
+            <brls:Header
+                title="@i18n/akira/settings/remote_play"
+                marginBottom="10"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"
+                backgroundColor="@theme/color/card"
+                cornerRadius="8"
+                marginBottom="30">
+
+                <brls:SelectorCell
+                    id="settings/remoteResolution"
+                    title="@i18n/akira/settings/resolution"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SelectorCell
+                    id="settings/remoteFps"
+                    title="@i18n/akira/settings/frame_rate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SliderCell
+                    id="settings/remoteBitrate"
+                    title="@i18n/akira/settings/bitrate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+            </brls:Box>
+
+            <brls:Header
+                title="@i18n/akira/settings/vpn"
+                marginBottom="10"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"
+                backgroundColor="@theme/color/card"
+                cornerRadius="8"
+                marginBottom="30">
+
+                <brls:SelectorCell
+                    id="settings/vpnResolution"
+                    title="@i18n/akira/settings/resolution"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SelectorCell
+                    id="settings/vpnFps"
+                    title="@i18n/akira/settings/frame_rate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SliderCell
+                    id="settings/vpnBitrate"
+                    title="@i18n/akira/settings/bitrate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+            </brls:Box>
+
+            <brls:Header
+                title="@i18n/akira/settings/picture_adjustments"
+                marginBottom="10"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"
+                backgroundColor="@theme/color/card"
+                cornerRadius="8"
+                marginBottom="30">
+
+                <brls:BooleanCell
+                    id="settings/enableDithering"
+                    title="@i18n/akira/settings/enable_dithering"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+                <brls:SliderCell
+                    id="settings/ditheringStrength"
+                    title="@i18n/akira/settings/dithering_strength"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+                <brls:BooleanCell
+                    id="settings/rcasEnabled"
+                    title="RCAS (Sharpening)"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SliderCell
+                    id="settings/rcasSharpness"
+                    title="RCAS Strength"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+            </brls:Box>
+
+        </brls:Box>
+    </brls:ScrollingFrame>
+</brls:Box>

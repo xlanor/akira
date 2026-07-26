@@ -21,7 +21,6 @@
 #include "views/vendored/switchfin/recycling_grid.hpp"
 #include "views/psn_gated_box.hpp"
 #include "views/trophy_list_tab.hpp"
-#include "views/settings_tab.hpp"
 #include "views/add_host_tab.hpp"
 #include "views/build_info_tab.hpp"
 #include "views/config_view_tab.hpp"
@@ -29,6 +28,7 @@
 #include "views/stream_view.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/connection_view.hpp"
+#include "views/settings_frame_view.hpp"
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
@@ -92,6 +92,11 @@ void initCustomTheme()
     brls::Theme::getDarkTheme().addColor("color/card", nvgRGB(51, 52, 53));
     brls::Theme::getLightTheme().addColor("color/grey_3", nvgRGB(225, 226, 227));
     brls::Theme::getDarkTheme().addColor("color/grey_3", nvgRGB(71, 72, 73));
+
+    brls::Theme::getLightTheme().addColor("brls/highlight/color1", nvgRGB(78, 161, 255));
+    brls::Theme::getDarkTheme().addColor("brls/highlight/color1", nvgRGB(78, 161, 255));
+    brls::Theme::getLightTheme().addColor("brls/highlight/color2", nvgRGB(137, 241, 242));
+    brls::Theme::getDarkTheme().addColor("brls/highlight/color2", nvgRGB(137, 241, 242));
 }
 
 static void chiaki_to_brls_log(ChiakiLogLevel level, const char* msg, void* user)
@@ -181,6 +186,11 @@ public:
                 }
             }
         }
+
+        this->registerAction("akira/tabs/settings"_i18n, brls::ControllerButton::BUTTON_RB, [](brls::View*) {
+            brls::Application::pushActivity(new brls::Activity(new SettingsFrameView()));
+            return true;
+        }, false);
     }
 };
 
@@ -224,6 +234,7 @@ int main(int argc, char* argv[])
     }
 
     brls::getStyle().addMetric("brls/tab_frame/sidebar_width", 369.0f);
+    brls::getStyle().addMetric("brls/sidebar/item_font_size", 24.0f);
 
     if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0)
     {
@@ -287,7 +298,6 @@ int main(int argc, char* argv[])
     brls::Application::registerXMLView("PsnGatedBox", PsnGatedBox::create);
     brls::Application::registerXMLView("RecyclingGrid", RecyclingGrid::create);
     brls::Application::registerXMLView("TrophyListTab", TrophyListTab::create);
-    brls::Application::registerXMLView("SettingsTab", SettingsTab::create);
     brls::Application::registerXMLView("AddHostTab", AddHostTab::create);
     brls::Application::registerXMLView("BuildInfoTab", BuildInfoTab::create);
     brls::Application::registerXMLView("ConfigViewTab", ConfigViewTab::create);
