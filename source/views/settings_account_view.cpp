@@ -1,5 +1,8 @@
 #include "views/settings_account_view.hpp"
+#include "views/host_list_tab.hpp"
+#include "ui/theme.hpp"
 #include "core/discovery_manager.hpp"
+#include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
 
 #include <borealis/core/i18n.hpp>
@@ -47,6 +50,21 @@ SettingsAccountView::SettingsAccountView() {
 
     initAuthSection();
 
+    profileSwitcher = new ProfileSwitcherView();
+    profileSwitcher->onProfileChanged = [this]() {
+        updateCredentialsDisplay();
+        trophiesEnabledCell->setOn(settings->getActiveProfileTrophiesEnabled(), false);
+    };
+    profileCardSlot->addView(profileSwitcher);
+
+    trophiesEnabledCell->init(
+        "akira/settings/trophies_enabled"_i18n,
+        settings->getActiveProfileTrophiesEnabled(),
+        [this](bool isOn) {
+            settings->setActiveProfileTrophiesEnabled(isOn);
+            settings->writeFile();
+        });
+
     revealCredentialsBtn->registerClickAction([this](brls::View*) {
         credentialsRevealed = !credentialsRevealed;
         revealCredentialsBtn->setText(credentialsRevealed ? "akira/settings/hide_secrets"_i18n : "akira/settings/reveal_secrets"_i18n);
@@ -66,6 +84,7 @@ SettingsAccountView::~SettingsAccountView() {
 
 void SettingsAccountView::willAppear(bool resetState) {
     Box::willAppear(resetState);
+    if (profileSwitcher) profileSwitcher->refresh();
     refreshTokenGate.start();
 }
 
@@ -80,12 +99,33 @@ void SettingsAccountView::initAuthSection() {
         "akira/settings/psn_account_id"_i18n,
         currentAccountId,
         [this](std::string text) {
+            if (text == settings->getPsnAccountId(nullptr))
+                return;
             settings->setPsnAccountId(nullptr, text);
             settings->writeFile();
+            if (profileSwitcher) profileSwitcher->refresh();
+            HostListTab::notifyActiveProfileChanged();
             brls::Logger::info("PSN Account ID set");
         },
         "akira/settings/psn_account_id_placeholder"_i18n,
         "akira/settings/psn_account_id_hint"_i18n
+    );
+
+    std::string currentOnlineId = settings->getPsnOnlineId(nullptr);
+    psnOnlineIdInput->init(
+        "akira/settings/online_id"_i18n,
+        currentOnlineId,
+        [this](std::string text) {
+            if (text == settings->getPsnOnlineId(nullptr))
+                return;
+            settings->setPsnOnlineId(nullptr, text);
+            settings->writeFile();
+            if (profileSwitcher) profileSwitcher->refresh();
+            HostListTab::notifyActiveProfileChanged();
+            brls::Logger::info("PSN Online ID set");
+        },
+        "",
+        ""
     );
 
     std::string currentHost = settings->getCompanionHost();
@@ -120,7 +160,7 @@ void SettingsAccountView::initAuthSection() {
     );
 
     fetchPsnBtn->setStyle(&BUTTONSTYLE_GREEN);
-    fetchPsnBtn->setBackgroundColor(nvgRGBA(74, 222, 128, 255));
+    fetchPsnBtn->setBackgroundColor(akira::ui::active().success);
 
     fetchPsnBtn->registerClickAction([this](brls::View* view) {
         std::string host = companionHostInput->getValue();
@@ -176,6 +216,8 @@ void SettingsAccountView::initAuthSection() {
 
                 if (SettingsAccountView::currentInstance) {
                     SettingsAccountView::currentInstance->updateCredentialsDisplay();
+                    if (SettingsAccountView::currentInstance->profileSwitcher)
+                        SettingsAccountView::currentInstance->profileSwitcher->refresh();
                 }
             },
             [](const std::string& error) {
@@ -191,7 +233,7 @@ void SettingsAccountView::initAuthSection() {
 
     refreshTokenGate.attach(
         refreshTokenBtn,
-        nvgRGBA(74, 222, 128, 255),
+        akira::ui::active().success,
         "akira/settings/refresh_token_btn"_i18n,
         "akira/settings/refresh_token_busy"_i18n,
         "akira/settings/refresh_token_wait",
@@ -232,7 +274,7 @@ void SettingsAccountView::initAuthSection() {
     });
 
     clearPsnBtn->setStyle(&BUTTONSTYLE_BLUE);
-    clearPsnBtn->setBackgroundColor(nvgRGBA(92, 157, 255, 255));
+    clearPsnBtn->setBackgroundColor(akira::ui::active().accent);
 
     clearPsnBtn->registerClickAction([this](brls::View* view) {
         auto* dialog = new brls::Dialog("akira/settings/clear_psn_confirm"_i18n);
@@ -261,9 +303,8 @@ std::string SettingsAccountView::censorString(const std::string& str) {
 }
 
 void SettingsAccountView::updateCredentialsDisplay() {
-    credOnlineIdCell->setText("akira/settings/online_id"_i18n);
-    std::string onlineId = settings->getPsnOnlineId(nullptr);
-    credOnlineIdCell->setDetailText(onlineId.empty() ? "akira/common/not_set"_i18n : onlineId);
+    psnAccountIdInput->setValue(settings->getPsnAccountId(nullptr));
+    psnOnlineIdInput->setValue(settings->getPsnOnlineId(nullptr));
 
     credAccessTokenCell->setText("akira/settings/access_token"_i18n);
     std::string accessToken = settings->getPsnAccessToken();
@@ -307,6 +348,41 @@ void SettingsAccountView::updateCredentialsDisplay() {
         }
     } else {
         credTokenExpiryCell->setDetailText("akira/common/not_set"_i18n);
+    }
+
+    credSsoAccessTokenCell->setText("akira/settings/sso_access_token"_i18n);
+    std::string ssoAccess = settings->getPsnMobileSsoAccessToken();
+    if (credentialsRevealed) {
+        credSsoAccessTokenCell->setDetailText(ssoAccess.empty()
+            ? "akira/common/not_set"_i18n
+            : (ssoAccess.length() > 40 ? ssoAccess.substr(0, 36) + "..." : ssoAccess));
+    } else {
+        credSsoAccessTokenCell->setDetailText(censorString(ssoAccess));
+    }
+
+    credSsoRefreshTokenCell->setText("akira/settings/sso_refresh_token"_i18n);
+    std::string ssoRefresh = settings->getPsnMobileSsoRefreshToken();
+    if (credentialsRevealed) {
+        credSsoRefreshTokenCell->setDetailText(ssoRefresh.empty()
+            ? "akira/common/not_set"_i18n
+            : (ssoRefresh.length() > 40 ? ssoRefresh.substr(0, 36) + "..." : ssoRefresh));
+    } else {
+        credSsoRefreshTokenCell->setDetailText(censorString(ssoRefresh));
+    }
+
+    credSsoExpiryCell->setText("akira/settings/sso_expires"_i18n);
+    int64_t ssoExpiresAt = settings->getPsnMobileSsoExpiresAt();
+    if (ssoExpiresAt > 0) {
+        std::time_t ssoExpTime = static_cast<std::time_t>(ssoExpiresAt);
+        std::tm* ssoTm = std::localtime(&ssoExpTime);
+        std::ostringstream ssoOss;
+        ssoOss << std::put_time(ssoTm, "%Y-%m-%d %H:%M:%S");
+        std::time_t now = std::time(nullptr);
+        credSsoExpiryCell->setDetailText(now > ssoExpTime
+            ? ssoOss.str() + "akira/settings/expired_suffix"_i18n
+            : ssoOss.str());
+    } else {
+        credSsoExpiryCell->setDetailText("akira/common/not_set"_i18n);
     }
 
     credDuidCell->setText("akira/settings/duid"_i18n);

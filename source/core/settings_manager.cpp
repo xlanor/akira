@@ -200,9 +200,8 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
 
     Host* host = hosts.at(hostName).get();
 
-    if (created) {
-        setPsnOnlineId(host, globalPsnOnlineId);
-        setPsnAccountId(host, globalPsnAccountId);
+    if (created && host->consoleId == 0) {
+        host->consoleId = nextConsoleId++;
     }
 
     return host;
@@ -210,6 +209,20 @@ Host* SettingsManager::getOrCreateHost(const std::string& hostName) {
 
 void SettingsManager::removeHost(const std::string& hostName) {
     hosts.erase(hostName);
+}
+
+void SettingsManager::removeActiveProfileRegistration(const std::string& hostName) {
+    auto it = hosts.find(hostName);
+    if (it == hosts.end() || !it->second)
+        return;
+
+    int64_t pid = getActiveProfileId();
+    auto& regs = it->second->registrations;
+    regs.erase(std::remove_if(regs.begin(), regs.end(),
+        [pid](const Registration& r) { return r.profileId == pid; }), regs.end());
+
+    if (regs.empty())
+        hosts.erase(it);
 }
 
 void SettingsManager::renameHost(const std::string& oldName, const std::string& newName) {
@@ -287,32 +300,20 @@ void SettingsManager::parseTomlFile() {
             if (auto val = (*rumbleTable)["envelope_attack"].value<double>())
                 rumbleEnvelopeAttack = std::max(0.20f, std::min(1.00f, static_cast<float>(*val)));
         }
-        if (auto val = config["psn_online_id"].value<std::string>())
-            globalPsnOnlineId = *val;
-        if (auto val = config["psn_account_id"].value<std::string>())
-            globalPsnAccountId = *val;
-        if (auto val = config["psn_refresh_token"].value<std::string>())
-            globalPsnRefreshToken = *val;
-        if (auto val = config["psn_access_token"].value<std::string>())
-            globalPsnAccessToken = *val;
-        if (auto val = config["psn_mobile_sso_refresh_token"].value<std::string>())
-            globalPsnMobileSsoRefreshToken = *val;
-        if (auto val = config["psn_mobile_sso_access_token"].value<std::string>())
-            globalPsnMobileSsoAccessToken = *val;
-        if (auto val = config["psn_mobile_sso_expires_at"].value<int64_t>())
-            globalPsnMobileSsoExpiresAt = *val;
-        if (auto val = config["psn_token_expires_at"].value<int64_t>())
-            globalPsnTokenExpiresAt = *val;
-        if (auto val = config["global_duid"].value<std::string>())
-            globalDuid = *val;
         if (auto val = config["holepunch_retry"].value<bool>())
             holepunchRetry = *val;
+        if (auto val = config["connection_show_stages"].value<bool>())
+            connectionShowStages = *val;
         if (auto val = config["port_guessing"].value<bool>())
             portGuessing = *val;
         if (auto val = config["port_guessing_count"].value<int64_t>())
             portGuessingCount = static_cast<int>(*val);
         if (auto val = config["port_guessing_socks"].value<int64_t>())
             portGuessingSocks = static_cast<int>(*val);
+        if (auto val = config["psn_request_budget"].value<int64_t>())
+            psnRequestBudget = std::clamp(static_cast<int>(*val), 1, 100000);
+        if (auto val = config["psn_request_window_seconds"].value<int64_t>())
+            psnRequestWindowSeconds = std::clamp(static_cast<int>(*val), 60, 86400);
         if (auto val = config["power_user_menu_unlocked"].value<bool>())
             powerUserMenuUnlocked = *val;
         if (auto val = config["ipc_stats_enabled"].value<bool>())
@@ -321,6 +322,9 @@ void SettingsManager::parseTomlFile() {
             unlockBitrateMax = *val;
         if (auto val = config["auto_reconnect"].value<bool>())
             autoReconnect = *val;
+
+        if (auto val = config["dev_fake_hosts"].value<bool>())
+            devFakeHosts = *val;
         if (auto val = config["sleep_on_exit"].value<bool>())
             sleepOnExit = *val;
         if (auto val = config["request_idr_on_fec_failure"].value<bool>())
@@ -419,55 +423,98 @@ void SettingsManager::parseTomlFile() {
             brls::Logger::info("Loaded button mapping from config");
         }
 
-        for (auto& [key, value] : config) {
-            if (!value.is_table()) continue;
+        if (auto* profilesArr = config["profiles"].as_array()) {
+            for (auto& elem : *profilesArr) {
+                auto* pt = elem.as_table();
+                if (!pt) continue;
 
-            std::string hostName(key.str());
+                Profile profile;
+                profile.id = (*pt)["profile_id"].value<int64_t>().value_or(0);
+                if (profile.id <= 0) continue;
 
-            if (hostName == "button_mapping" || hostName == "rumble" || hostName == "picture_adjustments") continue;
+                profile.onlineId = (*pt)["online_id"].value<std::string>().value_or("");
+                profile.accountId = (*pt)["account_id"].value<std::string>().value_or("");
+                profile.refreshToken = (*pt)["refresh_token"].value<std::string>().value_or("");
+                profile.accessToken = (*pt)["access_token"].value<std::string>().value_or("");
+                profile.tokenExpiresAt = (*pt)["token_expires_at"].value<int64_t>().value_or(0);
+                profile.mobileSsoRefreshToken = (*pt)["mobile_sso_refresh_token"].value<std::string>().value_or("");
+                profile.mobileSsoAccessToken = (*pt)["mobile_sso_access_token"].value<std::string>().value_or("");
+                profile.mobileSsoExpiresAt = (*pt)["mobile_sso_expires_at"].value<int64_t>().value_or(0);
+                profile.duid = (*pt)["duid"].value<std::string>().value_or("");
+                profile.trophiesEnabled = (*pt)["trophies_enabled"].value<bool>().value_or(true);
 
-            auto* table = value.as_table();
-
-            HostType hostType = HostType::Discovered;
-            if (auto val = (*table)["host_type"].value<int64_t>())
-                hostType = static_cast<HostType>(*val);
-
-            Host* host = getOrCreateHost(hostName);
-            host->inConfig = true;
-            host->hostType = hostType;
-            host->hostName = hostName;
-
-            if (auto val = (*table)["host_addr"].value<std::string>())
-                host->hostAddr = *val;
-            if (auto val = (*table)["target"].value<int64_t>())
-                host->setChiakiTarget(static_cast<ChiakiTarget>(*val));
-            if (auto val = (*table)["psn_online_id"].value<std::string>())
-                host->psnOnlineId = *val;
-            if (auto val = (*table)["psn_account_id"].value<std::string>())
-                host->psnAccountId = *val;
-            if (auto val = (*table)["console_pin"].value<std::string>())
-                host->consolePIN = *val;
-            if (auto val = (*table)["haptic"].value<int64_t>())
-                host->haptic = static_cast<int>(*val);
-            if (auto val = (*table)["remote_duid"].value<std::string>())
-                host->remoteDuid = *val;
-
-            bool rpKeySet = false, rpRegistKeySet = false, rpKeyTypeSet = false;
-            if (auto val = (*table)["rp_key"].value<std::string>())
-                rpKeySet = setHostRpKey(host, *val);
-            if (auto val = (*table)["rp_regist_key"].value<std::string>())
-                rpRegistKeySet = setHostRpRegistKey(host, *val);
-            if (auto val = (*table)["rp_key_type"].value<int64_t>()) {
-                host->rpKeyType = static_cast<int>(*val);
-                rpKeyTypeSet = true;
-            }
-
-            if (rpKeySet && rpRegistKeySet && rpKeyTypeSet) {
-                host->rpKeyData = true;
+                profiles.push_back(profile);
+                if (profile.id >= nextProfileId)
+                    nextProfileId = profile.id + 1;
             }
         }
 
-        brls::Logger::info("Loaded {} host(s) from TOML config", hosts.size());
+        if (auto val = config["active_profile_id"].value<int64_t>())
+            activeProfileId = *val;
+
+        if (auto* consolesArr = config["consoles"].as_array()) {
+            for (auto& elem : *consolesArr) {
+                auto* ct = elem.as_table();
+                if (!ct) continue;
+
+                std::string nickname = (*ct)["nickname"].value<std::string>().value_or("");
+                if (nickname.empty()) continue;
+
+                Host* host = getOrCreateHost(nickname);
+                host->inConfig = true;
+                host->hostName = nickname;
+                host->consoleId = (*ct)["console_id"].value<int64_t>().value_or(host->consoleId);
+                if (host->consoleId >= nextConsoleId)
+                    nextConsoleId = host->consoleId + 1;
+
+                if (auto val = (*ct)["host_type"].value<int64_t>())
+                    host->hostType = static_cast<HostType>(*val);
+                if (auto val = (*ct)["host_addr"].value<std::string>())
+                    host->hostAddr = *val;
+                if (auto val = (*ct)["target"].value<int64_t>())
+                    host->setChiakiTarget(static_cast<ChiakiTarget>(*val));
+                if (auto val = (*ct)["console_pin"].value<std::string>())
+                    host->consolePIN = *val;
+                if (auto val = (*ct)["haptic"].value<int64_t>())
+                    host->haptic = static_cast<int>(*val);
+                if (auto val = (*ct)["remote_duid"].value<std::string>())
+                    host->remoteDuid = *val;
+            }
+        }
+
+        if (auto* regsArr = config["registrations"].as_array()) {
+            for (auto& elem : *regsArr) {
+                auto* rt = elem.as_table();
+                if (!rt) continue;
+
+                int64_t consoleId = (*rt)["console_id"].value<int64_t>().value_or(0);
+                Host* host = nullptr;
+                for (auto& [n, h] : hosts) {
+                    if (h && h->consoleId == consoleId) { host = h.get(); break; }
+                }
+                if (!host) continue;
+
+                Registration reg;
+                reg.consoleId = consoleId;
+                reg.profileId = (*rt)["profile_id"].value<int64_t>().value_or(0);
+
+                if (auto val = (*rt)["rp_key"].value<std::string>()) {
+                    size_t sz = sizeof(reg.rpKey);
+                    chiaki_base64_decode(val->c_str(), val->length(), reg.rpKey, &sz);
+                }
+                if (auto val = (*rt)["rp_regist_key"].value<std::string>()) {
+                    size_t sz = sizeof(reg.rpRegistKey);
+                    chiaki_base64_decode(val->c_str(), val->length(),
+                        reinterpret_cast<uint8_t*>(reg.rpRegistKey), &sz);
+                }
+                reg.rpKeyType = static_cast<uint32_t>((*rt)["rp_key_type"].value<int64_t>().value_or(0));
+
+                host->upsertRegistration(reg);
+            }
+        }
+
+        brls::Logger::info("Loaded {} profile(s), {} console(s) from TOML config",
+            profiles.size(), hosts.size());
 
         if (configMigrated) {
             brls::Logger::info("Config migrated to current schema, rewriting");
@@ -533,6 +580,7 @@ void SettingsManager::parseLegacyFile() {
     std::string value;
     Host* currentHost = nullptr;
     bool rpKeySet = false, rpRegistKeySet = false, rpKeyTypeSet = false;
+    Registration legacyReg;
 
     while (std::getline(configFile, line)) {
         ConfigItem item = parseLine(line, value);
@@ -566,6 +614,7 @@ void SettingsManager::parseLegacyFile() {
                 currentHost->hostType = migratedType;
                 currentHost->hostName = cleanName;
                 rpKeySet = rpRegistKeySet = rpKeyTypeSet = false;
+                legacyReg = Registration{};
                 break;
             }
             case ConfigItem::HostAddr:
@@ -578,22 +627,33 @@ void SettingsManager::parseLegacyFile() {
                 setPsnAccountId(currentHost, value);
                 break;
             case ConfigItem::PsnRefreshToken:
-                globalPsnRefreshToken = value;
+                ensureActiveProfile()->refreshToken = value;
                 break;
             case ConfigItem::PsnAccessToken:
-                globalPsnAccessToken = value;
+                ensureActiveProfile()->accessToken = value;
                 break;
             case ConfigItem::ConsolePIN:
                 if (currentHost) currentHost->consolePIN = value;
                 break;
             case ConfigItem::RpKey:
-                if (currentHost) rpKeySet = setHostRpKey(currentHost, value);
+                if (currentHost) {
+                    size_t sz = sizeof(legacyReg.rpKey);
+                    rpKeySet = chiaki_base64_decode(value.c_str(), value.length(),
+                        legacyReg.rpKey, &sz) == CHIAKI_ERR_SUCCESS;
+                }
                 break;
             case ConfigItem::RpKeyType:
-                if (currentHost) rpKeyTypeSet = setHostRpKeyType(currentHost, value);
+                if (currentHost) {
+                    legacyReg.rpKeyType = static_cast<uint32_t>(std::atoi(value.c_str()));
+                    rpKeyTypeSet = true;
+                }
                 break;
             case ConfigItem::RpRegistKey:
-                if (currentHost) rpRegistKeySet = setHostRpRegistKey(currentHost, value);
+                if (currentHost) {
+                    size_t sz = sizeof(legacyReg.rpRegistKey);
+                    rpRegistKeySet = chiaki_base64_decode(value.c_str(), value.length(),
+                        reinterpret_cast<uint8_t*>(legacyReg.rpRegistKey), &sz) == CHIAKI_ERR_SUCCESS;
+                }
                 break;
             case ConfigItem::VideoResolution:
                 localVideoResolution = stringToResolution(value);
@@ -622,15 +682,17 @@ void SettingsManager::parseLegacyFile() {
                 if (companionPort <= 0 || companionPort > 65535) companionPort = 8080;
                 break;
             case ConfigItem::PsnTokenExpiresAt:
-                globalPsnTokenExpiresAt = std::atoll(value.c_str());
+                ensureActiveProfile()->tokenExpiresAt = std::atoll(value.c_str());
                 break;
             case ConfigItem::GlobalDuid:
-                globalDuid = value;
+                ensureActiveProfile()->duid = value;
                 break;
         }
 
         if (rpKeySet && rpRegistKeySet && rpKeyTypeSet && currentHost) {
-            currentHost->rpKeyData = true;
+            legacyReg.consoleId = currentHost->consoleId;
+            legacyReg.profileId = ensureActiveProfile()->id;
+            currentHost->upsertRegistration(legacyReg);
         }
     }
 
@@ -656,32 +718,17 @@ int SettingsManager::writeFile() {
     config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
     config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
     config.insert("haptic", std::to_underlying(globalHaptic));
-    if (!globalPsnOnlineId.empty())
-        config.insert("psn_online_id", globalPsnOnlineId);
-    if (!globalPsnAccountId.empty())
-        config.insert("psn_account_id", globalPsnAccountId);
-    if (!globalPsnRefreshToken.empty())
-        config.insert("psn_refresh_token", globalPsnRefreshToken);
-    if (!globalPsnAccessToken.empty())
-        config.insert("psn_access_token", globalPsnAccessToken);
-    if (!globalPsnMobileSsoRefreshToken.empty())
-        config.insert("psn_mobile_sso_refresh_token", globalPsnMobileSsoRefreshToken);
-    if (!globalPsnMobileSsoAccessToken.empty())
-        config.insert("psn_mobile_sso_access_token", globalPsnMobileSsoAccessToken);
-    if (globalPsnMobileSsoExpiresAt > 0)
-        config.insert("psn_mobile_sso_expires_at", globalPsnMobileSsoExpiresAt);
-    if (globalPsnTokenExpiresAt > 0)
-        config.insert("psn_token_expires_at", globalPsnTokenExpiresAt);
-    if (!globalDuid.empty())
-        config.insert("global_duid", globalDuid);
     if (!companionHost.empty())
         config.insert("companion_host", companionHost);
     config.insert("companion_port", companionPort);
     if (holepunchRetry)
         config.insert("holepunch_retry", holepunchRetry);
+    config.insert("connection_show_stages", connectionShowStages);
     config.insert("port_guessing", portGuessing);
     config.insert("port_guessing_count", portGuessingCount);
     config.insert("port_guessing_socks", portGuessingSocks);
+    config.insert("psn_request_budget", psnRequestBudget);
+    config.insert("psn_request_window_seconds", psnRequestWindowSeconds);
     if (powerUserMenuUnlocked)
         config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
     if (ipcStatsEnabled)
@@ -690,6 +737,8 @@ int SettingsManager::writeFile() {
         config.insert("unlock_bitrate_max", unlockBitrateMax);
     if (!autoReconnect)
         config.insert("auto_reconnect", autoReconnect);
+    if (devFakeHosts)
+        config.insert("dev_fake_hosts", devFakeHosts);
     if (sleepOnExit)
         config.insert("sleep_on_exit", sleepOnExit);
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
@@ -769,45 +818,94 @@ int SettingsManager::writeFile() {
         config.insert("button_mapping", mappingTable);
     }
 
-    for (const auto& [name, host] : hosts) {
-        brls::Logger::debug("Writing host config: {}", name);
-        host->inConfig = true;
+    {
+        toml::array profilesArr;
+        for (const Profile& p : profiles) {
+            toml::table pt;
+            pt.insert("profile_id", p.id);
+            if (!p.onlineId.empty()) pt.insert("online_id", p.onlineId);
+            if (!p.accountId.empty()) pt.insert("account_id", p.accountId);
+            if (!p.refreshToken.empty()) pt.insert("refresh_token", p.refreshToken);
+            if (!p.accessToken.empty()) pt.insert("access_token", p.accessToken);
+            if (p.tokenExpiresAt > 0) pt.insert("token_expires_at", p.tokenExpiresAt);
+            if (!p.mobileSsoRefreshToken.empty()) pt.insert("mobile_sso_refresh_token", p.mobileSsoRefreshToken);
+            if (!p.mobileSsoAccessToken.empty()) pt.insert("mobile_sso_access_token", p.mobileSsoAccessToken);
+            if (p.mobileSsoExpiresAt > 0) pt.insert("mobile_sso_expires_at", p.mobileSsoExpiresAt);
+            if (!p.duid.empty()) pt.insert("duid", p.duid);
+            if (!p.trophiesEnabled) pt.insert("trophies_enabled", false);
+            profilesArr.push_back(pt);
+        }
+        if (!profilesArr.empty())
+            config.insert("profiles", profilesArr);
+    }
 
-        toml::table hostTable;
-        hostTable.insert("host_addr", host->getHostAddr());
-        hostTable.insert("target", static_cast<int>(host->getChiakiTarget()));
-        hostTable.insert("host_type", std::to_underlying(host->hostType));
+    if (activeProfileId > 0)
+        config.insert("active_profile_id", activeProfileId);
 
-        if (!host->psnOnlineId.empty())
-            hostTable.insert("psn_online_id", host->psnOnlineId);
-        if (!host->psnAccountId.empty())
-            hostTable.insert("psn_account_id", host->psnAccountId);
-        if (!host->consolePIN.empty())
-            hostTable.insert("console_pin", host->consolePIN);
+    {
+        toml::array consolesArr;
+        toml::array registrationsArr;
 
-        if (host->rpKeyData || host->registered) {
-            hostTable.insert("rp_key", getHostRpKey(host.get()));
-            hostTable.insert("rp_regist_key", getHostRpRegistKey(host.get()));
-            hostTable.insert("rp_key_type", host->rpKeyType);
+        for (const auto& [name, host] : hosts) {
+            host->inConfig = true;
+
+            toml::table ct;
+            ct.insert("console_id", host->consoleId);
+            ct.insert("nickname", name);
+            ct.insert("host_addr", host->getHostAddr());
+            ct.insert("target", static_cast<int>(host->getChiakiTarget()));
+            ct.insert("host_type", std::to_underlying(host->hostType));
+            if (!host->consolePIN.empty()) ct.insert("console_pin", host->consolePIN);
+            if (!host->remoteDuid.empty()) ct.insert("remote_duid", host->remoteDuid);
+            if (host->haptic >= 0) ct.insert("haptic", host->haptic);
+            consolesArr.push_back(ct);
+
+            for (const Registration& reg : host->registrations) {
+                toml::table rt;
+                rt.insert("console_id", host->consoleId);
+                rt.insert("profile_id", reg.profileId);
+
+                {
+                    size_t b64Size = getB64EncodeSize(0x10);
+                    char b64[b64Size + 1] = {0};
+                    if (chiaki_base64_encode(reg.rpKey, 0x10, b64, sizeof(b64)) == CHIAKI_ERR_SUCCESS)
+                        rt.insert("rp_key", std::string(b64));
+                }
+                {
+                    size_t b64Size = getB64EncodeSize(CHIAKI_SESSION_AUTH_SIZE);
+                    char b64[b64Size + 1] = {0};
+                    if (chiaki_base64_encode(reinterpret_cast<const uint8_t*>(reg.rpRegistKey),
+                            CHIAKI_SESSION_AUTH_SIZE, b64, sizeof(b64)) == CHIAKI_ERR_SUCCESS)
+                        rt.insert("rp_regist_key", std::string(b64));
+                }
+                rt.insert("rp_key_type", static_cast<int64_t>(reg.rpKeyType));
+                registrationsArr.push_back(rt);
+            }
         }
 
-        if (!host->remoteDuid.empty())
-            hostTable.insert("remote_duid", host->remoteDuid);
-
-        if (host->haptic >= 0)
-            hostTable.insert("haptic", host->haptic);
-
-        config.insert(name, hostTable);
+        if (!consolesArr.empty())
+            config.insert("consoles", consolesArr);
+        if (!registrationsArr.empty())
+            config.insert("registrations", registrationsArr);
     }
 
-    std::ofstream configFile(TOML_CONFIG_FILE, std::ios::out | std::ios::trunc);
-    if (!configFile.is_open()) {
-        brls::Logger::error("Failed to open config file for writing");
+    std::string tmpPath = std::string(TOML_CONFIG_FILE) + ".tmp";
+    {
+        std::ofstream configFile(tmpPath, std::ios::out | std::ios::trunc);
+        if (!configFile.is_open()) {
+            brls::Logger::error("Failed to open config file for writing");
+            return -1;
+        }
+        configFile << config;
+        configFile.flush();
+        configFile.close();
+    }
+
+    std::remove(TOML_CONFIG_FILE);
+    if (std::rename(tmpPath.c_str(), TOML_CONFIG_FILE) != 0) {
+        brls::Logger::error("Failed to move config into place");
         return -1;
     }
-
-    configFile << config;
-    configFile.close();
     return 0;
 }
 
@@ -956,33 +1054,37 @@ void SettingsManager::setDiscovered(Host* host, bool value) {
 }
 
 std::string SettingsManager::getPsnOnlineId(Host* host) {
-    if (!host || host->psnOnlineId.empty()) {
-        return globalPsnOnlineId;
+    if (host) {
+        const Registration* reg = host->activeRegistration();
+        if (reg) {
+            const Profile* p = findProfile(reg->profileId);
+            if (p && !p->onlineId.empty()) return p->onlineId;
+        }
     }
-    return host->psnOnlineId;
+    const Profile* ap = getActiveProfile();
+    return ap ? ap->onlineId : "";
 }
 
 void SettingsManager::setPsnOnlineId(Host* host, const std::string& id) {
-    if (host) {
-        host->psnOnlineId = id;
-    } else {
-        globalPsnOnlineId = id;
-    }
+    (void)host;
+    ensureActiveProfile()->onlineId = id;
 }
 
 std::string SettingsManager::getPsnAccountId(Host* host) {
-    if (!host || host->psnAccountId.empty()) {
-        return globalPsnAccountId;
+    if (host) {
+        const Registration* reg = host->activeRegistration();
+        if (reg) {
+            const Profile* p = findProfile(reg->profileId);
+            if (p && !p->accountId.empty()) return p->accountId;
+        }
     }
-    return host->psnAccountId;
+    const Profile* ap = getActiveProfile();
+    return ap ? ap->accountId : "";
 }
 
 void SettingsManager::setPsnAccountId(Host* host, const std::string& id) {
-    if (host) {
-        host->psnAccountId = id;
-    } else {
-        globalPsnAccountId = id;
-    }
+    (void)host;
+    ensureActiveProfile()->accountId = id;
 }
 
 std::string SettingsManager::getConsolePIN(Host* host) {
@@ -1138,108 +1240,6 @@ bool SettingsManager::setChiakiTarget(Host* host, const std::string& value) {
     return setChiakiTarget(host, static_cast<ChiakiTarget>(std::atoi(value.c_str())));
 }
 
-std::string SettingsManager::getHostRpKey(Host* host) {
-    if (!host) {
-        brls::Logger::error("Cannot getHostRpKey from nullptr");
-        return "";
-    }
-
-    if (!host->rpKeyData && !host->registered) {
-        return "";
-    }
-
-    size_t b64Size = getB64EncodeSize(0x10);
-    char b64[b64Size + 1] = {0};
-
-    ChiakiErrorCode err = chiaki_base64_encode(host->rpKey, 0x10, b64, sizeof(b64));
-    if (err == CHIAKI_ERR_SUCCESS) {
-        return std::string(b64);
-    }
-
-    brls::Logger::error("Failed to encode rp_key to base64");
-    return "";
-}
-
-bool SettingsManager::setHostRpKey(Host* host, const std::string& rpKeyB64) {
-    if (!host) {
-        brls::Logger::error("Cannot setHostRpKey on nullptr");
-        return false;
-    }
-
-    size_t rpKeySize = sizeof(host->rpKey);
-    ChiakiErrorCode err = chiaki_base64_decode(
-        rpKeyB64.c_str(), rpKeyB64.length(),
-        host->rpKey, &rpKeySize
-    );
-
-    if (err != CHIAKI_ERR_SUCCESS) {
-        brls::Logger::error("Failed to decode rp_key from base64: {}", rpKeyB64);
-        return false;
-    }
-
-    return true;
-}
-
-std::string SettingsManager::getHostRpRegistKey(Host* host) {
-    if (!host) {
-        brls::Logger::error("Cannot getHostRpRegistKey from nullptr");
-        return "";
-    }
-
-    if (!host->rpKeyData && !host->registered) {
-        return "";
-    }
-
-    size_t b64Size = getB64EncodeSize(CHIAKI_SESSION_AUTH_SIZE);
-    char b64[b64Size + 1] = {0};
-
-    ChiakiErrorCode err = chiaki_base64_encode(
-        reinterpret_cast<uint8_t*>(host->rpRegistKey),
-        CHIAKI_SESSION_AUTH_SIZE, b64, sizeof(b64)
-    );
-
-    if (err == CHIAKI_ERR_SUCCESS) {
-        return std::string(b64);
-    }
-
-    brls::Logger::error("Failed to encode rp_regist_key to base64");
-    return "";
-}
-
-bool SettingsManager::setHostRpRegistKey(Host* host, const std::string& rpRegistKeyB64) {
-    if (!host) {
-        brls::Logger::error("Cannot setHostRpRegistKey on nullptr");
-        return false;
-    }
-
-    size_t rpRegistKeySize = sizeof(host->rpRegistKey);
-    ChiakiErrorCode err = chiaki_base64_decode(
-        rpRegistKeyB64.c_str(), rpRegistKeyB64.length(),
-        reinterpret_cast<uint8_t*>(host->rpRegistKey), &rpRegistKeySize
-    );
-
-    if (err != CHIAKI_ERR_SUCCESS) {
-        brls::Logger::error("Failed to decode rp_regist_key from base64: {}", rpRegistKeyB64);
-        return false;
-    }
-
-    return true;
-}
-
-int SettingsManager::getHostRpKeyType(Host* host) {
-    if (host) return host->rpKeyType;
-    brls::Logger::error("Cannot getHostRpKeyType from nullptr");
-    return 0;
-}
-
-bool SettingsManager::setHostRpKeyType(Host* host, const std::string& value) {
-    if (host) {
-        host->rpKeyType = std::atoi(value.c_str());
-        return true;
-    }
-    return false;
-}
-
 std::string SettingsManager::getCompanionHost() const {
     return companionHost;
 }
@@ -1259,73 +1259,149 @@ void SettingsManager::setCompanionPort(int port) {
 }
 
 std::string SettingsManager::getPsnRefreshToken() const {
-    return globalPsnRefreshToken;
+    const Profile* p = getActiveProfile();
+    return p ? p->refreshToken : "";
 }
 
 void SettingsManager::setPsnRefreshToken(const std::string& token) {
-    globalPsnRefreshToken = token;
+    ensureActiveProfile()->refreshToken = token;
 }
 
 std::string SettingsManager::getPsnAccessToken() const {
-    return globalPsnAccessToken;
+    const Profile* p = getActiveProfile();
+    return p ? p->accessToken : "";
 }
 
 void SettingsManager::setPsnAccessToken(const std::string& token) {
-    globalPsnAccessToken = token;
+    ensureActiveProfile()->accessToken = token;
 }
 
 int64_t SettingsManager::getPsnTokenExpiresAt() const {
-    return globalPsnTokenExpiresAt;
+    const Profile* p = getActiveProfile();
+    return p ? p->tokenExpiresAt : 0;
 }
 
 void SettingsManager::setPsnTokenExpiresAt(int64_t expiresAt) {
-    globalPsnTokenExpiresAt = expiresAt;
+    ensureActiveProfile()->tokenExpiresAt = expiresAt;
 }
 
 std::string SettingsManager::getPsnMobileSsoRefreshToken() const {
-    return globalPsnMobileSsoRefreshToken;
+    const Profile* p = getActiveProfile();
+    return p ? p->mobileSsoRefreshToken : "";
 }
 
 void SettingsManager::setPsnMobileSsoRefreshToken(const std::string& token) {
-    globalPsnMobileSsoRefreshToken = token;
+    ensureActiveProfile()->mobileSsoRefreshToken = token;
 }
 
 std::string SettingsManager::getPsnMobileSsoAccessToken() const {
-    return globalPsnMobileSsoAccessToken;
+    const Profile* p = getActiveProfile();
+    return p ? p->mobileSsoAccessToken : "";
 }
 
 void SettingsManager::setPsnMobileSsoAccessToken(const std::string& token) {
-    globalPsnMobileSsoAccessToken = token;
+    ensureActiveProfile()->mobileSsoAccessToken = token;
 }
 
 int64_t SettingsManager::getPsnMobileSsoExpiresAt() const {
-    return globalPsnMobileSsoExpiresAt;
+    const Profile* p = getActiveProfile();
+    return p ? p->mobileSsoExpiresAt : 0;
 }
 
 void SettingsManager::setPsnMobileSsoExpiresAt(int64_t expiresAt) {
-    globalPsnMobileSsoExpiresAt = expiresAt;
+    ensureActiveProfile()->mobileSsoExpiresAt = expiresAt;
 }
 
 void SettingsManager::clearPsnMobileSsoData() {
-    globalPsnMobileSsoAccessToken.clear();
-    globalPsnMobileSsoRefreshToken.clear();
-    globalPsnMobileSsoExpiresAt = 0;
+    if (Profile* p = getActiveProfile()) {
+        p->mobileSsoAccessToken.clear();
+        p->mobileSsoRefreshToken.clear();
+        p->mobileSsoExpiresAt = 0;
+    }
     brls::Logger::info("PSN mobile SSO token data cleared");
 }
 
 void SettingsManager::clearPsnTokenData() {
-    globalPsnAccessToken.clear();
-    globalPsnRefreshToken.clear();
-    globalPsnTokenExpiresAt = 0;
+    if (Profile* p = getActiveProfile()) {
+        p->accessToken.clear();
+        p->refreshToken.clear();
+        p->tokenExpiresAt = 0;
+    }
     brls::Logger::info("PSN token data cleared");
 }
 
 std::string SettingsManager::getGlobalDuid() const {
-    return globalDuid;
+    const Profile* p = getActiveProfile();
+    return p ? p->duid : "";
 }
 
 void SettingsManager::setGlobalDuid(const std::string& duid) {
-    globalDuid = duid;
+    ensureActiveProfile()->duid = duid;
+}
+
+const std::vector<Profile>& SettingsManager::getProfiles() const {
+    return profiles;
+}
+
+Profile* SettingsManager::findProfile(int64_t id) {
+    for (Profile& p : profiles)
+        if (p.id == id) return &p;
+    return nullptr;
+}
+
+const Profile* SettingsManager::findProfile(int64_t id) const {
+    for (const Profile& p : profiles)
+        if (p.id == id) return &p;
+    return nullptr;
+}
+
+Profile* SettingsManager::getActiveProfile() {
+    return findProfile(activeProfileId);
+}
+
+const Profile* SettingsManager::getActiveProfile() const {
+    return findProfile(activeProfileId);
+}
+
+Profile* SettingsManager::ensureActiveProfile() {
+    if (Profile* p = getActiveProfile())
+        return p;
+    Profile np;
+    int64_t id = addProfile(np);
+    activeProfileId = id;
+    return findProfile(id);
+}
+
+int64_t SettingsManager::getActiveProfileId() const {
+    return activeProfileId;
+}
+
+void SettingsManager::setActiveProfileId(int64_t id) {
+    activeProfileId = id;
+}
+
+bool SettingsManager::getActiveProfileTrophiesEnabled() const {
+    const Profile* p = getActiveProfile();
+    return p ? p->trophiesEnabled : true;
+}
+
+void SettingsManager::setActiveProfileTrophiesEnabled(bool enabled) {
+    Profile* p = getActiveProfile();
+    if (p)
+        p->trophiesEnabled = enabled;
+}
+
+int64_t SettingsManager::addProfile(const Profile& profile) {
+    Profile copy = profile;
+    copy.id = nextProfileId++;
+    profiles.push_back(copy);
+    return copy.id;
+}
+
+void SettingsManager::removeProfile(int64_t id) {
+    std::erase_if(profiles, [id](const Profile& p) { return p.id == id; });
+    if (activeProfileId == id)
+        activeProfileId = profiles.empty() ? 0 : profiles.front().id;
 }
 
 bool SettingsManager::getHolepunchRetry() const {
@@ -1334,6 +1410,14 @@ bool SettingsManager::getHolepunchRetry() const {
 
 void SettingsManager::setHolepunchRetry(bool retry) {
     holepunchRetry = retry;
+}
+
+bool SettingsManager::getConnectionShowStages() const {
+    return connectionShowStages;
+}
+
+void SettingsManager::setConnectionShowStages(bool show) {
+    connectionShowStages = show;
 }
 
 bool SettingsManager::getPortGuessing() const {
@@ -1360,6 +1444,22 @@ int SettingsManager::getPortGuessingSocks() const {
 void SettingsManager::setPortGuessingSocks(int count) {
     if (count > 0)
         portGuessingSocks = count;
+}
+
+int SettingsManager::getPsnRequestBudget() const {
+    return psnRequestBudget;
+}
+
+void SettingsManager::setPsnRequestBudget(int budget) {
+    psnRequestBudget = std::clamp(budget, 1, 100000);
+}
+
+int SettingsManager::getPsnRequestWindowSeconds() const {
+    return psnRequestWindowSeconds;
+}
+
+void SettingsManager::setPsnRequestWindowSeconds(int seconds) {
+    psnRequestWindowSeconds = std::clamp(seconds, 60, 86400);
 }
 
 bool SettingsManager::getPowerUserMenuUnlocked() const {
@@ -1392,6 +1492,14 @@ bool SettingsManager::getAutoReconnect() const {
 
 void SettingsManager::setAutoReconnect(bool enabled) {
     autoReconnect = enabled;
+}
+
+bool SettingsManager::getDevFakeHosts() const {
+    return devFakeHosts;
+}
+
+void SettingsManager::setDevFakeHosts(bool enabled) {
+    devFakeHosts = enabled;
 }
 
 int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const {

@@ -18,7 +18,7 @@
             justifyContent="spaceBetween"
             alignItems="center"
             backgroundColor="@theme/color/card"
-            cornerRadius="8"
+            cornerRadius="14"
             paddingTop="12"
             paddingBottom="12"
             paddingLeft="15"
@@ -29,31 +29,11 @@
             marginBottom="10">
 
             <brls:Box
+                id="trophies/profile"
                 width="auto"
                 height="auto"
                 axis="column"
-                grow="1.0">
-
-                <brls:Label
-                    id="trophies/summaryTitle"
-                    text="@i18n/akira/trophies/title"
-                    fontSize="22"/>
-
-                <brls:Label
-                    id="trophies/summaryDetail"
-                    text="@i18n/akira/trophies/loading"
-                    fontSize="15"
-                    textColor="#888888"
-                    marginTop="4"/>
-
-                <brls:Label
-                    id="trophies/status"
-                    text=""
-                    fontSize="13"
-                    textColor="#7A7F88"
-                    marginTop="4"/>
-
-            </brls:Box>
+                grow="1.0"/>
 
             <brls:Button
                 id="trophies/forceRefreshBtn"

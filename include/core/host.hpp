@@ -4,6 +4,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <vector>
 
 #include <chiaki/common.h>
 #include <chiaki/discovery.h>
@@ -14,6 +15,7 @@
 #include <chiaki/remote/holepunch.h>
 
 #include "settings_manager.hpp"
+#include "registration.hpp"
 
 // Forward declarations
 class SettingsManager;
@@ -50,7 +52,6 @@ private:
 
     // User info
     std::string psnOnlineId;
-    std::string psnAccountId;
     std::string consolePIN;  // 4-digit login PIN for auto-login (optional)
 
     // Host identification
@@ -72,14 +73,10 @@ private:
     ChiakiDiscoveryHostState state = CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN;
 
     // Registration data
-    uint8_t serverMac[6] = {0};
-    char rpRegistKey[CHIAKI_SESSION_AUTH_SIZE] = {0};
-    uint32_t rpKeyType = 0;
-    uint8_t rpKey[0x10] = {0};
+    int64_t consoleId = 0;
+    std::vector<Registration> registrations;
 
     bool discovered = false;
-    bool registered = false;
-    bool rpKeyData = false;
     bool sessionInit = false;
     bool needsLinking = false;
     bool inConfig = false;
@@ -128,8 +125,8 @@ public:
 
     // Status checks
     bool isDiscovered() const { return discovered; }
-    bool isRegistered() const { return registered; }
-    bool hasRpKey() const { return rpKeyData; }
+    bool isRegistered() const { return activeRegistration() != nullptr; }
+    bool hasRpKey() const { return activeRegistration() != nullptr; }
     bool isReady() const { return state == CHIAKI_DISCOVERY_HOST_STATE_READY; }
     bool isPS5() const;
     bool isRemote() const { return hostType == HostType::Remote; }
@@ -153,9 +150,6 @@ public:
     // Remote DUID for matching remote hosts
     std::string getRemoteDuid() const { return remoteDuid; }
     void setRemoteDuid(const std::string& duid) { remoteDuid = duid; }
-
-    // Per-host PSN Account ID (returns empty if not set, doesn't fall back to global)
-    std::string getPerHostPsnAccountId() const { return psnAccountId; }
 
     // Per-host haptic setting (-1=inherit, 0=disabled, 1=weak, 2=strong)
     int getHapticRaw() const { return haptic; }
@@ -193,6 +187,9 @@ public:
     int registerHost(int pin);
     void applyRegistrationData(ChiakiRegisteredHost* regHost);
     void copyRegistrationFrom(const Host* other);
+    const Registration* activeRegistration() const;
+    void upsertRegistration(const Registration& reg);
+    int64_t getConsoleId() const { return consoleId; }
 
     // Event callbacks from chiaki
     void connectionEventCallback(ChiakiEvent* event);

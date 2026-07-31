@@ -1,0 +1,37 @@
+{
+  "settings/unlockBitrateMax": {
+    "title": "解锁最大码率",
+    "body": "将码率上限提高到常规的每分辨率限制之上。",
+    "image": ""
+  },
+  "settings/ipcStats": {
+    "title": "IPC 统计",
+    "body": "显示用于调试的进程间计时统计。",
+    "image": ""
+  },
+  "settings/portGuessing": {
+    "title": "端口猜测",
+    "body": "探测额外端口以改善严格网络下的 NAT 穿透。",
+    "image": ""
+  },
+  "settings/portGuessingCount": {
+    "title": "端口猜测数量",
+    "body": "要探测的候选端口数量。",
+    "image": ""
+  },
+  "settings/portGuessingSocks": {
+    "title": "探测套接字数",
+    "body": "探测时打开的套接字数量。",
+    "image": ""
+  },
+  "settings/autoReconnect": {
+    "title": "自动重连",
+    "body": "在会话断开后自动重新建立连接。",
+    "image": ""
+  },
+  "settings/runBenchmark": {
+    "title": "运行基准测试",
+    "body": "测量此主机的 GHASH 加密吞吐量。",
+    "image": ""
+  }
+}

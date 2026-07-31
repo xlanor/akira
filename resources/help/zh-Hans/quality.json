@@ -1,0 +1,67 @@
+{
+  "settings/localResolution": {
+    "title": "本地分辨率",
+    "body": "本地网络下的串流分辨率。越高越清晰，但需要更高码率。",
+    "image": ""
+  },
+  "settings/localFps": {
+    "title": "本地帧率",
+    "body": "本地网络游玩的目标每秒帧数。",
+    "image": ""
+  },
+  "settings/localBitrate": {
+    "title": "本地码率",
+    "body": "本地网络的视频码率，以 500 kbps 为步进调整。",
+    "image": ""
+  },
+  "settings/remoteResolution": {
+    "title": "远程分辨率",
+    "body": "远程（互联网）游玩的串流分辨率。",
+    "image": ""
+  },
+  "settings/remoteFps": {
+    "title": "远程帧率",
+    "body": "远程游玩的目标每秒帧数。",
+    "image": ""
+  },
+  "settings/remoteBitrate": {
+    "title": "远程码率",
+    "body": "远程游玩的视频码率，以 500 kbps 为步进调整。",
+    "image": ""
+  },
+  "settings/vpnResolution": {
+    "title": "VPN 分辨率",
+    "body": "通过 VPN 连接时的串流分辨率。",
+    "image": ""
+  },
+  "settings/vpnFps": {
+    "title": "VPN 帧率",
+    "body": "通过 VPN 的目标每秒帧数。",
+    "image": ""
+  },
+  "settings/vpnBitrate": {
+    "title": "VPN 码率",
+    "body": "通过 VPN 的视频码率，以 500 kbps 为步进调整。",
+    "image": ""
+  },
+  "settings/enableDithering": {
+    "title": "抖动",
+    "body": "减少渐变上的色带。",
+    "image": ""
+  },
+  "settings/ditheringStrength": {
+    "title": "抖动强度",
+    "body": "抖动应用的强度。",
+    "image": ""
+  },
+  "settings/rcasEnabled": {
+    "title": "RCAS 锐化",
+    "body": "对解码图像进行对比度自适应锐化。",
+    "image": ""
+  },
+  "settings/rcasSharpness": {
+    "title": "RCAS 强度",
+    "body": "锐化程度，以 5% 为步进。",
+    "image": ""
+  }
+}

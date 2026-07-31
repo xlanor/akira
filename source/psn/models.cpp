@@ -607,4 +607,32 @@ json_object* toJson(const TrophyTitle& title)
     return obj;
 }
 
+bool parseProfile(json_object* obj, PsnProfile& out)
+{
+    if (!obj)
+        return false;
+
+    out.onlineId = jsonString(obj, "onlineId");
+    out.aboutMe = jsonString(obj, "aboutMe");
+    out.isPlus = jsonBool(obj, "isPlus");
+    out.isOfficiallyVerified = jsonBool(obj, "isOfficiallyVerified");
+
+    json_object* avatars = nullptr;
+    if (jsonField(obj, "avatars", &avatars) && json_object_is_type(avatars, json_type_array))
+    {
+        size_t count = json_object_array_length(avatars);
+        for (size_t i = 0; i < count; i++)
+        {
+            json_object* entry = json_object_array_get_idx(avatars, i);
+            PsnAvatar avatar;
+            avatar.size = jsonString(entry, "size");
+            avatar.url = jsonString(entry, "url");
+            if (!avatar.url.empty())
+                out.avatars.push_back(std::move(avatar));
+        }
+    }
+
+    return !out.onlineId.empty();
+}
+
 } // namespace psn

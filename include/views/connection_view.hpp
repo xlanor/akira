@@ -42,6 +42,9 @@ private:
     std::atomic<bool> connectionRunning{false};
     std::atomic<bool> connectionSuccess{false};
     std::atomic<bool> connectionFinished{false};
+    std::atomic<int> currentStage{0};
+    std::atomic<bool> connectFailed{false};
+    std::string failureText;
     std::string connectionError;
 
     bool transitionPending = false;

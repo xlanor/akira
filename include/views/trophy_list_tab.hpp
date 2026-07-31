@@ -31,6 +31,8 @@ private:
     brls::Box* progressTrack = nullptr;
     brls::Rectangle* progressFill = nullptr;
 
+    brls::Animatable focusAnim{0.0f};
+
     std::string iconUrl;
 
     static std::unordered_set<TrophyCardCell*> liveCells;
@@ -81,16 +83,15 @@ public:
     static TrophyListTab* currentInstance;
 
 private:
-    BRLS_BIND(brls::Label, summaryTitleLabel, "trophies/summaryTitle");
-    BRLS_BIND(brls::Label, summaryDetailLabel, "trophies/summaryDetail");
+    BRLS_BIND(brls::Box, profileBox, "trophies/profile");
     BRLS_BIND(RecyclingGrid, grid, "trophies/grid");
     BRLS_BIND(PsnGatedBox, gate, "trophies/gate");
     BRLS_BIND(brls::Button, sortBtn, "trophies/sortBtn");
     BRLS_BIND(brls::Button, filterBtn, "trophies/filterBtn");
-    BRLS_BIND(brls::Label, statusLabel, "trophies/status");
     BRLS_BIND(brls::Button, forceRefreshBtn, "trophies/forceRefreshBtn");
 
     void load(bool forceRefresh);
+    void buildProfileCard();
     void applySummary(const psn::TrophySummary& summary);
     void applyTitles(const std::vector<psn::TrophyTitle>& titles);
     void rebuildGrid();
@@ -98,6 +99,19 @@ private:
     void showFilterPicker();
     void refreshControlLabels();
     void refreshStatusLine();
+
+    brls::Label* levelValue = nullptr;
+    brls::Label* progressLabel = nullptr;
+    brls::Rectangle* progressFill = nullptr;
+    brls::Label* statusLabel = nullptr;
+    brls::Image* tierImages[4] = {};
+    brls::Label* tierCounts[4] = {};
+
+    brls::Animatable summaryFillAnim{0.0f};
+    brls::Animatable tierCountAnim[4] = {};
+    brls::Animatable entryAnim{1.0f};
+    int summaryPct = -1;
+    int tierPrev[4] = {-1, -1, -1, -1};
 
     PsnActionButton forceRefreshGate;
 

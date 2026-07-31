@@ -1,9 +1,11 @@
 #include "views/host_list_tab.hpp"
+#include "ui/theme.hpp"
+#include "ui/motion.hpp"
 #include "views/stream_view.hpp"
 #include "views/connection_view.hpp"
 #include "views/enter_pin_view.hpp"
-#include "views/host_settings_view.hpp"
 #include "core/host.hpp"
+#include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
 #include "stream/session.hpp"
 #include "util/shared_view_holder.hpp"
@@ -12,6 +14,8 @@
 using namespace brls::literals;
 
 #include <ctime>
+#include <algorithm>
+#include <cctype>
 
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
     .shadowType              = brls::ShadowType::GENERIC,
@@ -42,186 +46,191 @@ static const brls::ButtonStyle BUTTONSTYLE_ORANGE = {
 HostListTab* HostListTab::currentInstance = nullptr;
 bool HostListTab::isConnecting = false;
 bool HostListTab::isRegistering = false;
-bool HostListTab::isActive = true;
+bool HostListTab::isActive = false;
 
 
 class HostItemView : public brls::Box {
 public:
     HostItemView(Host* host) : host(host), hostName(host->getHostName()) {
-        this->setAxis(brls::Axis::ROW);
-        this->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
+        this->setAxis(brls::Axis::COLUMN);
         this->setAlignItems(brls::AlignItems::CENTER);
-        this->setPadding(15);
-        this->setMarginBottom(10);
+        this->setJustifyContent(brls::JustifyContent::FLEX_START);
+        this->setWidth(174);
+        this->setHeight(238);
+        this->setPadding(14);
+        this->setMarginRight(14);
+        this->setMarginBottom(14);
         this->setBackgroundColor(brls::Application::getTheme().getColor("color/card"));
-        this->setCornerRadius(8);
+        this->setCornerRadius(14);
+        this->setFocusable(true);
 
-        auto* infoBox = new brls::Box();
-        infoBox->setAxis(brls::Axis::COLUMN);
-        infoBox->setGrow(1);
-        infoBox->setShrink(1);
-
-        auto* nameRow = new brls::Box();
-        nameRow->setAxis(brls::Axis::ROW);
-        nameRow->setAlignItems(brls::AlignItems::CENTER);
-        nameRow->setMarginBottom(5);
+        consoleImg = new brls::Image();
+        consoleImg->setImageFromRes(host->isPS5() ? "img/console/ps5.png" : "img/console/ps4.png");
+        consoleImg->setScalingType(brls::ImageScalingType::FIT);
+        consoleImg->setDimensions(146, 118);
+        consoleImg->setMarginBottom(12);
+        this->addView(consoleImg);
 
         nameLabel = new brls::Label();
-        std::string displayName = host->getHostName();
-        if (host->isRemote() && displayName.length() > 9 && displayName.substr(displayName.length() - 9) == " (Remote)") {
-            displayName = displayName.substr(0, displayName.length() - 9);
-        }
-        nameLabel->setText(displayName);
         nameLabel->setFontSize(18);
-        nameRow->addView(nameLabel);
+        nameLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        nameLabel->setMarginBottom(6);
+        nameLabel->setAutoAnimate(true);
+        this->addView(nameLabel);
 
-        remoteBadge = new brls::Box();
-        remoteBadge->setBackgroundColor(nvgRGBA(59, 130, 246, 255));
-        remoteBadge->setCornerRadius(4);
-        remoteBadge->setPaddingTop(2);
-        remoteBadge->setPaddingBottom(2);
-        remoteBadge->setPaddingLeft(6);
-        remoteBadge->setPaddingRight(6);
-        remoteBadge->setMarginLeft(8);
-        remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        typePill = new brls::Box();
+        typePill->setAxis(brls::Axis::ROW);
+        typePill->setCornerRadius(11);
+        typePill->setPaddingLeft(11);
+        typePill->setPaddingRight(11);
+        typePill->setPaddingTop(2);
+        typePill->setPaddingBottom(3);
+        typePill->setMarginBottom(8);
 
-        auto* remoteBadgeLabel = new brls::Label();
-        remoteBadgeLabel->setText("akira/hosts/remote"_i18n);
-        remoteBadgeLabel->setFontSize(11);
-        remoteBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
-        remoteBadge->addView(remoteBadgeLabel);
+        typeLabel = new brls::Label();
+        typeLabel->setFontSize(14);
+        typePill->addView(typeLabel);
+        this->addView(typePill);
 
-        nameRow->addView(remoteBadge);
-
-        autoBadge = new brls::Box();
-        autoBadge->setBackgroundColor(nvgRGBA(6, 182, 212, 255));
-        autoBadge->setCornerRadius(4);
-        autoBadge->setPaddingTop(2);
-        autoBadge->setPaddingBottom(2);
-        autoBadge->setPaddingLeft(6);
-        autoBadge->setPaddingRight(6);
-        autoBadge->setMarginLeft(8);
-        autoBadge->setVisibility(host->isAuto() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-
-        auto* autoBadgeLabel = new brls::Label();
-        autoBadgeLabel->setText("akira/hosts/auto"_i18n);
-        autoBadgeLabel->setFontSize(11);
-        autoBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
-        autoBadge->addView(autoBadgeLabel);
-
-        nameRow->addView(autoBadge);
-
-        manualBadge = new brls::Box();
-        manualBadge->setBackgroundColor(nvgRGBA(168, 85, 247, 255));
-        manualBadge->setCornerRadius(4);
-        manualBadge->setPaddingTop(2);
-        manualBadge->setPaddingBottom(2);
-        manualBadge->setPaddingLeft(6);
-        manualBadge->setPaddingRight(6);
-        manualBadge->setMarginLeft(8);
-        manualBadge->setVisibility(host->isManual() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-
-        auto* manualBadgeLabel = new brls::Label();
-        manualBadgeLabel->setText("akira/hosts/manual"_i18n);
-        manualBadgeLabel->setFontSize(11);
-        manualBadgeLabel->setTextColor(nvgRGBA(255, 255, 255, 255));
-        manualBadge->addView(manualBadgeLabel);
-
-        nameRow->addView(manualBadge);
-
-        infoBox->addView(nameRow);
-
-        addrLabel = new brls::Label();
-        addrLabel->setText(host->getHostAddr());
-        addrLabel->setFontSize(14);
-        addrLabel->setTextColor(nvgRGBA(150, 150, 150, 255));
-        infoBox->addView(addrLabel);
+        statusPill = new brls::Box();
+        statusPill->setAxis(brls::Axis::ROW);
+        statusPill->setCornerRadius(11);
+        statusPill->setPaddingLeft(11);
+        statusPill->setPaddingRight(11);
+        statusPill->setPaddingTop(2);
+        statusPill->setPaddingBottom(3);
 
         statusLabel = new brls::Label();
-        statusLabel->setFontSize(12);
-        statusLabel->setTextColor(nvgRGBA(100, 150, 100, 255));
-        infoBox->addView(statusLabel);
+        statusLabel->setFontSize(14);
+        statusPill->addView(statusLabel);
+        this->addView(statusPill);
 
-        this->addView(infoBox);
+        this->registerClickAction([this](brls::View*) {
+            doPrimaryAction();
+            return true;
+        });
+        this->registerAction("akira/hosts/options"_i18n, brls::ControllerButton::BUTTON_Y,
+            [this](brls::View*) { openContextMenu(); return true; }, false);
 
-        buttonBox = new brls::Box();
-        buttonBox->setAxis(brls::Axis::ROW);
-        buttonBox->setShrink(0);
-
-        createConnectButton();
-        createWakeButton();
-        createRegisterButton();
-        createLinkButton();
-        createSettingsButton();
-        createDeleteButton();
-
-        this->addView(buttonBox);
+        akira::ui::motion::liftOnFocus(this, focusAnim);
 
         updateState();
     }
 
+    void playEntrance(int delayMs) {
+        akira::ui::motion::fadeIn(this, entranceAnim, delayMs, 300);
+    }
+
     void updateState() {
-        std::string status = host->getTargetString() + " - " + host->getStateString();
-        if (host->isRegistered()) {
-            status += " (" + "akira/common/registered"_i18n + ")";
-        }
-        statusLabel->setText(status);
+        std::string displayName = host->getHostName();
+        if (host->isRemote() && displayName.length() > 9 && displayName.substr(displayName.length() - 9) == " (Remote)")
+            displayName = displayName.substr(0, displayName.length() - 9);
+        nameLabel->setText(displayName);
 
-        remoteBadge->setVisibility(host->isRemote() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-
-        autoBadge->setVisibility(host->isAuto() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        manualBadge->setVisibility(host->isManual() ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-
+        std::string typeText;
+        NVGcolor typeColor;
         if (host->isRemote()) {
-            addrLabel->setText("akira/hosts/psn_remote_play"_i18n);
+            typeText = "akira/hosts/remote"_i18n;
+            typeColor = akira::ui::active().accentStrong;
+        } else if (host->isManual()) {
+            typeText = "akira/hosts/manual"_i18n;
+            typeColor = akira::ui::active().media;
+        } else if (host->isAuto()) {
+            typeText = "akira/hosts/auto"_i18n;
+            typeColor = akira::ui::active().accent;
         } else {
-            addrLabel->setText(host->getHostAddr());
+            typeText = "akira/hosts/local"_i18n;
+            typeColor = akira::ui::active().textMuted;
         }
+        typeLabel->setText(typeText);
+        typeLabel->setTextColor(typeColor);
+        typePill->setBackgroundColor(akira::ui::withAlpha(typeColor, 0x2e));
 
-        bool showLink = host->isRemote() && host->needsLink();
-        bool showConnect = host->hasRpKey() && !host->isStandby() && !host->needsLink();
-        bool showWake = host->isStandby() && host->hasRpKey() && !host->isRemote();
-        bool showRegister = host->isDiscovered() && !host->hasRpKey() && !host->isRemote();
-        bool showSettings = host->hasRpKey() && !host->needsLink();
-        bool showDelete = host->isInConfig() && !host->needsLink();
+        std::string pillText;
+        NVGcolor fg = akira::ui::active().textMuted;
+        bool dim = true;
+        if (host->isRemote() && host->needsLink()) {
+            pillText = "akira/hosts/link"_i18n;
+            fg = akira::ui::active().accent;
+        } else if (host->isDiscovered() && !host->hasRpKey() && !host->isRemote()) {
+            pillText = "akira/hosts/register"_i18n;
+            fg = akira::ui::active().accent;
+        } else if (host->isStandby() && host->hasRpKey()) {
+            pillText = "akira/hosts/standby"_i18n;
+        } else if ((host->hasRpKey() && host->isReady()) || (host->isRemote() && host->hasRpKey())) {
+            pillText = "akira/hosts/ready"_i18n;
+            fg = akira::ui::active().success;
+            dim = false;
+        } else {
+            pillText = host->getStateString();
+        }
+        statusLabel->setText(pillText);
+        statusLabel->setTextColor(fg);
+        statusPill->setBackgroundColor(akira::ui::withAlpha(fg, 0x2e));
 
-        linkBtn->setVisibility(showLink ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        connectBtn->setVisibility(showConnect ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        wakeBtn->setVisibility(showWake ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        registerBtn->setVisibility(showRegister ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        settingsBtn->setVisibility(showSettings ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        deleteBtn->setVisibility(showDelete ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        int wantDim = dim ? 1 : 0;
+        if (wantDim != lastDim) {
+            float target = dim ? 0.5f : 1.0f;
+            if (lastDim < 0) {
+                consoleImg->setAlpha(target);
+                dimAnim.reset(target);
+            } else {
+                akira::ui::motion::animate(dimAnim, dimAnim.getValue(), target, 260,
+                    brls::EasingFunction::quadraticOut,
+                    [this](float v) { consoleImg->setAlpha(v); });
+            }
+            lastDim = wantDim;
+        }
     }
 
     Host* getHost() { return host; }
     std::string getHostName() const { return hostName; }
 
+    void doPrimaryAction() {
+        if (host->isRemote() && host->needsLink()) doLink();
+        else if (host->isDiscovered() && !host->hasRpKey() && !host->isRemote()) doRegister();
+        else if (host->isStandby() && host->hasRpKey() && !host->isRemote()) doWake();
+        else if (host->hasRpKey()) doConnect();
+    }
+
+    void openContextMenu() {
+        std::vector<std::string> options;
+        std::vector<int> ids;
+        if (host->hasRpKey() && !host->isRemote()) {
+            options.push_back("akira/host_settings/console_pin"_i18n);
+            ids.push_back(0);
+        }
+        if (host->isRegistered()) {
+            options.push_back("akira/hosts/delete"_i18n);
+            ids.push_back(1);
+        }
+        if (options.empty()) return;
+        auto* dropdown = new brls::Dropdown("akira/hosts/options"_i18n, options,
+            [this, ids](int sel) {
+                if (sel < 0 || sel >= static_cast<int>(ids.size())) return;
+                if (ids[sel] == 0) doConsolePIN();
+                else doDelete();
+            });
+        brls::Application::pushActivity(new brls::Activity(dropdown));
+    }
+
 private:
     Host* host;
     std::string hostName;
+    brls::Image* consoleImg;
     brls::Label* nameLabel;
-    brls::Box* remoteBadge;
-    brls::Box* autoBadge;
-    brls::Box* manualBadge;
-    brls::Label* addrLabel;
+    brls::Box* typePill;
+    brls::Label* typeLabel;
+    brls::Box* statusPill;
     brls::Label* statusLabel;
-    brls::Box* buttonBox;
-    brls::Button* connectBtn;
-    brls::Button* wakeBtn;
-    brls::Button* registerBtn;
-    brls::Button* linkBtn;
-    brls::Button* settingsBtn;
-    brls::Button* deleteBtn;
+    brls::Animatable entranceAnim{1.0f};
+    brls::Animatable focusAnim{0.0f};
+    brls::Animatable dimAnim{1.0f};
+    int lastDim = -1;
 
-    void createConnectButton() {
-        connectBtn = new brls::Button();
-        connectBtn->setText("akira/hosts/connect"_i18n);
-        connectBtn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
-        connectBtn->setShrink(0);
-        connectBtn->setMarginRight(10);
-        connectBtn->registerClickAction([this](brls::View* view) {
-            if (HostListTab::isConnecting) {
-                return true;
+    void doConnect() {
+        if (HostListTab::isConnecting) {
+                return;
             }
 
             brls::Logger::info("Connect to {}", host->getHostName());
@@ -239,7 +248,7 @@ private:
                     dialog->close();
                 });
                 dialog->open();
-                return true;
+                return;
             }
 
             if (!needsAccountId && onlineId.empty()) {
@@ -248,7 +257,7 @@ private:
                     dialog->close();
                 });
                 dialog->open();
-                return true;
+                return;
             }
 
             HostListTab::isConnecting = true;
@@ -266,21 +275,9 @@ private:
             }
 
             HostListTab::isConnecting = false;
-
-            return true;
-        });
-        buttonBox->addView(connectBtn);
     }
 
-    void createWakeButton() {
-        wakeBtn = new brls::Button();
-        wakeBtn->setText("akira/hosts/wake"_i18n);
-        wakeBtn->setStyle(&BUTTONSTYLE_ORANGE);
-        wakeBtn->setShrink(0);
-        wakeBtn->setMarginRight(10);
-        wakeBtn->setBackgroundColor(nvgRGBA(255, 203, 92, 255));
-
-        wakeBtn->registerClickAction([this](brls::View* view) {
+    void doWake() {
             brls::Logger::info("Wake {}", host->getHostName());
 
             int result = host->wakeup();
@@ -289,21 +286,11 @@ private:
             } else {
                 brls::Application::notify(brls::getStr("akira/hosts/wake_failed", host->getHostName()));
             }
-
-            return true;
-        });
-        buttonBox->addView(wakeBtn);
     }
 
-    void createRegisterButton() {
-        registerBtn = new brls::Button();
-        registerBtn->setText("akira/hosts/register"_i18n);
-        registerBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
-        registerBtn->setShrink(0);
-        registerBtn->setMarginRight(10);
-        registerBtn->registerClickAction([this](brls::View* view) {
+    void doRegister() {
             if (HostListTab::isRegistering) {
-                return true;
+                return;
             }
 
             brls::Logger::info("Register button clicked for {}", host->getHostName());
@@ -320,7 +307,7 @@ private:
                     dialog->close();
                 });
                 dialog->open();
-                return true;
+                return;
             }
 
             if (!needsAccountId && onlineId.empty()) {
@@ -329,7 +316,7 @@ private:
                     dialog->close();
                 });
                 dialog->open();
-                return true;
+                return;
             }
 
             HostListTab::isRegistering = true;
@@ -393,20 +380,9 @@ private:
             });
 
             brls::Application::pushActivity(new brls::Activity(pinView));
-
-            return true;
-        });
-        buttonBox->addView(registerBtn);
     }
 
-    void createLinkButton() {
-        linkBtn = new brls::Button();
-        linkBtn->setText("akira/hosts/link"_i18n);
-        linkBtn->setStyle(&BUTTONSTYLE_BLUE);
-        linkBtn->setShrink(0);
-        linkBtn->setMarginRight(10);
-        linkBtn->setBackgroundColor(nvgRGBA(59, 130, 246, 255));
-        linkBtn->registerClickAction([this](brls::View* view) {
+    void doLink() {
             brls::Logger::info("Link button clicked for {}", host->getHostName());
 
             auto* settings = SettingsManager::getInstance();
@@ -423,7 +399,7 @@ private:
 
             if (hostNames.empty()) {
                 brls::Application::notify("akira/hosts/no_registered_hosts"_i18n);
-                return true;
+                return;
             }
 
             Host* remoteHost = host;
@@ -463,53 +439,32 @@ private:
                 }
             );
             brls::Application::pushActivity(new brls::Activity(dropdown));
-
-            return true;
-        });
-        buttonBox->addView(linkBtn);
     }
 
-    void createSettingsButton() {
-        settingsBtn = new brls::Button();
-        settingsBtn->setText("akira/hosts/settings"_i18n);
-        settingsBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
-        settingsBtn->setShrink(0);
-        settingsBtn->setMarginRight(10);
-        settingsBtn->registerClickAction([this](brls::View* view) {
-            brls::Logger::info("Settings button clicked for {}", host->getHostName());
-
-            auto* settingsView = new HostSettingsView(host);
-            settingsView->setOnSaved([]() {
-                brls::sync([]() {
-                    if (HostListTab::currentInstance) {
-                        HostListTab::currentInstance->syncHostList();
-                        if (HostListTab::currentInstance->findRemoteBtn) {
-                            brls::Application::giveFocus(HostListTab::currentInstance->findRemoteBtn);
-                        }
+    void doConsolePIN() {
+            std::string current = SettingsManager::getInstance()->getConsolePIN(host);
+            brls::Application::getImeManager()->openForText(
+                [this](std::string text) {
+                    if (!text.empty() && (text.length() != 4 || !std::ranges::all_of(text, ::isdigit))) {
+                        brls::Application::notify("akira/host_settings/console_pin_invalid"_i18n);
+                        return;
                     }
-                });
-            });
-            brls::Application::pushActivity(new brls::Activity(settingsView));
-
-            return true;
-        });
-        buttonBox->addView(settingsBtn);
+                    SettingsManager::getInstance()->setConsolePIN(host, text);
+                    SettingsManager::getInstance()->writeFile();
+                    brls::Application::notify("akira/host_settings/console_pin_saved"_i18n);
+                },
+                "akira/host_settings/console_pin"_i18n, "akira/host_settings/console_pin_hint"_i18n, 4, current, 0);
     }
 
-    void createDeleteButton() {
-        deleteBtn = new brls::Button();
-        deleteBtn->setText("akira/hosts/delete"_i18n);
-        deleteBtn->setStyle(&brls::BUTTONSTYLE_BORDERED);
-        deleteBtn->setShrink(0);
-        std::string hostName = host->getHostName();
-        deleteBtn->registerClickAction([hostName](brls::View* view) {
+    void doDelete() {
+            std::string hostName = host->getHostName();
             brls::Logger::info("Delete button clicked for {}", hostName);
 
             auto* dialog = new brls::Dialog(brls::getStr("akira/hosts/delete_confirm", hostName));
             dialog->addButton("akira/common/cancel"_i18n, []() {});
             dialog->addButton("akira/common/delete"_i18n, [hostName]() {
                 auto* settings = SettingsManager::getInstance();
-                settings->removeHost(hostName);
+                settings->removeActiveProfileRegistration(hostName);
                 settings->writeFile();
                 brls::Application::notify("akira/hosts/host_deleted"_i18n);
                 if (HostListTab::currentInstance) {
@@ -523,11 +478,60 @@ private:
                 }
             });
             dialog->open();
+    }
+};
 
+static void openAddHostFlow() {
+    auto* view = AddHostTab::create();
+    view->registerAction("akira/common/back"_i18n, brls::ControllerButton::BUTTON_B, [](brls::View*) {
+        brls::Application::popActivity();
+        return true;
+    }, false);
+    auto* frame = new brls::AppletFrame(view);
+    frame->setTitle("akira/tabs/add_host"_i18n);
+    brls::Application::pushActivity(new brls::Activity(frame));
+}
+
+class AddHostCard : public brls::Box {
+public:
+    AddHostCard() {
+        this->setAxis(brls::Axis::COLUMN);
+        this->setAlignItems(brls::AlignItems::CENTER);
+        this->setJustifyContent(brls::JustifyContent::CENTER);
+        this->setWidth(174);
+        this->setHeight(238);
+        this->setPadding(14);
+        this->setMarginRight(14);
+        this->setMarginBottom(14);
+        this->setBackgroundColor(brls::Application::getTheme().getColor("color/card"));
+        this->setCornerRadius(14);
+        this->setBorderColor(akira::ui::withAlpha(akira::ui::active().accent, 0x66));
+        this->setBorderThickness(2);
+        this->setFocusable(true);
+
+        auto* plus = new brls::Label();
+        plus->setText("+");
+        plus->setFontSize(64);
+        plus->setTextColor(akira::ui::active().accent);
+        plus->setMarginBottom(6);
+        this->addView(plus);
+
+        auto* label = new brls::Label();
+        label->setText("akira/add_host/add_console"_i18n);
+        label->setFontSize(18);
+        label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        label->setTextColor(akira::ui::active().textMuted);
+        this->addView(label);
+
+        this->registerClickAction([](brls::View*) {
+            openAddHostFlow();
             return true;
         });
-        buttonBox->addView(deleteBtn);
+        akira::ui::motion::liftOnFocus(this, focusAnim);
     }
+
+private:
+    brls::Animatable focusAnim{0.0f};
 };
 
 
@@ -563,6 +567,56 @@ HostListTab::HostListTab() {
     }
 
     initFindRemoteButton();
+
+    profileChip = new ProfileChipView();
+    chipSlot->addView(profileChip);
+    profileChip->registerClickAction([this](brls::View*) {
+        const auto& profiles = settings->getProfiles();
+        if (profiles.empty()) {
+            brls::Application::notify("akira/hosts/no_profiles_add"_i18n);
+            return true;
+        }
+
+        std::vector<std::string> names;
+        std::vector<int64_t> ids;
+        int selected = 0;
+        for (size_t i = 0; i < profiles.size(); i++) {
+            std::string lbl = profiles[i].label();
+            if (lbl.empty())
+                lbl = "akira/settings/unnamed_profile"_i18n;
+            names.push_back(lbl);
+            ids.push_back(profiles[i].id);
+            if (profiles[i].id == settings->getActiveProfileId())
+                selected = static_cast<int>(i);
+        }
+
+        auto* dropdown = new brls::Dropdown(
+            "akira/hosts/switch_profile"_i18n, names,
+            [ids](int sel) {
+                if (sel < 0 || sel >= static_cast<int>(ids.size()))
+                    return;
+                auto* s = SettingsManager::getInstance();
+                s->setActiveProfileId(ids[sel]);
+                s->writeFile();
+                TrophyManager::getInstance()->onActiveProfileChanged();
+                brls::sync([]() {
+                    if (HostListTab::currentInstance) {
+                        HostListTab::currentInstance->syncHostList();
+                        if (HostListTab::currentInstance->profileChip)
+                            HostListTab::currentInstance->profileChip->refresh();
+                        if (HostListTab::currentInstance->recentRail)
+                            HostListTab::currentInstance->recentRail->refresh();
+                    }
+                });
+            },
+            selected);
+        brls::Application::pushActivity(new brls::Activity(dropdown));
+        return true;
+    });
+
+    recentRail = new RecentlyPlayedRail();
+    railSlot->addView(recentRail);
+
     syncHostList();
 }
 
@@ -571,7 +625,7 @@ void HostListTab::initFindRemoteButton() {
 
     findRemoteGate.attach(
         findRemoteBtn,
-        nvgRGBA(92, 157, 255, 255),
+        akira::ui::active().accent,
         "akira/hosts/find_remote"_i18n,
         "akira/hosts/find_remote_busy"_i18n,
         "akira/hosts/find_remote_wait",
@@ -632,6 +686,8 @@ void HostListTab::willAppear(bool resetState) {
     isActive = true;
     brls::Logger::debug("HostListTab::willAppear - resuming discovery callbacks");
     findRemoteGate.start();
+    if (profileChip) profileChip->refresh();
+    if (recentRail) recentRail->refresh();
     syncHostList();
 }
 
@@ -646,6 +702,16 @@ brls::View* HostListTab::create() {
     return new HostListTab();
 }
 
+void HostListTab::notifyActiveProfileChanged() {
+    if (!currentInstance)
+        return;
+    currentInstance->syncHostList();
+    if (currentInstance->profileChip)
+        currentInstance->profileChip->refresh();
+    if (currentInstance->recentRail)
+        currentInstance->recentRail->refresh();
+}
+
 void HostListTab::syncHostList() {
     brls::Logger::debug("Syncing host list...");
 
@@ -653,13 +719,29 @@ void HostListTab::syncHostList() {
         brls::Logger::error("syncHostList: hostContainer is null");
         return;
     }
+    brls::View* focused = brls::Application::getCurrentFocus();
+    bool childFocused = false;
+    for (brls::View* v = focused; v; v = v->getParent()) {
+        if (v == this) {
+            childFocused = true;
+            break;
+        }
+    }
+
     // borealis really hates it when you remove a view.
     // just rebuild the damn thing.
-    brls::Application::giveFocus(this);
+    if (childFocused)
+        brls::Application::giveFocus(this);
 
     hostContainer->clearViews();
     hostItems.clear();
 
+    bool animateEntrance = !entrancePlayed;
+    int shownIndex = 0;
+
+    const int perRow = 6;
+    int col = 0;
+    brls::Box* row = nullptr;
     auto* hostsMap = settings->getHostsMap();
     if (hostsMap) {
         for (auto& [name, host] : *hostsMap) {
@@ -667,21 +749,75 @@ void HostListTab::syncHostList() {
                 brls::Logger::error("Null host in hosts map for key: {}", name);
                 continue;
             }
+            if (!host->hasRpKey() && !host->isDiscovered())
+                continue;
+            if (col == 0) {
+                row = new brls::Box();
+                row->setAxis(brls::Axis::ROW);
+                hostContainer->addView(row);
+            }
             auto* item = new HostItemView(host.get());
             hostItems[host.get()] = item;
-            hostContainer->addView(item);
+            row->addView(item);
+            if (animateEntrance)
+                item->playEntrance(shownIndex * 45);
+            shownIndex++;
+            col = (col + 1) % perRow;
         }
     }
 
     bool hasHosts = !hostItems.empty();
+
+    if (settings->getDevFakeHosts()) {
+        static std::vector<Host*> fakeHosts;
+        if (fakeHosts.empty()) {
+            for (int i = 1; i <= 20; i++) {
+                Host* h = new Host("PS5-Debug-" + std::to_string(i));
+                h->setChiakiTarget(CHIAKI_TARGET_PS5_1);
+                h->setState((i % 4 == 0) ? CHIAKI_DISCOVERY_HOST_STATE_STANDBY : CHIAKI_DISCOVERY_HOST_STATE_READY);
+                h->setHostType((i % 2 == 0) ? HostType::Auto : HostType::Manual);
+                fakeHosts.push_back(h);
+            }
+        }
+        for (Host* h : fakeHosts) {
+            if (col == 0) {
+                row = new brls::Box();
+                row->setAxis(brls::Axis::ROW);
+                hostContainer->addView(row);
+            }
+            row->addView(new HostItemView(h));
+            col = (col + 1) % perRow;
+        }
+        hasHosts = true;
+    }
+
+    if (hasHosts && animateEntrance)
+        entrancePlayed = true;
+
+    if (emptyAddSlot)
+        emptyAddSlot->clearViews();
+    auto* addCard = new AddHostCard();
+    if (hasHosts) {
+        if (col == 0 || !row) {
+            row = new brls::Box();
+            row->setAxis(brls::Axis::ROW);
+            hostContainer->addView(row);
+        }
+        row->addView(addCard);
+    } else if (emptyAddSlot) {
+        emptyAddSlot->addView(addCard);
+    }
+
     if (emptyMessage) {
         emptyMessage->setVisibility(hasHosts ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
     }
 
-    if (hasHosts) {
-        brls::Application::giveFocus(hostContainer);
-    } else if (findRemoteBtn) {
-        brls::Application::giveFocus(findRemoteBtn);
+    if (childFocused) {
+        if (hasHosts) {
+            brls::Application::giveFocus(hostContainer);
+        } else if (findRemoteBtn) {
+            brls::Application::giveFocus(findRemoteBtn);
+        }
     }
 
     brls::Logger::debug("Host list sync complete, {} hosts", hostItems.size());

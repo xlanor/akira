@@ -18,6 +18,7 @@ private:
     BRLS_BIND(brls::Label, versionLabel, "settings/version");
     BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
+    BRLS_BIND(brls::BooleanCell, connectionShowStagesToggle, "settings/connectionShowStages");
     BRLS_BIND(brls::BooleanCell, requestIdrOnFecFailureToggle, "settings/requestIdrOnFecFailure");
     BRLS_BIND(brls::SliderCell, packetLossMaxSlider, "settings/packetLossMax");
 
@@ -29,6 +30,7 @@ private:
     void initVersionUnlock();
     void initEnableThreadAffinityToggle();
     void initHolepunchRetryToggle();
+    void initConnectionShowStagesToggle();
     void initRequestIdrOnFecFailureToggle();
     void initPacketLossMaxSlider();
 };

@@ -1,4 +1,5 @@
 #include "views/benchmark_view.hpp"
+#include "ui/theme.hpp"
 #include "core/thread_affinity.h"
 #include "crypto/libnx/gmac.h"
 #include <chiaki/thread.h>
@@ -91,7 +92,7 @@ void BenchmarkView::updateLogDisplay()
     if (logContainer->getChildren().empty()) {
         auto* label = new brls::Label();
         label->setFontSize(18);
-        label->setTextColor(nvgRGBA(200, 200, 200, 255));
+        label->setTextColor(akira::ui::active().textMuted);
         logContainer->addView(label);
     }
 

@@ -12,6 +12,7 @@ SettingsGeneralView::SettingsGeneralView() {
     settings = SettingsManager::getInstance();
 
     initLanguageSelector();
+    initConnectionShowStagesToggle();
     initEnableThreadAffinityToggle();
     initHolepunchRetryToggle();
     initRequestIdrOnFecFailureToggle();
@@ -29,6 +30,19 @@ void SettingsGeneralView::initEnableThreadAffinityToggle() {
             settings->setEnableThreadAffinity(isOn);
             settings->writeFile();
             brls::Logger::info("Thread affinity set to {} (requires restart)", isOn ? "true" : "false");
+        }
+    );
+}
+
+void SettingsGeneralView::initConnectionShowStagesToggle() {
+    bool currentValue = settings->getConnectionShowStages();
+
+    connectionShowStagesToggle->init(
+        "akira/settings/connection_stages"_i18n,
+        currentValue,
+        [this](bool isOn) {
+            settings->setConnectionShowStages(isOn);
+            settings->writeFile();
         }
     );
 }

@@ -1,0 +1,117 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="row"
+    alignItems="center"
+    cornerRadius="14"
+    paddingTop="18"
+    paddingBottom="18"
+    paddingLeft="20"
+    paddingRight="24"
+    marginBottom="16">
+
+    <brls:Image
+        id="profileCard/avatar"
+        width="100"
+        height="100"
+        marginRight="20"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="column"
+        marginRight="32">
+
+        <brls:Label
+            id="profileCard/onlineId"
+            text="—"
+            fontSize="28"/>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            marginTop="6">
+
+            <brls:Label
+                id="profileCard/plus"
+                text="PS Plus"
+                fontSize="14"
+                marginRight="12"/>
+
+            <brls:Label
+                id="profileCard/status"
+                text=""
+                fontSize="14"/>
+
+        </brls:Box>
+    </brls:Box>
+
+    <brls:Box
+        id="profileCard/trophyCol"
+        width="auto"
+        height="auto"
+        axis="column"
+        grow="1.0"
+        justifyContent="center"
+        visibility="gone">
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            justifyContent="spaceBetween"
+            alignItems="flexEnd">
+
+            <brls:Label
+                id="profileCard/level"
+                text=""
+                fontSize="16"/>
+
+        </brls:Box>
+
+        <brls:Box
+            id="profileCard/track"
+            width="auto"
+            height="8"
+            axis="row"
+            cornerRadius="4"
+            marginTop="8">
+
+            <brls:Rectangle
+                id="profileCard/progress"
+                width="1"
+                height="8"/>
+
+        </brls:Box>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            alignItems="center"
+            marginTop="14">
+
+            <brls:Box width="auto" height="auto" axis="row" alignItems="center" marginRight="30">
+                <brls:Image id="profileCard/platImg" width="26" height="34" marginRight="7"/>
+                <brls:Label id="profileCard/plat" text="" fontSize="18"/>
+            </brls:Box>
+
+            <brls:Box width="auto" height="auto" axis="row" alignItems="center" marginRight="30">
+                <brls:Image id="profileCard/goldImg" width="26" height="34" marginRight="7"/>
+                <brls:Label id="profileCard/gold" text="" fontSize="18"/>
+            </brls:Box>
+
+            <brls:Box width="auto" height="auto" axis="row" alignItems="center" marginRight="30">
+                <brls:Image id="profileCard/silverImg" width="26" height="34" marginRight="7"/>
+                <brls:Label id="profileCard/silver" text="" fontSize="18"/>
+            </brls:Box>
+
+            <brls:Box width="auto" height="auto" axis="row" alignItems="center">
+                <brls:Image id="profileCard/bronzeImg" width="26" height="34" marginRight="7"/>
+                <brls:Label id="profileCard/bronze" text="" fontSize="18"/>
+            </brls:Box>
+
+        </brls:Box>
+    </brls:Box>
+</brls:Box>

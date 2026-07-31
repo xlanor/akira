@@ -18,6 +18,8 @@ private:
     BRLS_BIND(brls::SliderCell, portGuessingCountSlider, "settings/portGuessingCount");
     BRLS_BIND(brls::SliderCell, portGuessingSocksSlider, "settings/portGuessingSocks");
     BRLS_BIND(brls::BooleanCell, autoReconnectToggle, "settings/autoReconnect");
+    BRLS_BIND(brls::SliderCell, psnRequestBudgetSlider, "settings/psnRequestBudget");
+    BRLS_BIND(brls::SliderCell, psnRequestWindowSlider, "settings/psnRequestWindow");
     BRLS_BIND(brls::Button, runBenchmarkBtn, "settings/runBenchmark");
 
     SettingsManager* settings = nullptr;
@@ -28,6 +30,8 @@ private:
     void initPortGuessingToggle();
     void initPortGuessingCountSlider();
     void initPortGuessingSocksSlider();
+    void initPsnRequestBudgetSlider();
+    void initPsnRequestWindowSlider();
     void runGhashBenchmark();
 };
 

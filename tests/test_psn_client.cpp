@@ -82,6 +82,26 @@ TEST(summary_is_a_single_unpaged_request)
     CHECK_EQ(summary.earnedTrophies.total(), 127);
 }
 
+TEST(profile_is_fetched_by_account_id)
+{
+    FakeApi api;
+    api.handler = [](const std::string&, std::string& body) {
+        body = R"({"onlineId": "Hakoom", "isPlus": true,
+            "avatars": [{"size": "xl", "url": "http://a/xl.png"}]})";
+        return Error{};
+    };
+
+    PsnProfile profile;
+    Error error = api.client().fetchProfile("acct-123", profile);
+
+    CHECK(error.ok());
+    CHECK_EQ(api.requests.size(), size_t(1));
+    CHECK_EQ(api.requests[0],
+        std::string("https://m.np.playstation.com/api/userProfile/v1/internal/users/acct-123/profiles"));
+    CHECK_EQ(profile.onlineId, std::string("Hakoom"));
+    CHECK_EQ(profile.avatarUrl(), std::string("http://a/xl.png"));
+}
+
 TEST(titles_single_page_asks_for_limit_and_offset)
 {
     FakeApi api;

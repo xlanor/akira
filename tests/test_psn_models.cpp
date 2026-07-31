@@ -32,6 +32,36 @@ TEST(json_reads_numbers_given_as_strings)
     CHECK(jsonDouble(doc.get(), "rateNum") > 12.4 && jsonDouble(doc.get(), "rateNum") < 12.6);
 }
 
+TEST(parse_profile_reads_identity_and_avatar)
+{
+    Doc doc(R"({"onlineId": "Hakoom", "aboutMe": "hi", "isPlus": true, "isOfficiallyVerified": false,
+        "avatars": [{"size": "s", "url": "http://a/s.png"}, {"size": "xl", "url": "http://a/xl.png"}]})");
+
+    PsnProfile profile;
+    CHECK(parseProfile(doc.get(), profile));
+    CHECK_EQ(profile.onlineId, std::string("Hakoom"));
+    CHECK_EQ(profile.isPlus, true);
+    CHECK_EQ(profile.avatars.size(), size_t(2));
+    CHECK_EQ(profile.avatarUrl(), std::string("http://a/xl.png"));
+}
+
+TEST(parse_profile_rejects_a_row_without_online_id)
+{
+    Doc doc(R"({"aboutMe": "no id", "avatars": []})");
+
+    PsnProfile profile;
+    CHECK(!parseProfile(doc.get(), profile));
+}
+
+TEST(parse_profile_avatar_url_falls_back_when_no_preferred_size)
+{
+    Doc doc(R"({"onlineId": "x", "avatars": [{"size": "weird", "url": "http://a/w.png"}]})");
+
+    PsnProfile profile;
+    CHECK(parseProfile(doc.get(), profile));
+    CHECK_EQ(profile.avatarUrl(), std::string("http://a/w.png"));
+}
+
 TEST(json_missing_and_null_fields_take_defaults)
 {
     Doc doc(R"({"present": 1, "nulled": null, "notANumber": "abc"})");

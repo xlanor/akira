@@ -76,10 +76,10 @@ build_akira() {
     # Extract ffmpeg version from RELEASE file
     FFMPEG_VERSION=$(cat ${BUILD_DIR}/library/ffmpeg/RELEASE 2>/dev/null || echo "unknown")
 
-    # Extract Akira version from CMakeLists.txt
-    AKIRA_MAJOR=$(grep 'set(VERSION_MAJOR' ${BUILD_DIR}/CMakeLists.txt | sed 's/[^0-9]*//g')
-    AKIRA_MINOR=$(grep 'set(VERSION_MINOR' ${BUILD_DIR}/CMakeLists.txt | sed 's/[^0-9]*//g')
-    AKIRA_REVISION=$(grep 'set(VERSION_REVISION' ${BUILD_DIR}/CMakeLists.txt | sed 's/[^0-9]*//g')
+    # Extract Akira version from cmake/version.cmake (revision/commit appended below)
+    AKIRA_MAJOR=$(grep 'set(VERSION_MAJOR' ${BUILD_DIR}/cmake/version.cmake | sed 's/[^0-9]*//g')
+    AKIRA_MINOR=$(grep 'set(VERSION_MINOR' ${BUILD_DIR}/cmake/version.cmake | sed 's/[^0-9]*//g')
+    AKIRA_REVISION=$(grep 'set(VERSION_PATCH' ${BUILD_DIR}/cmake/version.cmake | sed 's/[^0-9]*//g')
     AKIRA_VERSION="${AKIRA_MAJOR}.${AKIRA_MINOR}.${AKIRA_REVISION}"
 
     # Get Akira git commit SHA
@@ -106,12 +106,18 @@ build_akira() {
         CMAKE_EXTRA_ARGS="-DMUTE_CHIAKI_LOGS=ON"
     fi
 
-    cmake -B build \
+    # Regenerate from scratch if an existing build dir used a different generator
+    if [ -f build/CMakeCache.txt ] && ! grep -q "CMAKE_GENERATOR:INTERNAL=Ninja" build/CMakeCache.txt; then
+        echo "=== Generator changed, cleaning build dir ==="
+        rm -rf build
+    fi
+
+    cmake -G Ninja -B build \
         -DPLATFORM_SWITCH=ON \
         -DCMAKE_BUILD_TYPE=Debug \
         $CMAKE_EXTRA_ARGS
 
-    make -C build akira.nro -j$(nproc)
+    cmake --build build --target akira.nro
 
     echo "=== Build complete ==="
     ls -la build/*.nro 2>/dev/null || echo "NRO not found - check build logs"

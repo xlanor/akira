@@ -11,6 +11,8 @@
 #include <chiaki/session.h>
 #include <chiaki/log.h>
 
+#include "profile.hpp"
+
 // Forward declaration
 class Host;
 
@@ -52,15 +54,10 @@ private:
     ChiakiVideoResolutionPreset remoteVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     ChiakiVideoFPSPreset localVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
     ChiakiVideoFPSPreset remoteVideoFPS = CHIAKI_VIDEO_FPS_PRESET_60;
-    std::string globalPsnOnlineId;
-    std::string globalPsnAccountId;
-    std::string globalPsnRefreshToken;
-    std::string globalPsnAccessToken;
-    int64_t globalPsnTokenExpiresAt = 0;
-    std::string globalPsnMobileSsoRefreshToken;
-    std::string globalPsnMobileSsoAccessToken;
-    int64_t globalPsnMobileSsoExpiresAt = 0;
-    std::string globalDuid;
+    std::vector<Profile> profiles;
+    int64_t activeProfileId = 0;
+    int64_t nextProfileId = 1;
+    int64_t nextConsoleId = 1;
     HapticPreset globalHaptic = HapticPreset::Disabled;
     float rumbleFreqLow = 140.0f;
     float rumbleFreqHigh = 185.0f;
@@ -72,13 +69,17 @@ private:
     ChiakiVideoResolutionPreset vpnVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     ChiakiVideoFPSPreset vpnVideoFPS = CHIAKI_VIDEO_FPS_PRESET_30;
     bool holepunchRetry = false;
+    bool connectionShowStages = true;
     bool portGuessing = true;
     int portGuessingCount = 75;
     int portGuessingSocks = 120;
+    int psnRequestBudget = 300;
+    int psnRequestWindowSeconds = 900;
     bool powerUserMenuUnlocked = false;
     bool ipcStatsEnabled = false;
     bool unlockBitrateMax = false;
     bool autoReconnect = true;
+    bool devFakeHosts = false;
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
@@ -142,6 +143,7 @@ public:
     Host* getOrCreateHost(const std::string& hostName);
     Host* findHostByDuid(const std::string& duid);
     void removeHost(const std::string& hostName);
+    void removeActiveProfileRegistration(const std::string& hostName);
     void renameHost(const std::string& oldName, const std::string& newName);
 
     static std::string resolutionToString(ChiakiVideoResolutionPreset resolution);
@@ -191,8 +193,27 @@ public:
 
     void clearPsnMobileSsoData();
 
+    int getPsnRequestBudget() const;
+    void setPsnRequestBudget(int budget);
+
+    int getPsnRequestWindowSeconds() const;
+    void setPsnRequestWindowSeconds(int seconds);
+
     std::string getGlobalDuid() const;
     void setGlobalDuid(const std::string& duid);
+
+    const std::vector<Profile>& getProfiles() const;
+    Profile* findProfile(int64_t id);
+    const Profile* findProfile(int64_t id) const;
+    Profile* getActiveProfile();
+    const Profile* getActiveProfile() const;
+    Profile* ensureActiveProfile();
+    int64_t getActiveProfileId() const;
+    void setActiveProfileId(int64_t id);
+    bool getActiveProfileTrophiesEnabled() const;
+    void setActiveProfileTrophiesEnabled(bool enabled);
+    int64_t addProfile(const Profile& profile);
+    void removeProfile(int64_t id);
 
     std::string getConsolePIN(Host* host);
     void setConsolePIN(Host* host, const std::string& pin);
@@ -238,15 +259,6 @@ public:
     bool setChiakiTarget(Host* host, ChiakiTarget target);
     bool setChiakiTarget(Host* host, const std::string& value);
 
-    std::string getHostRpKey(Host* host);
-    bool setHostRpKey(Host* host, const std::string& rpKeyB64);
-
-    std::string getHostRpRegistKey(Host* host);
-    bool setHostRpRegistKey(Host* host, const std::string& rpRegistKeyB64);
-
-    int getHostRpKeyType(Host* host);
-    bool setHostRpKeyType(Host* host, const std::string& value);
-
     std::string getCompanionHost() const;
     void setCompanionHost(const std::string& host);
     int getCompanionPort() const;
@@ -256,6 +268,9 @@ public:
     void setGyroSource(GyroSource source);
 
     bool getHolepunchRetry() const;
+
+    bool getConnectionShowStages() const;
+    void setConnectionShowStages(bool show);
     void setHolepunchRetry(bool retry);
 
     bool getPortGuessing() const;
@@ -273,6 +288,8 @@ public:
     void setUnlockBitrateMax(bool enabled);
     bool getAutoReconnect() const;
     void setAutoReconnect(bool enabled);
+    bool getDevFakeHosts() const;
+    void setDevFakeHosts(bool enabled);
     int getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const;
 
 

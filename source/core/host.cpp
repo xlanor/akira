@@ -145,20 +145,49 @@ bool Host::getVideoResolution(int* width, int* height) const
     return true;
 }
 
+const Registration* Host::activeRegistration() const
+{
+    int64_t pid = settings ? settings->getActiveProfileId() : 0;
+    for (const auto& reg : registrations)
+        if (reg.profileId == pid)
+            return &reg;
+    return nullptr;
+}
+
+void Host::upsertRegistration(const Registration& reg)
+{
+    for (auto& existing : registrations)
+    {
+        if (existing.profileId == reg.profileId)
+        {
+            existing = reg;
+            return;
+        }
+    }
+    registrations.push_back(reg);
+}
+
 int Host::wakeup()
 {
-    if (strlen(rpRegistKey) > 8)
+    const Registration* reg = activeRegistration();
+    if (!reg)
+    {
+        brls::Logger::error("Host::wakeup: no registration for the active profile");
+        return 2;
+    }
+
+    if (strlen(reg->rpRegistKey) > 8)
     {
         brls::Logger::error("Given registkey is too long");
         return 1;
     }
-    else if (strlen(rpRegistKey) <= 0)
+    else if (strlen(reg->rpRegistKey) <= 0)
     {
         brls::Logger::error("Given registkey is not defined");
         return 2;
     }
 
-    uint64_t credential = strtoull(rpRegistKey, NULL, 16);
+    uint64_t credential = strtoull(reg->rpRegistKey, NULL, 16);
 
     auto& wg = WireGuardManager::instance();
     if (wg.isConnected())
@@ -193,35 +222,33 @@ void Host::applyRegistrationData(ChiakiRegisteredHost* regHost)
     apSsid = regHost->ap_ssid;
     apKey = regHost->ap_key;
     apName = regHost->ap_name;
-    memcpy(serverMac, regHost->server_mac, sizeof(serverMac));
     serverNickname = regHost->server_nickname;
-    memcpy(rpRegistKey, regHost->rp_regist_key, sizeof(rpRegistKey));
-    rpKeyType = regHost->rp_key_type;
-    memcpy(rpKey, regHost->rp_key, sizeof(rpKey));
     target = regHost->target;
 
-    registered = true;
-    rpKeyData = true;
+    Registration reg;
+    reg.consoleId = consoleId;
+    reg.profileId = settings ? settings->getActiveProfileId() : 0;
+    memcpy(reg.serverMac, regHost->server_mac, sizeof(reg.serverMac));
+    memcpy(reg.rpRegistKey, regHost->rp_regist_key, sizeof(reg.rpRegistKey));
+    reg.rpKeyType = regHost->rp_key_type;
+    memcpy(reg.rpKey, regHost->rp_key, sizeof(reg.rpKey));
+    upsertRegistration(reg);
 
     brls::Logger::info("Applied registration data for {}", hostName);
 }
 
 void Host::copyRegistrationFrom(const Host* other)
 {
-    if (!other || !other->rpKeyData) return;
+    if (!other) return;
 
-    memcpy(serverMac, other->serverMac, sizeof(serverMac));
-    memcpy(rpRegistKey, other->rpRegistKey, sizeof(rpRegistKey));
-    rpKeyType = other->rpKeyType;
-    memcpy(rpKey, other->rpKey, sizeof(rpKey));
+    const Registration* src = other->activeRegistration();
+    if (!src) return;
 
-    Host* otherMut = const_cast<Host*>(other);
-    psnAccountId = other->psnAccountId.empty() ? settings->getPsnAccountId(otherMut) : other->psnAccountId;
-    psnOnlineId = other->psnOnlineId.empty() ? settings->getPsnOnlineId(otherMut) : other->psnOnlineId;
+    Registration reg = *src;
+    reg.consoleId = consoleId;
+    upsertRegistration(reg);
+
     consolePIN = other->consolePIN;
-
-    registered = true;
-    rpKeyData = true;
 
     brls::Logger::info("Copied registration data from '{}' to '{}'", other->hostName, hostName);
 }
@@ -254,6 +281,7 @@ int Host::registerHost(int pin)
     {
         if (onlineId.length() > 0)
         {
+            psnOnlineId = onlineId;
             registInfo.psn_online_id = psnOnlineId.c_str();
         }
         else
@@ -424,8 +452,13 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
         throw Exception("Failed to initiate video");
     }
 
-    memcpy(connectInfo.regist_key, rpRegistKey, sizeof(connectInfo.regist_key));
-    memcpy(connectInfo.morning, rpKey, sizeof(connectInfo.morning));
+    const Registration* reg = activeRegistration();
+    if (!reg)
+    {
+        throw Exception("No registration for the active profile");
+    }
+    memcpy(connectInfo.regist_key, reg->rpRegistKey, sizeof(connectInfo.regist_key));
+    memcpy(connectInfo.morning, reg->rpKey, sizeof(connectInfo.morning));
 
     ChiakiErrorCode err = chiaki_session_init(&session, &connectInfo, log);
     if (err != CHIAKI_ERR_SUCCESS)
@@ -594,8 +627,6 @@ void Host::connectionEventCallback(ChiakiEvent* event)
 
 void Host::registCallback(ChiakiRegistEvent* event)
 {
-    registered = false;
-
     switch (event->type)
     {
         case CHIAKI_REGIST_EVENT_TYPE_FINISHED_CANCELED:
@@ -622,14 +653,16 @@ void Host::registCallback(ChiakiRegistEvent* event)
             apSsid = rHost->ap_ssid;
             apKey = rHost->ap_key;
             apName = rHost->ap_name;
-            memcpy(serverMac, rHost->server_mac, sizeof(serverMac));
             serverNickname = rHost->server_nickname;
-            memcpy(rpRegistKey, rHost->rp_regist_key, sizeof(rpRegistKey));
-            rpKeyType = rHost->rp_key_type;
-            memcpy(rpKey, rHost->rp_key, sizeof(rpKey));
 
-            registered = true;
-            rpKeyData = true;
+            Registration reg;
+            reg.consoleId = consoleId;
+            reg.profileId = settings ? settings->getActiveProfileId() : 0;
+            memcpy(reg.serverMac, rHost->server_mac, sizeof(reg.serverMac));
+            memcpy(reg.rpRegistKey, rHost->rp_regist_key, sizeof(reg.rpRegistKey));
+            reg.rpKeyType = rHost->rp_key_type;
+            memcpy(reg.rpKey, rHost->rp_key, sizeof(reg.rpKey));
+            upsertRegistration(reg);
 
             brls::Logger::info("Register Success {}", hostName);
 

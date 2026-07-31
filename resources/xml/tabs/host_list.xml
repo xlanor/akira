@@ -32,10 +32,26 @@
                     text="@i18n/akira/hosts/title"
                     fontSize="24"/>
 
-                <brls:Button
-                    id="host/findRemoteBtn"
-                    text="@i18n/akira/hosts/find_remote"
-                    style="bordered"/>
+                <brls:Box
+                    width="auto"
+                    height="auto"
+                    axis="row"
+                    alignItems="center">
+
+                    <brls:Box
+                        id="host/chipSlot"
+                        width="auto"
+                        height="auto"
+                        axis="row"
+                        alignItems="center"
+                        marginRight="12"/>
+
+                    <brls:Button
+                        id="host/findRemoteBtn"
+                        text="@i18n/akira/hosts/find_remote"
+                        style="bordered"/>
+
+                </brls:Box>
 
             </brls:Box>
 
@@ -43,8 +59,13 @@
                 id="host/container"
                 width="auto"
                 height="auto"
-                axis="column"
-                grow="1.0"/>
+                axis="column"/>
+
+            <brls:Box
+                id="host/railSlot"
+                width="auto"
+                height="auto"
+                axis="column"/>
 
         </brls:Box>
 
@@ -60,6 +81,13 @@
         alignItems="center"
         paddingBottom="80"
         visibility="gone">
+
+        <brls:Box
+            id="empty/addSlot"
+            width="auto"
+            height="auto"
+            axis="column"
+            alignItems="center"/>
 
         <brls:Label
             text="@i18n/akira/hosts/no_consoles"

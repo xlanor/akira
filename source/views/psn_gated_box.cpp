@@ -1,4 +1,5 @@
 #include "views/psn_gated_box.hpp"
+#include "ui/theme.hpp"
 
 using namespace brls::literals;
 
@@ -11,7 +12,7 @@ PsnGatedBox::PsnGatedBox()
 
     placeholder = new brls::Label();
     placeholder->setFontSize(18);
-    placeholder->setTextColor(nvgRGB(150, 150, 150));
+    placeholder->setTextColor(akira::ui::active().textDim);
     placeholder->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     placeholder->setVerticalAlign(brls::VerticalAlign::CENTER);
     placeholder->setGrow(1.0f);
@@ -72,10 +73,14 @@ void PsnGatedBox::applyState(psn::SessionState state)
 
     if (open)
     {
+        this->setJustifyContent(brls::JustifyContent::FLEX_START);
+        this->setAlignItems(brls::AlignItems::STRETCH);
         placeholder->setVisibility(brls::Visibility::GONE);
         return;
     }
 
+    this->setJustifyContent(brls::JustifyContent::CENTER);
+    this->setAlignItems(brls::AlignItems::CENTER);
     placeholder->setText("akira/trophies/no_psn_token"_i18n);
     placeholder->setVisibility(brls::Visibility::VISIBLE);
 

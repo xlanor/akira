@@ -1,9 +1,8 @@
 #include "views/psn_action_button.hpp"
+#include "ui/theme.hpp"
 
 #include <format>
 
-static const NVGcolor PSN_ACTION_DISABLED_BACKGROUND = nvgRGBA(72, 76, 84, 255);
-static const NVGcolor PSN_ACTION_DISABLED_TEXT = nvgRGBA(176, 180, 188, 255);
 static constexpr brls::Time PSN_ACTION_TICK_MS = 250;
 
 void PsnActionButton::attach(brls::Button* button, NVGcolor readyColor, std::string readyLabel,
@@ -81,15 +80,15 @@ void PsnActionButton::apply()
         case psn::ActionState::Busy:
             button->setText(busyLabel);
             button->setState(brls::ButtonState::DISABLED);
-            button->setTextColor(PSN_ACTION_DISABLED_TEXT);
-            button->setBackgroundColor(PSN_ACTION_DISABLED_BACKGROUND);
+            button->setTextColor(akira::ui::active().textDim);
+            button->setBackgroundColor(akira::ui::active().surface);
             break;
 
         case psn::ActionState::CoolingDown:
             button->setText(brls::getStr(waitLabelKey, formatWait(status.secondsRemaining)));
             button->setState(brls::ButtonState::DISABLED);
-            button->setTextColor(PSN_ACTION_DISABLED_TEXT);
-            button->setBackgroundColor(PSN_ACTION_DISABLED_BACKGROUND);
+            button->setTextColor(akira::ui::active().textDim);
+            button->setBackgroundColor(akira::ui::active().surface);
             break;
     }
 }

@@ -34,6 +34,8 @@ public:
     using IconCallback = std::function<void(const std::string& url, const std::vector<uint8_t>&)>;
 
     void fetchSummary(bool forceRefresh, Callback<psn::TrophySummary> onSuccess, ErrorCallback onError);
+    void fetchProfile(bool forceRefresh, Callback<psn::PsnProfile> onSuccess, ErrorCallback onError);
+    void fetchPlayedGames(bool forceRefresh, Callback<std::vector<psn::PlayedGame>> onSuccess, ErrorCallback onError);
     void fetchLibrary(bool forceRefresh, Callback<std::vector<psn::TrophyTitle>> onSuccess, ErrorCallback onError);
 
     void fetchTitleDetail(const psn::TrophyTitle& title, bool forceRefresh,
@@ -44,12 +46,15 @@ public:
 
     void clearCache();
 
+    void onActiveProfileChanged();
+
     void startAutoRefresh();
 
     void setSummaryObserver(Callback<psn::TrophySummary> observer);
     void setLibraryObserver(Callback<std::vector<psn::TrophyTitle>> observer);
 
     PersistedRateLimiter::Status budgetStatus() const;
+    void reconfigureLimiter();
     int64_t librarySavedAtSeconds() const;
 
     struct GameProgress {
@@ -78,6 +83,8 @@ private:
     static constexpr int LIBRARY_LOG_CAP = 50;
     static constexpr int ICON_PREFETCH_CAP = 120;
     static constexpr int SUMMARY_TTL_MINUTES = 360;
+    static constexpr int PROFILE_TTL_MINUTES = 720;
+    static constexpr int PLAYED_TTL_MINUTES = 60;
     static constexpr int DETAIL_TTL_MINUTES = 360;
     static constexpr int LIBRARY_TTL_MINUTES = 360;
     static constexpr long ICON_TIMEOUT_S = 20;
@@ -87,24 +94,26 @@ private:
     static constexpr const char* TROPHY_CACHE_DIR = "sdmc:/switch/akira/cache/trophies";
     static constexpr const char* ICON_CACHE_DIR = "sdmc:/switch/akira/cache/trophies/icons";
     static constexpr const char* RATELIMIT_PATH = "sdmc:/switch/akira/cache/ratelimit.json";
-    static constexpr const char* LIBRARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/library.json";
-    static constexpr const char* SUMMARY_CACHE_PATH = "sdmc:/switch/akira/cache/trophies/summary.json";
-    static constexpr const char* DETAIL_CACHE_DIR = "sdmc:/switch/akira/cache/trophies/detail";
-    static constexpr const char* TITLE_MAP_PATH = "sdmc:/switch/akira/cache/trophies/title_map.json";
-    static constexpr const char* FORCE_STATE_PATH = "sdmc:/switch/akira/cache/trophies/refresh_state.json";
 
     TrophyManager();
 
     bool hasConnectivity() const;
     void awaitBurstSlot();
-    bool breakerOpen(int& outSecondsRemaining) const;
-    void tripBreaker(int seconds);
 
     psn::Error governedGet(HttpSession& session, const std::string& url, std::string& outBody);
     psn::Client clientFor(HttpSession& session);
 
     void ensureCacheDirs();
     void ensureIconCacheDir();
+
+    std::string accountKey() const;
+    std::string accountCacheDir() const;
+    std::string summaryCachePath() const;
+    std::string libraryCachePath() const;
+    std::string detailCacheDir() const;
+    std::string titleMapPath() const;
+    std::string forceStatePath() const;
+    std::string rateLimitPath() const;
 
     bool loadLibraryFromDisk(std::vector<psn::TrophyTitle>& outTitles, int64_t& outSavedAt) const;
     void saveLibraryToDisk(const std::vector<psn::TrophyTitle>& titles) const;
@@ -148,11 +157,18 @@ private:
     std::unordered_map<std::string, std::vector<IconCallback>> iconWaiters;
     size_t iconCacheBytes = 0;
     std::deque<std::chrono::steady_clock::time_point> burstWindow;
-    std::chrono::steady_clock::time_point breakerUntil{};
 
     psn::TrophySummary cachedSummary;
     bool hasCachedSummary = false;
     int64_t summarySavedAt = 0;
+
+    psn::PsnProfile cachedProfile;
+    bool hasCachedProfile = false;
+    int64_t profileSavedAt = 0;
+
+    std::vector<psn::PlayedGame> cachedPlayedGames;
+    bool hasCachedPlayedGames = false;
+    int64_t playedGamesSavedAt = 0;
 
     std::unordered_map<std::string, int64_t> forcedAt;
     bool forceStateLoaded = false;

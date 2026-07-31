@@ -29,7 +29,7 @@
                 axis="column"
                 grow="1.0"
                 backgroundColor="@theme/color/card"
-                cornerRadius="8"
+                cornerRadius="14"
                 marginBottom="30">
 
                 <brls:BooleanCell
@@ -70,6 +70,20 @@
                 <brls:BooleanCell
                     id="settings/autoReconnect"
                     title="@i18n/akira/settings/auto_reconnect"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+                <brls:SliderCell
+                    id="settings/psnRequestBudget"
+                    title="@i18n/akira/settings/psn_request_budget"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+                <brls:SliderCell
+                    id="settings/psnRequestWindow"
+                    title="@i18n/akira/settings/psn_request_window"
                     marginLeft="15"
                     marginRight="15"/>
 

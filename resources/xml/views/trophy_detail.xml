@@ -18,7 +18,7 @@
             justifyContent="spaceBetween"
             alignItems="center"
             backgroundColor="@theme/color/card"
-            cornerRadius="8"
+            cornerRadius="14"
             paddingTop="12"
             paddingBottom="12"
             paddingLeft="15"

@@ -1,4 +1,5 @@
 #include "views/config_view_tab.hpp"
+#include "ui/theme.hpp"
 #include <fstream>
 #include <vector>
 
@@ -6,8 +7,8 @@
 using namespace brls::literals;
 
 static const std::vector<std::string> sensitiveKeys = {
-    "global_duid", "psn_access_token", "psn_account_id",
-    "psn_refresh_token", "remote_duid", "rp_key", "rp_regist_key"
+    "account_id", "access_token", "refresh_token", "duid",
+    "rp_key", "rp_regist_key"
 };
 
 ConfigViewTab::ConfigViewTab() {
@@ -94,11 +95,11 @@ void ConfigViewTab::addLine(const std::string& text, bool isHeader) {
     label->setFontSize(18);
 
     if (isHeader) {
-        label->setTextColor(nvgRGBA(6, 182, 212, 255));
+        label->setTextColor(akira::ui::active().accent);
         label->setMarginTop(12);
         label->setMarginBottom(4);
     } else {
-        label->setTextColor(nvgRGBA(200, 200, 200, 255));
+        label->setTextColor(akira::ui::active().textMuted);
     }
 
     configContainer->addView(label);

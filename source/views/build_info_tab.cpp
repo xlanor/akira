@@ -1,4 +1,5 @@
 #include "views/build_info_tab.hpp"
+#include "ui/theme.hpp"
 #include <fstream>
 #include <sstream>
 
@@ -44,12 +45,12 @@ void BuildInfoTab::addInfoRow(const std::string& text, bool isHeader) {
 
     if (isHeader) {
         label->setFontSize(22);
-        label->setTextColor(nvgRGBA(100, 180, 255, 255));
+        label->setTextColor(akira::ui::active().accent);
         label->setMarginTop(20);
         label->setMarginBottom(10);
     } else {
         label->setFontSize(22);
-        label->setTextColor(nvgRGBA(200, 200, 200, 255));
+        label->setTextColor(akira::ui::active().textMuted);
     }
 
     infoContainer->addView(label);

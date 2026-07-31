@@ -11,7 +11,7 @@
 #   make crash LOG=path/to/report.log    Symbolicate a crash report already on disk
 #   make test                            Run the host-side unit tests
 
-.PHONY: help build deploy crash test rebuild shell clean-libs docker-image submodules
+.PHONY: help build deploy crash test rebuild shell clean-libs docker-image submodules backup
 
 DOCKER_IMAGE := akira-builder
 NRO_FILE     := $(CURDIR)/build/akira.nro
@@ -44,6 +44,7 @@ help:
 	@echo "  rebuild      Force full rebuild (clean libs + rebuild docker image)"
 	@echo "  shell        Open shell in build container"
 	@echo "  crash        Symbolicate the latest Switch crash report (SWITCH_IP or LOG)"
+	@echo "  backup       Pull akira.toml off the Switch over sys-ftpd (SWITCH_IP)"
 	@echo "  test         Run the host-side unit tests for the psn package"
 	@echo "  clean-libs   Clean library build artifacts"
 	@echo "  help         Show this help"
@@ -91,6 +92,7 @@ test:
 	@printf "$(GREEN)[*]$(NC) Building host tests...\n"
 	@c++ -std=c++23 -g -O0 -Wall -Wextra -Wno-unused-parameter \
 		-I"$(CURDIR)/include" -I"$(CURDIR)/tests" -I"$(JSONC_PREFIX)/include" \
+		-I"$(CURDIR)/library/tomlplusplus/include" \
 		$(TEST_SRC) -L"$(JSONC_PREFIX)/lib" -ljson-c -o "$(TEST_BIN)"
 	@printf "$(GREEN)[*]$(NC) Running host tests...\n"
 	@"$(TEST_BIN)"
@@ -109,11 +111,6 @@ docker-image: submodules
 	fi
 
 build: docker-image
-	$(eval ORIGINAL_REVISION := $(shell grep 'set.VERSION_REVISION' "$(CURDIR)/CMakeLists.txt" | tr -dc '0-9'))
-	$(eval DEV_TIMESTAMP := $(shell date +%d%m%y-%H%M%S))
-	$(eval DEV_REVISION := $(ORIGINAL_REVISION)-dev-$(DEV_TIMESTAMP))
-	@printf "$(GREEN)[*]$(NC) Setting dev version: $(DEV_REVISION)\n"
-	@sed -i '' 's/set(VERSION_REVISION "$(ORIGINAL_REVISION)")/set(VERSION_REVISION "$(DEV_REVISION)")/' "$(CURDIR)/CMakeLists.txt"
 	@printf "$(GREEN)[*]$(NC) Building...\n"
 	@docker run --rm \
 		-v "$(CURDIR):/build" \
@@ -128,18 +125,31 @@ build: docker-image
 			git config --global --add safe.directory /build/library/curl-libnx; \
 			chmod +x /build/scripts/build-docker.sh; \
 			/build/scripts/build-docker.sh \
-		"; \
-	EXIT_CODE=$$?; \
-	sed -i '' 's/set(VERSION_REVISION "$(DEV_REVISION)")/set(VERSION_REVISION "$(ORIGINAL_REVISION)")/' "$(CURDIR)/CMakeLists.txt"; \
-	if [ $$EXIT_CODE -ne 0 ]; then \
-		printf "$(RED)[x]$(NC) Build failed\n"; \
-		exit 1; \
-	fi
+		"
 	@if [ ! -f "$(NRO_FILE)" ]; then \
 		printf "$(RED)[x]$(NC) Build failed - NRO not found at $(NRO_FILE)\n"; \
 		exit 1; \
 	fi
 	@printf "$(GREEN)[*]$(NC) Build successful: $(NRO_FILE)\n"
+
+backup:
+	@if [ -z "$(SWITCH_IP)" ]; then \
+		printf "$(YELLOW)[!]$(NC) No SWITCH_IP provided\n"; \
+		echo "  make backup SWITCH_IP=<ip> [FTP_PORT=5000]"; \
+		echo "  Requires sys-ftpd running on the Switch."; \
+		exit 1; \
+	fi
+	@mkdir -p "$(CURDIR)/backups"
+	@stamp=$$(date +%Y%m%d-%H%M%S); \
+	dest="$(CURDIR)/backups/akira-$(SWITCH_IP)-$$stamp.toml"; \
+	printf "$(GREEN)[*]$(NC) Pulling /switch/akira/akira.toml from $(SWITCH_IP):$(FTP_PORT)\n"; \
+	if curl -fsS "ftp://$(SWITCH_IP):$(FTP_PORT)/switch/akira/akira.toml" -o "$$dest"; then \
+		printf "$(GREEN)[*]$(NC) Saved $$dest\n"; \
+	else \
+		printf "$(RED)[x]$(NC) Backup failed - is sys-ftpd running on $(SWITCH_IP):$(FTP_PORT)?\n"; \
+		rm -f "$$dest"; \
+		exit 1; \
+	fi
 
 deploy: build
 	@if [ -z "$(SWITCH_IP)" ]; then \

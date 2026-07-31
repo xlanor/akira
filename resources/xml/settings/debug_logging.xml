@@ -29,7 +29,7 @@
                 axis="column"
                 grow="1.0"
                 backgroundColor="@theme/color/card"
-                cornerRadius="8"
+                cornerRadius="14"
                 marginBottom="30">
 
                 <brls:BooleanCell

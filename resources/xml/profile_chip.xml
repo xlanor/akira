@@ -1,0 +1,41 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="row"
+    cornerRadius="24"
+    paddingTop="6"
+    paddingBottom="6"
+    paddingLeft="6"
+    paddingRight="14"
+    focusable="true">
+
+    <brls:Image
+        id="chip/avatar"
+        width="36"
+        height="36"
+        marginRight="10"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="column"
+        marginRight="10">
+
+        <brls:Label
+            id="chip/name"
+            text="—"
+            fontSize="16"/>
+
+        <brls:Label
+            id="chip/sub"
+            text=""
+            fontSize="12"/>
+
+    </brls:Box>
+
+    <brls:Label
+        id="chip/plus"
+        text="PS Plus"
+        fontSize="12"/>
+
+</brls:Box>

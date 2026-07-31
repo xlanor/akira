@@ -29,7 +29,7 @@
                 axis="column"
                 grow="1.0"
                 backgroundColor="@theme/color/card"
-                cornerRadius="8"
+                cornerRadius="14"
                 marginBottom="30">
 
                 <brls:SelectorCell
@@ -38,6 +38,11 @@
                     marginLeft="15"
                     marginRight="15"/>
 
+                <brls:BooleanCell
+                    id="settings/connectionShowStages"
+                    title="@i18n/akira/settings/connection_stages"
+                    marginLeft="15"
+                    marginRight="15"/>
 
             </brls:Box>
 
@@ -51,7 +56,7 @@
                 axis="column"
                 grow="1.0"
                 backgroundColor="@theme/color/card"
-                cornerRadius="8"
+                cornerRadius="14"
                 marginBottom="30">
 
                 <brls:BooleanCell

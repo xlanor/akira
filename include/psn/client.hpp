@@ -32,6 +32,8 @@ public:
 
     Error fetchPlayedGames(std::vector<PlayedGame>& out) const;
 
+    Error fetchProfile(const std::string& accountId, PsnProfile& out) const;
+
     static constexpr size_t TITLE_MAP_BATCH = 5;
 
     Error fetchTitleMapping(const std::vector<std::string>& titleIds,
@@ -42,6 +44,7 @@ private:
 
     static constexpr const char* API_BASE = "https://m.np.playstation.com/api/trophy/v1";
     static constexpr const char* GAMELIST_BASE = "https://m.np.playstation.com/api/gamelist/v2/users";
+    static constexpr const char* USER_BASE_URL = "https://m.np.playstation.com/api/userProfile/v1/internal/users";
     static constexpr int PAGE_SIZE = 100;
     static constexpr int PAGE_CAP = 50;
 

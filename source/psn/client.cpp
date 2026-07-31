@@ -158,6 +158,19 @@ Error Client::fetchSummary(TrophySummary& out) const
     return {};
 }
 
+Error Client::fetchProfile(const std::string& accountId, PsnProfile& out) const
+{
+    Json doc;
+    Error error = fetchDocument(USER_BASE_URL, "/" + accountId + "/profiles", doc);
+    if (!error.ok())
+        return error;
+
+    if (!parseProfile(doc.get(), out))
+        return {Status::ServerError, "profile response had no onlineId"};
+
+    return {};
+}
+
 Error Client::fetchTitles(std::vector<TrophyTitle>& out) const
 {
     return fetchPaged(API_BASE, "/users/me/trophyTitles", "trophyTitles", [&out](json_object* row) {

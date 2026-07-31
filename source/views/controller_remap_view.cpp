@@ -1,4 +1,5 @@
 #include "views/controller_remap_view.hpp"
+#include "ui/theme.hpp"
 #include "core/settings_manager.hpp"
 #include "core/swipe_direction.hpp"
 
@@ -236,12 +237,12 @@ void ControllerRemapView::updateCellDisplay(int index)
         statusLbl->setText("akira/remap/default"_i18n);
         statusLbl->setFontSize(14);
         statusLbl->setMarginLeft(8);
-        statusLbl->setTextColor(nvgRGBA(136, 136, 136, 255));
+        statusLbl->setTextColor(akira::ui::active().textDim);
         switchBox->addView(statusLbl);
     }
 
     if (hasConflict(button)) {
-        detailCells[index]->setBackgroundColor(nvgRGBA(200, 50, 50, 80));
+        detailCells[index]->setBackgroundColor(akira::ui::withAlpha(akira::ui::active().danger, 80));
     } else {
         detailCells[index]->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
     }
@@ -370,7 +371,7 @@ void ControllerRemapView::enterCaptureMode(uint32_t target)
     auto* waitLbl = new brls::Label();
     waitLbl->setText("akira/remap/waiting"_i18n);
     waitLbl->setFontSize(22);
-    waitLbl->setTextColor(nvgRGBA(0, 204, 136, 255));
+    waitLbl->setTextColor(akira::ui::active().success);
     captureSwitchBox->addView(waitLbl);
     captureOverlay->setVisibility(brls::Visibility::VISIBLE);
     mainContent->setVisibility(brls::Visibility::GONE);
@@ -408,7 +409,7 @@ void ControllerRemapView::updateCaptureDisplay()
         auto* waitLbl = new brls::Label();
         waitLbl->setText("akira/remap/waiting"_i18n);
         waitLbl->setFontSize(22);
-        waitLbl->setTextColor(nvgRGBA(0, 204, 136, 255));
+        waitLbl->setTextColor(akira::ui::active().success);
         captureSwitchBox->addView(waitLbl);
     } else {
         std::vector<uint64_t> buttons(peakHeldButtons.begin(), peakHeldButtons.end());
@@ -418,7 +419,7 @@ void ControllerRemapView::updateCaptureDisplay()
                 plus->setText("+");
                 plus->setFontSize(20);
                 plus->setMargins(0, 6, 0, 6);
-                plus->setTextColor(nvgRGBA(0, 204, 136, 255));
+                plus->setTextColor(akira::ui::active().success);
                 captureSwitchBox->addView(plus);
             }
             std::string path = getButtonImagePath(buttons[j]);
@@ -432,7 +433,7 @@ void ControllerRemapView::updateCaptureDisplay()
                 auto* lbl = new brls::Label();
                 lbl->setText(hidButtonToString(buttons[j]));
                 lbl->setFontSize(22);
-                lbl->setTextColor(nvgRGBA(0, 204, 136, 255));
+                lbl->setTextColor(akira::ui::active().success);
                 captureSwitchBox->addView(lbl);
             }
         }

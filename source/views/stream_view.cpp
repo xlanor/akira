@@ -1,5 +1,7 @@
 #include "views/stream_view.hpp"
 #include "views/stream_menu.hpp"
+#include "ui/theme.hpp"
+#include "views/connection_stage.hpp"
 #include "stream/video_renderer.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/controller_remap_view.hpp"
@@ -92,6 +94,8 @@ void StreamView::setupCallbacks()
                 while (self->logLines.size() > MAX_LOG_LINES) {
                     self->logLines.pop_front();
                 }
+                self->currentStage = static_cast<int>(matchConnectionStage(
+                    msg, static_cast<ConnectionStage>(self->currentStage.load())));
             }
         });
 }
@@ -259,11 +263,18 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
         nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
         nvgFill(vg);
 
-        nvgFontSize(vg, 24);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
-        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        std::string connectingText = "akira/stream/connecting"_i18n;
-        nvgText(vg, x + width / 2, y + height / 2, connectingText.c_str(), nullptr);
+        if (settings->getConnectionShowStages()) {
+            ConnectionStage stage = static_cast<ConnectionStage>(currentStage.load());
+            drawConnectionPulse(vg, x + width / 2, y + height / 2,
+                brls::getStr(connectionStageLabelKey(stage)));
+        } else {
+            nvgFontSize(vg, 24);
+            nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+            std::string connectingText = "akira/stream/connecting"_i18n;
+            nvgText(vg, x + width / 2, y + 40, connectingText.c_str(), nullptr);
+            renderLogs(vg, x, y + 90, width, height - 90);
+        }
 
         return;
     }
@@ -304,7 +315,13 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
         nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
         nvgFill(vg);
 
-        renderLogs(vg, x, y, width, height);
+        if (settings->getConnectionShowStages()) {
+            ConnectionStage stage = static_cast<ConnectionStage>(currentStage.load());
+            drawConnectionPulse(vg, x + width / 2, y + height / 2,
+                brls::getStr(connectionStageLabelKey(stage)));
+        } else {
+            renderLogs(vg, x, y, width, height);
+        }
 
         session->MainLoop();
         return;
@@ -461,6 +478,8 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             return;
         }
 
+        bool duringConnect = !self->videoPipelineActive;
+
         self->stopStream();
 
         // Release early to invalidate weak_ptrs before popActivity
@@ -470,7 +489,11 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             brls::Application::notify(reasonStr);
             brls::Application::popActivity();
         } else {
-            auto* dialog = new brls::Dialog(brls::getStr("akira/stream/session_ended", reasonStr));
+            std::string body = duringConnect
+                ? brls::getStr("akira/connection/connect_failed_title",
+                    brls::getStr(connectionFailureKeyForReason(reason)))
+                : brls::getStr("akira/stream/session_ended", reasonStr);
+            auto* dialog = new brls::Dialog(body);
             dialog->setCloseCallback([]() {
                 brls::Application::popActivity();
             });

@@ -124,6 +124,27 @@ struct PlayedGame {
     std::string lastPlayedDateTime;
 };
 
+struct PsnAvatar {
+    std::string size;
+    std::string url;
+};
+
+struct PsnProfile {
+    std::string onlineId;
+    std::string aboutMe;
+    std::vector<PsnAvatar> avatars;
+    bool isPlus = false;
+    bool isOfficiallyVerified = false;
+
+    std::string avatarUrl() const {
+        for (const char* want : {"xl", "l", "m", "s"})
+            for (const auto& avatar : avatars)
+                if (avatar.size == want)
+                    return avatar.url;
+        return avatars.empty() ? std::string() : avatars.front().url;
+    }
+};
+
 int64_t parseIso8601Duration(const std::string& value);
 int64_t parseIso8601Timestamp(const std::string& value);
 bool parsePlayedGame(json_object* obj, PlayedGame& out);
@@ -137,6 +158,7 @@ struct TitleDetail {
 };
 
 bool parseSummary(json_object* obj, TrophySummary& out);
+bool parseProfile(json_object* obj, PsnProfile& out);
 bool parseTitle(json_object* obj, TrophyTitle& out);
 bool parseGroupDefinition(json_object* obj, TrophyGroup& out);
 bool parseGroupProgress(json_object* obj, TrophyGroup& out);

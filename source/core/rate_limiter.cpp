@@ -8,10 +8,39 @@
 
 #include <json-c/json.h>
 
-PersistedRateLimiter::PersistedRateLimiter(std::string path, int budget)
+PersistedRateLimiter::PersistedRateLimiter(std::string path, int budget, int windowSeconds)
     : path(std::move(path))
-    , budget(budget)
+    , budget(std::max(1, budget))
+    , windowSeconds(std::max(1, windowSeconds))
 {
+}
+
+void PersistedRateLimiter::reconfigure(int newBudget, int newWindowSeconds)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    budget = std::max(1, newBudget);
+    windowSeconds = std::max(1, newWindowSeconds);
+}
+
+void PersistedRateLimiter::retarget(std::string newPath)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    path = std::move(newPath);
+    loaded = false;
+    stamps.clear();
+    breakerUntil = 0;
+    lastSeen = 0;
+    throttleCount = 0;
+    lastThrottleAt = 0;
+}
+
+void PersistedRateLimiter::pruneLocked(int64_t now)
+{
+    int64_t cutoff = now - windowSeconds;
+    while (!stamps.empty() && stamps.front() <= cutoff)
+        stamps.pop_front();
+    while (!stamps.empty() && stamps.back() > now)
+        stamps.pop_back();
 }
 
 void PersistedRateLimiter::loadLocked()
@@ -22,13 +51,12 @@ void PersistedRateLimiter::loadLocked()
     loaded = true;
 
     int64_t now = static_cast<int64_t>(std::time(nullptr));
-    bucket = now / BUCKET_SECONDS;
     lastSeen = now;
 
     FILE* file = fopen(path.c_str(), "rb");
     if (!file)
     {
-        brls::Logger::info("Rate limiter: no state at {}, starting a fresh bucket", path);
+        brls::Logger::info("Rate limiter: no state at {}, starting a fresh window", path);
         return;
     }
 
@@ -42,8 +70,8 @@ void PersistedRateLimiter::loadLocked()
     json_object* parsed = json_tokener_parse(body.c_str());
     if (!parsed)
     {
-        count = budget;
-        brls::Logger::warning("Rate limiter: state at {} is unreadable, treating this bucket as spent", path);
+        stamps.assign(static_cast<size_t>(budgetLocked()), now);
+        brls::Logger::warning("Rate limiter: state at {} is unreadable, treating this window as spent", path);
         return;
     }
 
@@ -54,46 +82,43 @@ void PersistedRateLimiter::loadLocked()
         return json_object_get_int64(field);
     };
 
-    int64_t storedBucket = readInt64("bucket");
-    int storedCount = static_cast<int>(readInt64("count"));
     breakerUntil = readInt64("breaker_until");
     int64_t storedLastSeen = readInt64("last_seen");
     throttleCount = static_cast<int>(readInt64("throttle_count"));
     lastThrottleAt = readInt64("last_throttle_at");
 
+    json_object* stampsArray = nullptr;
+    if (json_object_object_get_ex(parsed, "stamps", &stampsArray) && stampsArray &&
+        json_object_is_type(stampsArray, json_type_array))
+    {
+        size_t length = json_object_array_length(stampsArray);
+        for (size_t i = 0; i < length; i++)
+        {
+            json_object* entry = json_object_array_get_idx(stampsArray, i);
+            if (entry)
+                stamps.push_back(json_object_get_int64(entry));
+        }
+    }
+
     json_object_put(parsed);
+
+    std::sort(stamps.begin(), stamps.end());
 
     if (storedLastSeen > now)
     {
-        bucket = now / BUCKET_SECONDS;
-        count = budget;
-        brls::Logger::warning("Rate limiter: clock moved backwards, treating this bucket as spent");
+        stamps.assign(static_cast<size_t>(budgetLocked()), now);
+        breakerUntil = std::min(breakerUntil, now + BREAKER_MAX_SECONDS);
+        brls::Logger::warning("Rate limiter: clock moved backwards, treating this window as spent");
+        return;
     }
-    else if (storedBucket == bucket)
-    {
-        count = std::clamp(storedCount, 0, budget);
-    }
-    else
-    {
-        count = 0;
-    }
+
+    pruneLocked(now);
 
     if (breakerUntil > now + BREAKER_MAX_SECONDS)
     {
         brls::Logger::warning("Rate limiter: breaker deadline is implausibly far out, clamping");
         breakerUntil = now + BREAKER_MAX_SECONDS;
     }
-}
-
-void PersistedRateLimiter::rollBucketLocked(int64_t now)
-{
-    int64_t currentBucket = now / BUCKET_SECONDS;
-    if (currentBucket == bucket)
-        return;
-
-    bucket = currentBucket;
-    count = 0;
-    creditsHeld = 0;
 }
 
 int PersistedRateLimiter::budgetLocked() const
@@ -108,14 +133,22 @@ int PersistedRateLimiter::budgetLocked() const
     return budget;
 }
 
-void PersistedRateLimiter::persistLocked(int countToStore)
+void PersistedRateLimiter::persistLocked()
 {
     lastSeen = static_cast<int64_t>(std::time(nullptr));
 
+    std::string joined;
+    for (size_t i = 0; i < stamps.size(); i++)
+    {
+        if (i > 0)
+            joined += ",";
+        joined += std::to_string(stamps[i]);
+    }
+
     std::string body = std::format(
-        "{{\"bucket\":{},\"count\":{},\"breaker_until\":{},\"last_seen\":{},"
+        "{{\"stamps\":[{}],\"breaker_until\":{},\"last_seen\":{},"
         "\"throttle_count\":{},\"last_throttle_at\":{}}}\n",
-        bucket, countToStore, breakerUntil, lastSeen, throttleCount, lastThrottleAt);
+        joined, breakerUntil, lastSeen, throttleCount, lastThrottleAt);
 
     FILE* file = fopen(path.c_str(), "wb");
     if (!file)
@@ -137,13 +170,12 @@ bool PersistedRateLimiter::tryAcquire(std::string& outReason)
 
     if (now < lastSeen)
     {
-        count = budget;
-        creditsHeld = 0;
-        brls::Logger::warning("Rate limiter: clock moved backwards mid-session, spending this bucket");
+        stamps.assign(static_cast<size_t>(budgetLocked()), now);
+        brls::Logger::warning("Rate limiter: clock moved backwards mid-session, spending this window");
     }
 
-    rollBucketLocked(now);
     lastSeen = now;
+    pruneLocked(now);
 
     if (breakerUntil > now)
     {
@@ -152,23 +184,19 @@ bool PersistedRateLimiter::tryAcquire(std::string& outReason)
     }
 
     int limit = budgetLocked();
-    if (count >= limit)
+    if (static_cast<int>(stamps.size()) >= limit)
     {
-        int64_t resetsAt = (bucket + 1) * BUCKET_SECONDS;
+        int64_t resetsAt = stamps.empty() ? now : stamps.front() + windowSeconds;
         outReason = std::format("Request budget used up ({}/{}), resets in {}s",
-            count, limit, std::max<int64_t>(0, resetsAt - now));
+            stamps.size(), limit, std::max<int64_t>(0, resetsAt - now));
         return false;
     }
 
-    if (creditsHeld == 0)
-    {
-        int block = std::min(RESERVATION, limit - count);
-        persistLocked(count + block);
-        creditsHeld = block;
-    }
+    stamps.push_back(now);
+    while (stamps.size() > MAX_STAMPS)
+        stamps.pop_front();
 
-    creditsHeld--;
-    count++;
+    persistLocked();
     return true;
 }
 
@@ -183,26 +211,28 @@ void PersistedRateLimiter::recordThrottle(int cooldownSeconds)
     breakerUntil = std::max(breakerUntil, now + clamped);
     throttleCount++;
     lastThrottleAt = now;
-    creditsHeld = 0;
 
     brls::Logger::error("Rate limiter: throttled by the server ({} lifetime), breaker open for {}s",
         throttleCount, clamped);
 
-    persistLocked(count);
+    persistLocked();
 }
 
 PersistedRateLimiter::Status PersistedRateLimiter::status() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    const_cast<PersistedRateLimiter*>(this)->loadLocked();
+    auto* self = const_cast<PersistedRateLimiter*>(this);
+    self->loadLocked();
 
     int64_t now = static_cast<int64_t>(std::time(nullptr));
-    int64_t currentBucket = now / BUCKET_SECONDS;
+    self->pruneLocked(now);
 
     Status result;
     result.limit = budgetLocked();
-    result.used = currentBucket == bucket ? std::min(count, result.limit) : 0;
-    result.bucketResetsAt = (currentBucket + 1) * BUCKET_SECONDS;
+    result.used = std::min(static_cast<int>(stamps.size()), result.limit);
+    result.bucketResetsAt = (result.used >= result.limit && !stamps.empty())
+        ? stamps.front() + windowSeconds
+        : now;
     result.breakerUntil = breakerUntil;
     result.throttleCount = throttleCount;
     return result;

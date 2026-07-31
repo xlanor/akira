@@ -8,11 +8,6 @@
     paddingRight="40"
     paddingBottom="30">
 
-    <brls:Label
-        text="@i18n/akira/settings/authentication"
-        fontSize="30"
-        marginBottom="20"/>
-
     <brls:ScrollingFrame
         width="auto"
         height="auto"
@@ -23,13 +18,32 @@
             height="auto"
             axis="column">
 
+            <brls:Box id="settings/profileCardSlot" width="auto" height="auto" axis="column"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                backgroundColor="@theme/color/card"
+                cornerRadius="14"
+                marginBottom="25"
+                paddingTop="6"
+                paddingBottom="6">
+
+                <brls:BooleanCell
+                    id="settings/trophiesEnabled"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+            </brls:Box>
+
             <brls:Box
                 width="auto"
                 height="auto"
                 axis="column"
                 grow="1.0"
                 backgroundColor="@theme/color/card"
-                cornerRadius="8"
+                cornerRadius="14"
                 marginBottom="30"
                 paddingTop="15"
                 paddingBottom="15">
@@ -70,9 +84,9 @@
                     marginLeft="15"
                     marginRight="15"/>
 
-                <brls:DetailCell
-                    id="settings/credOnlineId"
-                    focusable="false"
+                <brls:InputCell
+                    id="settings/psnOnlineId"
+                    title="@i18n/akira/settings/online_id"
                     marginLeft="15"
                     marginRight="15"/>
 
@@ -90,6 +104,24 @@
 
                 <brls:DetailCell
                     id="settings/credTokenExpiry"
+                    focusable="false"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:DetailCell
+                    id="settings/credSsoAccessToken"
+                    focusable="false"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:DetailCell
+                    id="settings/credSsoRefreshToken"
+                    focusable="false"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:DetailCell
+                    id="settings/credSsoExpiry"
                     focusable="false"
                     marginLeft="15"
                     marginRight="15"/>

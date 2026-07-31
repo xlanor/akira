@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/trophy_manager.hpp"
+#include "views/progress_ring.hpp"
 #include "views/psn_action_button.hpp"
 #include "views/psn_gated_box.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
@@ -38,15 +39,48 @@ private:
     static std::unordered_set<std::string> retriedIcons;
 };
 
-class TrophyRowDataSource : public RecyclingGridDataSource {
+class SummaryCell : public RecyclingGridItem {
 public:
-    explicit TrophyRowDataSource(std::vector<psn::Trophy> trophies);
+    SummaryCell();
 
-    std::vector<psn::Trophy> trophies;
+    void bindSummary(int earned, int available, int progress, const psn::TrophyCounts& counts);
+
+    static RecyclingGridItem* create();
+
+private:
+    ProgressRing* ring = nullptr;
+    brls::Label* ringLabel = nullptr;
+    brls::Label* earnedValue = nullptr;
+    brls::Label* availableValue = nullptr;
+    brls::Image* tierImages[4] = {};
+    brls::Label* tierCounts[4] = {};
+
+    brls::Animatable earnedAnim{0.0f};
+    brls::Animatable availAnim{0.0f};
+    brls::Animatable ringLabelAnim{0.0f};
+    brls::Animatable tierAnim[4] = {};
+    int prevEarned = -1;
+    int prevAvail = -1;
+    int prevRingPct = -1;
+    int prevTier[4] = {-1, -1, -1, -1};
+};
+
+class TrophyDetailSource : public RecyclingGridDataSource {
+public:
+    TrophyDetailSource(int earned, int available, int progress,
+        psn::TrophyCounts counts, std::vector<psn::Trophy> trophies);
 
     size_t getItemCount() override;
     RecyclingGridItem* cellForRow(RecyclingView* recycler, size_t index) override;
+    float heightForRow(brls::View* recycler, size_t index) override;
     void clearData() override;
+
+private:
+    int earned;
+    int available;
+    int progress;
+    psn::TrophyCounts counts;
+    std::vector<psn::Trophy> trophies;
 };
 
 enum class TrophySort {

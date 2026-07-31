@@ -232,16 +232,29 @@ void RecyclingGrid::draw(
 
     if (!this->dataSource || this->dataSource->getItemCount() == 0) {
         if (!this->hintLabel) return;
-        float w2 = hintLabel->getWidth(), h2 = hintLabel->getHeight();
-        float h1 = 0;
-        if (this->hintImage) {
-            float w1 = hintImage->getWidth();
-            h1 = hintImage->getHeight();
-            this->hintImage->setAlpha(this->getAlpha());
-            this->hintImage->draw(vg, x + (width - w1) / 2, y + (height - h1) / 2, w1, h1, style, ctx);
-        }
-        this->hintLabel->setAlpha(this->getAlpha());
-        this->hintLabel->draw(vg, x + (width - w2) / 2, y + (height + h1 - h2) / 2, w2, h2, style, ctx);
+
+        std::string msg = this->hintLabel->getFullText();
+        if (msg.empty()) return;
+
+        float wrapWidth = width * 0.72f;
+
+        nvgSave(vg);
+        nvgFontSize(vg, this->hintLabel->getFontSize());
+        nvgFontFaceId(vg, this->hintLabel->getFont());
+        nvgFontQuality(vg, this->hintLabel->getFontQuality());
+        nvgTextLineHeight(vg, this->hintLabel->getLineHeight());
+
+        float bounds[4] = {0, 0, 0, 0};
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+        nvgTextBoxBounds(vg, 0, 0, wrapWidth, msg.c_str(), nullptr, bounds);
+        float textHeight = bounds[3] - bounds[1];
+
+        NVGcolor color = this->hintLabel->getTextColor();
+        color.a *= this->getAlpha();
+        nvgFillColor(vg, color);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        nvgTextBox(vg, x + width / 2.0f, y + (height - textHeight) / 2.0f, wrapWidth, msg.c_str(), nullptr);
+        nvgRestore(vg);
     }
 }
 

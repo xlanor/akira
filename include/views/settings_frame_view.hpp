@@ -28,11 +28,15 @@ private:
     brls::Box* menuBar = nullptr;
     brls::Box* subBar = nullptr;
     brls::Box* contentHolder = nullptr;
+    brls::Box* descPanel = nullptr;
     brls::Label* descTitle = nullptr;
     brls::Label* descBody = nullptr;
     brls::Image* descImage = nullptr;
 
     brls::GenericEvent::Subscription focusSub;
+
+    brls::Animatable contentFade{1.0f};
+    brls::Animatable entryAnim{1.0f};
 
     void buildMenus();
     void renderMenuBar();
@@ -41,6 +45,7 @@ private:
     void switchMenu(int delta);
     void switchSub(int delta);
     void updateDescriptionFromFocus();
+    void showDescPanel(bool show);
 };
 
 #endif // AKIRA_SETTINGS_FRAME_VIEW_HPP

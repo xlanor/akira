@@ -1,5 +1,6 @@
 #include "core/settings_descriptions.hpp"
 
+#include <borealis/core/application.hpp>
 #include <borealis/extern/nlohmann/json.hpp>
 
 #include <array>
@@ -9,35 +10,44 @@
 
 namespace akira {
 
-static const std::array<const char*, 6> kHelpFiles = {
-    "general", "quality", "controls", "debug", "account", "poweruser"
+static const std::array<const char*, 7> kHelpFiles = {
+    "general", "quality", "controls", "debug", "account", "poweruser", "developer"
 };
+
+static void mergeHelpFile(const std::string& path, std::unordered_map<std::string, SettingDescription>& m)
+{
+    std::ifstream file(path);
+    if (!file.is_open())
+        return;
+
+    nlohmann::json j;
+    try {
+        file >> j;
+    } catch (...) {
+        return;
+    }
+
+    for (auto it = j.begin(); it != j.end(); ++it) {
+        const auto& v = it.value();
+        SettingDescription d;
+        d.title = v.value("title", std::string());
+        d.body  = v.value("body", std::string());
+        d.image = v.value("image", std::string());
+        m[it.key()] = d;
+    }
+}
 
 static const std::unordered_map<std::string, SettingDescription>& table()
 {
     static const std::unordered_map<std::string, SettingDescription> t = []() {
         std::unordered_map<std::string, SettingDescription> m;
 
+        std::string locale = brls::Application::getLocale();
+
         for (const char* name : kHelpFiles) {
-            std::ifstream file(std::string("romfs:/help/") + name + ".json");
-            if (!file.is_open())
-                continue;
-
-            nlohmann::json j;
-            try {
-                file >> j;
-            } catch (...) {
-                continue;
-            }
-
-            for (auto it = j.begin(); it != j.end(); ++it) {
-                const auto& v = it.value();
-                SettingDescription d;
-                d.title = v.value("title", std::string());
-                d.body  = v.value("body", std::string());
-                d.image = v.value("image", std::string());
-                m[it.key()] = d;
-            }
+            mergeHelpFile(std::string("romfs:/help/") + name + ".json", m);
+            if (!locale.empty() && locale != "en-US")
+                mergeHelpFile(std::string("romfs:/help/") + locale + "/" + name + ".json", m);
         }
         return m;
     }();
