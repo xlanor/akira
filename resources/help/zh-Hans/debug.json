@@ -1,0 +1,37 @@
+{
+  "settings/enableFileLogging": {
+    "title": "文件日志",
+    "body": "将日志写入 SD 卡。启用下方的各子系统日志。",
+    "image": ""
+  },
+  "settings/debugLwipLog": {
+    "title": "lwIP 日志",
+    "body": "网络栈日志。",
+    "image": ""
+  },
+  "settings/debugWireguardLog": {
+    "title": "WireGuard 日志",
+    "body": "VPN 隧道日志。",
+    "image": ""
+  },
+  "settings/debugRenderLog": {
+    "title": "渲染日志",
+    "body": "视频解码与渲染日志。",
+    "image": ""
+  },
+  "settings/debugChiakiLog": {
+    "title": "chiaki 日志",
+    "body": "核心远程游玩库日志。",
+    "image": ""
+  },
+  "settings/debugDiscoveryLog": {
+    "title": "发现日志",
+    "body": "主机发现与唤醒日志。",
+    "image": ""
+  },
+  "settings/debugFfmpegLog": {
+    "title": "ffmpeg 日志",
+    "body": "解码器（ffmpeg）日志。",
+    "image": ""
+  }
+}

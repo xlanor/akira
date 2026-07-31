@@ -1,0 +1,17 @@
+{
+  "settings/updateChannel": {
+    "title": "更新通道",
+    "body": "稳定版接收正式发布的版本。候选版本接收用于测试的预发布版本，仅高级用户可用。开发版本不会检查更新。",
+    "image": ""
+  },
+  "settings/autoCheckUpdates": {
+    "title": "启动时检查",
+    "body": "启用后，Akira 会在启动时向 GitHub 检查是否有更新版本（每天最多一次），如有可用更新则显示提示。关闭后仅手动检查。",
+    "image": ""
+  },
+  "settings/checkForUpdates": {
+    "title": "检查更新",
+    "body": "立即向 GitHub 查询所选通道上的最新版本，并报告是否有可用更新。",
+    "image": ""
+  }
+}

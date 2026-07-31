@@ -156,6 +156,12 @@ func (m LoginModel) loginWithNpsso(npsso string) tea.Cmd {
 		m.state.SetTokens(tokens)
 		m.state.SetNpsso(npsso)
 
+		if mobileCode, mobileErr := psn.GetMobileAuthCodeFromNpsso(npsso); mobileErr == nil {
+			if mobileTokens, mobileErr := psn.ExchangeCodeForMobileTokens(mobileCode); mobileErr == nil {
+				m.state.SetMobileTokens(mobileTokens)
+			}
+		}
+
 		accountInfo, err := psn.GetAccountInfo(tokens.AccessToken)
 		if err != nil {
 			return tokenExchangeResultMsg{err: err}

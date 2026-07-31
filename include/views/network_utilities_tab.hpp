@@ -3,6 +3,7 @@
 
 #include <borealis.hpp>
 #include "core/stun_client.hpp"
+#include "ui/theme.hpp"
 
 class NetworkUtilitiesTab : public brls::Box {
 public:
@@ -26,7 +27,7 @@ private:
     void displayResult(const StunResult& result);
     void clearResults();
     void addResultRow(const std::string& label, const std::string& value,
-                      NVGcolor valueColor = nvgRGBA(200, 200, 200, 255));
+                      NVGcolor valueColor = akira::ui::active().textMuted);
     void addCompatibilityTable();
 
     void initWireGuardUI();

@@ -1,0 +1,15 @@
+{
+  "settings/localResolution":   { "title": "Local resolution", "body": "Streaming resolution on the local network. Higher looks sharper but needs more bitrate.", "image": "" },
+  "settings/localFps":          { "title": "Local frame rate", "body": "Target frames per second for local-network play.", "image": "" },
+  "settings/localBitrate":      { "title": "Local bitrate", "body": "Video bitrate on the local network, adjusted in 500-kbps steps.", "image": "" },
+  "settings/remoteResolution":  { "title": "Remote resolution", "body": "Streaming resolution for remote (internet) play.", "image": "" },
+  "settings/remoteFps":         { "title": "Remote frame rate", "body": "Target frames per second for remote play.", "image": "" },
+  "settings/remoteBitrate":     { "title": "Remote bitrate", "body": "Video bitrate for remote play, adjusted in 500-kbps steps.", "image": "" },
+  "settings/vpnResolution":     { "title": "VPN resolution", "body": "Streaming resolution when connected over the VPN.", "image": "" },
+  "settings/vpnFps":            { "title": "VPN frame rate", "body": "Target frames per second over the VPN.", "image": "" },
+  "settings/vpnBitrate":        { "title": "VPN bitrate", "body": "Video bitrate over the VPN, adjusted in 500-kbps steps.", "image": "" },
+  "settings/enableDithering":   { "title": "Dithering", "body": "Reduces color banding on gradients.", "image": "" },
+  "settings/ditheringStrength": { "title": "Dither strength", "body": "How aggressively dithering is applied.", "image": "" },
+  "settings/rcasEnabled":       { "title": "RCAS sharpening", "body": "Contrast-adaptive sharpening of the decoded image.", "image": "" },
+  "settings/rcasSharpness":     { "title": "RCAS strength", "body": "Amount of sharpening, in 5% steps.", "image": "" }
+}

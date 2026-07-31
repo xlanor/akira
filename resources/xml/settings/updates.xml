@@ -1,0 +1,60 @@
+<brls:Box
+    width="100%"
+    height="100%"
+    axis="column"
+    backgroundColor="@theme/brls/background"
+    paddingTop="30"
+    paddingLeft="40"
+    paddingRight="40"
+    paddingBottom="30">
+
+    <brls:ScrollingFrame
+        width="auto"
+        height="auto"
+        grow="1.0">
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="column">
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                backgroundColor="@theme/color/card"
+                cornerRadius="14"
+                marginBottom="30">
+
+                <brls:SelectorCell
+                    id="settings/updateChannel"
+                    title="@i18n/akira/update/channel"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:BooleanCell
+                    id="settings/autoCheckUpdates"
+                    title="@i18n/akira/update/auto_check"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:DetailCell
+                    id="settings/checkForUpdates"
+                    title="@i18n/akira/update/check_now"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+            </brls:Box>
+
+            <brls:Label
+                id="settings/updateCurrentVersion"
+                text="Akira"
+                fontSize="15"
+                textColor="#999999"
+                marginTop="4"
+                marginLeft="15"
+                horizontalAlign="left"/>
+
+        </brls:Box>
+    </brls:ScrollingFrame>
+</brls:Box>

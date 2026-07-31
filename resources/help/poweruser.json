@@ -1,0 +1,9 @@
+{
+  "settings/unlockBitrateMax":  { "title": "Unlock max bitrate", "body": "Raise the bitrate ceiling above the usual per-resolution limit.", "image": "" },
+  "settings/ipcStats":          { "title": "IPC stats", "body": "Show inter-process timing statistics for debugging.", "image": "" },
+  "settings/portGuessing":      { "title": "Port guessing", "body": "Probe extra ports to improve NAT traversal on strict networks.", "image": "" },
+  "settings/portGuessingCount": { "title": "Port guess count", "body": "How many candidate ports to probe.", "image": "" },
+  "settings/portGuessingSocks": { "title": "Probe socket count", "body": "How many sockets to open while probing.", "image": "" },
+  "settings/autoReconnect":     { "title": "Auto reconnect", "body": "Automatically re-establish a dropped session.", "image": "" },
+  "settings/runBenchmark":      { "title": "Run benchmark", "body": "Measure GHASH crypto throughput on this console.", "image": "" }
+}

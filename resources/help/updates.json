@@ -1,0 +1,17 @@
+{
+  "settings/updateChannel": {
+    "title": "Update channel",
+    "body": "Stable receives finished releases. Release candidate receives pre-release builds for testing and is only available to power users. Dev builds never check for updates.",
+    "image": ""
+  },
+  "settings/autoCheckUpdates": {
+    "title": "Check on launch",
+    "body": "When enabled, Akira checks GitHub for a newer build on startup (at most once a day) and shows a prompt if one is available. Disable to only check manually.",
+    "image": ""
+  },
+  "settings/checkForUpdates": {
+    "title": "Check for updates",
+    "body": "Query GitHub now for the latest build on your selected channel and report whether an update is available.",
+    "image": ""
+  }
+}

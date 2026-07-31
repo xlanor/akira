@@ -1,0 +1,67 @@
+{
+  "settings/companionHost": {
+    "title": "伴侣主机",
+    "body": "获取你凭据的伴侣助手的地址。",
+    "image": ""
+  },
+  "settings/companionPort": {
+    "title": "伴侣端口",
+    "body": "伴侣助手监听的端口。",
+    "image": ""
+  },
+  "settings/fetchPsnBtn": {
+    "title": "从 PSN 获取",
+    "body": "从伴侣拉取你的在线 ID、令牌和 DUID。",
+    "image": ""
+  },
+  "settings/revealCredentials": {
+    "title": "显示密钥",
+    "body": "取消遮盖下方存储的令牌。",
+    "image": ""
+  },
+  "settings/psnAccountId": {
+    "title": "PSN 账号 ID",
+    "body": "你的 PlayStation Network 账号标识符。",
+    "image": ""
+  },
+  "settings/credOnlineId": {
+    "title": "在线 ID",
+    "body": "与你的凭据关联的 PSN 在线 ID。",
+    "image": ""
+  },
+  "settings/credAccessToken": {
+    "title": "访问令牌",
+    "body": "短期有效的 PSN 访问令牌。",
+    "image": ""
+  },
+  "settings/credRefreshToken": {
+    "title": "刷新令牌",
+    "body": "用于续期访问的长期令牌。",
+    "image": ""
+  },
+  "settings/credTokenExpiry": {
+    "title": "令牌过期",
+    "body": "当前访问令牌的过期时间。",
+    "image": ""
+  },
+  "settings/credDuid": {
+    "title": "DUID",
+    "body": "用于远程注册的设备标识符。",
+    "image": ""
+  },
+  "settings/clearPsnBtn": {
+    "title": "清除凭据",
+    "body": "移除所有存储的 PSN 令牌数据。",
+    "image": ""
+  },
+  "settings/refreshTokenBtn": {
+    "title": "刷新令牌",
+    "body": "使用刷新令牌续期访问令牌。",
+    "image": ""
+  },
+  "settings/trophiesEnabled": {
+    "title": "显示奖杯页面",
+    "body": "开启后可用 L 键查看该账号的奖杯。关闭则完全隐藏奖杯页面。",
+    "image": ""
+  }
+}

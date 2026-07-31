@@ -24,3 +24,6 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 .claude/
+
+# Local config backups pulled off the Switch (contain PSN tokens)
+backups/

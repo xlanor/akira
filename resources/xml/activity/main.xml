@@ -1,34 +1,6 @@
-<brls:AppletFrame headerHidden="false" footerHidden="false">
-    <brls:TabFrame
-        id="main/tabFrame"
-        title="Akira"
-        grow="1.0">
-
-        <brls:Tab label="@i18n/akira/tabs/hosts">
-            <HostListTab/>
-        </brls:Tab>
-
-        <brls:Tab label="@i18n/akira/tabs/settings">
-            <SettingsTab/>
-        </brls:Tab>
-
-        <brls:Separator/>
-
-        <brls:Tab label="@i18n/akira/tabs/add_host">
-            <AddHostTab/>
-        </brls:Tab>
-
-        <brls:Tab label="@i18n/akira/tabs/build_info">
-            <BuildInfoTab/>
-        </brls:Tab>
-
-        <brls:Tab label="@i18n/akira/tabs/config">
-            <ConfigViewTab/>
-        </brls:Tab>
-
-        <brls:Tab label="@i18n/akira/tabs/network">
-            <NetworkUtilitiesTab/>
-        </brls:Tab>
-
-    </brls:TabFrame>
+<brls:AppletFrame headerHidden="false" footerHidden="false"
+    background="vertical_linear"
+    backgroundStartColor="@theme/akira/gradient_top"
+    backgroundEndColor="@theme/akira/gradient_bottom">
+    <HostListTab/>
 </brls:AppletFrame>

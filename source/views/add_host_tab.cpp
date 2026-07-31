@@ -1,4 +1,5 @@
 #include "views/add_host_tab.hpp"
+#include "ui/theme.hpp"
 #include "core/host.hpp"
 
 #include <borealis/core/i18n.hpp>
@@ -51,26 +52,26 @@ void AddHostTab::onSaveClicked() {
 
     if (name.empty()) {
         statusLabel->setText("akira/add_host/error_no_name"_i18n);
-        statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
+        statusLabel->setTextColor(akira::ui::active().danger);
         return;
     }
 
     if (addr.empty()) {
         statusLabel->setText("akira/add_host/error_no_ip"_i18n);
-        statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
+        statusLabel->setTextColor(akira::ui::active().danger);
         return;
     }
 
     if (!SettingsManager::isValidHostAddress(addr)) {
         statusLabel->setText("akira/add_host/error_invalid_ip"_i18n);
-        statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
+        statusLabel->setTextColor(akira::ui::active().danger);
         return;
     }
 
     auto* hostsMap = settings->getHostsMap();
     if (hostsMap->find(name) != hostsMap->end()) {
         statusLabel->setText("akira/add_host/error_duplicate_name"_i18n);
-        statusLabel->setTextColor(nvgRGBA(255, 100, 100, 255));
+        statusLabel->setTextColor(akira::ui::active().danger);
         return;
     }
 
@@ -85,7 +86,7 @@ void AddHostTab::onSaveClicked() {
     settings->writeFile();
 
     statusLabel->setText("akira/add_host/success"_i18n);
-    statusLabel->setTextColor(nvgRGBA(100, 200, 100, 255));
+    statusLabel->setTextColor(akira::ui::active().success);
 
     brls::Logger::info("Added host: {} at {}", name, addr);
 

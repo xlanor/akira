@@ -1,0 +1,9 @@
+{
+  "settings/enableFileLogging": { "title": "File logging", "body": "Write logs to the SD card. Enables the per-subsystem logs below.", "image": "" },
+  "settings/debugLwipLog":      { "title": "lwIP log", "body": "Network-stack logging.", "image": "" },
+  "settings/debugWireguardLog": { "title": "WireGuard log", "body": "VPN tunnel logging.", "image": "" },
+  "settings/debugRenderLog":    { "title": "Render log", "body": "Video decode and render logging.", "image": "" },
+  "settings/debugChiakiLog":    { "title": "chiaki log", "body": "Core Remote Play library logging.", "image": "" },
+  "settings/debugDiscoveryLog": { "title": "Discovery log", "body": "Console discovery and wake logging.", "image": "" },
+  "settings/debugFfmpegLog":    { "title": "ffmpeg log", "body": "Decoder (ffmpeg) logging.", "image": "" }
+}

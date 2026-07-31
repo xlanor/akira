@@ -38,6 +38,7 @@ type AppState struct {
 	Seed     string       `json:"seed,omitempty"`
 	Npsso    string       `json:"npsso,omitempty"`
 	Tokens   *Tokens      `json:"tokens,omitempty"`
+	MobileTokens *Tokens  `json:"psn_mobile_sso,omitempty"`
 	Account  *AccountInfo `json:"account,omitempty"`
 	filePath string       `json:"-"`
 }
@@ -135,6 +136,21 @@ func (s *AppState) SetTokens(tokens *Tokens) {
 	defer s.mu.Unlock()
 	tokens.ObtainedAt = time.Now().Unix()
 	s.Tokens = tokens
+}
+
+func (s *AppState) SetMobileTokens(tokens *Tokens) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if tokens != nil {
+		tokens.ObtainedAt = time.Now().Unix()
+	}
+	s.MobileTokens = tokens
+}
+
+func (s *AppState) GetMobileTokens() *Tokens {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.MobileTokens
 }
 
 func (s *AppState) GetAccessToken() string {

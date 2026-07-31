@@ -1,10 +1,13 @@
 #ifndef AKIRA_DISCOVERY_MANAGER_HPP
 #define AKIRA_DISCOVERY_MANAGER_HPP
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
-#include <atomic>
 
 #include <chiaki/discoveryservice.h>
 #include <chiaki/log.h>
@@ -12,6 +15,8 @@
 #include <chiaki/remote/holepunch.h>
 
 #include "host.hpp"
+#include "psn/auth.hpp"
+#include "util/http_pool.hpp"
 
 class SettingsManager;
 
@@ -23,6 +28,7 @@ struct NetworkAddresses {
 class DiscoveryManager {
 public:
     using HostDiscoveredCallback = std::function<void(Host*)>;
+    using RemoteRefreshCallback = std::function<void(const psn::AuthResult&)>;
 
 private:
     SettingsManager* settings = nullptr;
@@ -39,8 +45,20 @@ private:
 
     NetworkAddresses getIPv4BroadcastAddr();
 
-    void fetchRemoteDevicesFromPsn(std::function<void()> onComplete);
+    void fetchRemoteDevicesFromPsn();
     void processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType);
+
+    static constexpr int PSN_REMOTE_COOLDOWN_S = 15;
+    static constexpr int PSN_FAILED_COOLDOWN_S = 5;
+
+    mutable std::mutex remoteRefreshMutex;
+    bool remoteRefreshInFlight = false;
+    bool remoteRefreshUserRequested = false;
+    std::vector<RemoteRefreshCallback> remoteRefreshWaiters;
+    std::chrono::steady_clock::time_point remoteRefreshReadyAt{};
+
+    void runRemoteDeviceRefresh(HttpSession& session);
+    void finishRemoteDeviceRefresh(const psn::AuthResult& result);
 
     ChiakiThread remoteDiscoveryThread;
     ChiakiBoolPredCond remoteStopCond;
@@ -87,14 +105,9 @@ public:
         std::function<void(const std::string&)> onError
     );
 
-    void refreshPsnToken(
-        std::function<void()> onSuccess,
-        std::function<void(const std::string&)> onError
-    );
+    void refreshRemoteDevices(RemoteRefreshCallback onComplete = nullptr, bool userInitiated = false);
 
-    bool isPsnTokenValid() const;
-
-    void refreshRemoteDevices(std::function<void()> onComplete = nullptr);
+    psn::ActionStatus getRemoteRefreshStatus() const;
 };
 
 #endif // AKIRA_DISCOVERY_MANAGER_HPP

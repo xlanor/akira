@@ -1,9 +1,13 @@
 #include "views/connection_view.hpp"
+#include "ui/theme.hpp"
+#include "views/connection_stage.hpp"
 #include "views/stream_view.hpp"
 #include <format>
 #include <thread>
 #include <chrono>
+#include <future>
 #include "core/discovery_manager.hpp"
+#include "psn/auth.hpp"
 #include "core/settings_manager.hpp"
 #include "core/thread_affinity.h"
 #include "util/shared_view_holder.hpp"
@@ -20,6 +24,13 @@ ConnectionView::ConnectionView(Host* host)
 
     auto* titleLabel = (brls::Label*)this->getView("connection/title");
     titleLabel->setText(brls::getStr("akira/connection/connecting_to", host->getHostName()));
+    titleLabel->setMarginLeft(14);
+
+    auto* titleRow = (brls::Box*)this->getView("connection/titleRow");
+    auto* spinner = new brls::ProgressSpinner();
+    spinner->setWidth(28);
+    spinner->setHeight(28);
+    titleRow->addView(spinner, 0);
 
     setFocusable(true);
 }
@@ -99,6 +110,8 @@ void ConnectionView::addLogLine(const std::string& line, brls::LogLevel level)
         logLines.pop_front();
     }
 
+    currentStage = static_cast<int>(
+        matchConnectionStage(line, static_cast<ConnectionStage>(currentStage.load())));
 }
 
 void ConnectionView::switchToConnectionLog()
@@ -121,7 +134,9 @@ void ConnectionView::switchToConnectionLog()
 void ConnectionView::restoreMainLog()
 {
     if (m_connectionLogFile) {
-        brls::Logger::setLogOutput(m_prevLogOutput);
+        brls::Logger::flushAsyncLogs();
+        brls::Logger::setLogOutput(m_prevLogOutput ? m_prevLogOutput : stdout);
+        brls::Logger::flushAsyncLogs();
         fclose(m_connectionLogFile);
         m_connectionLogFile = nullptr;
         m_prevLogOutput = nullptr;
@@ -136,7 +151,7 @@ void ConnectionView::renderLogs(NVGcontext* vg, float x, float y, float width, f
     nvgScissor(vg, x, y, width, height);
 
     nvgFontSize(vg, 16);
-    nvgFillColor(vg, nvgRGBA(200, 200, 200, 255));
+    nvgFillColor(vg, akira::ui::active().textMuted);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
 
     float padding = 20;
@@ -206,16 +221,31 @@ void* ConnectionView::connectionThreadFunc(void* user)
     brls::Logger::info("Connection thread started");
 
     if (host->isRemote()) {
-        auto* dm = DiscoveryManager::getInstance();
-        if (!dm->isPsnTokenValid()) {
-            if (auto view = weak.lock()) {
-                view->connectionError = "akira/connection/psn_token_expired"_i18n;
-                brls::Logger::error("{}", view->connectionError);
-                view->connectionSuccess = false;
-                view->connectionFinished = true;
-                view->connectionRunning = false;
+        if (!psn::Auth::instance().tokenValid()) {
+            brls::Logger::info("PSN token expired at connect; attempting refresh before holepunch");
+
+            std::promise<bool> refreshDone;
+            auto refreshFuture = refreshDone.get_future();
+
+            psn::Auth::instance().refresh(
+                [&refreshDone]() { refreshDone.set_value(true); },
+                [&refreshDone](psn::AuthError, const std::string&) { refreshDone.set_value(false); });
+
+            bool refreshed = refreshFuture.wait_for(std::chrono::seconds(30)) == std::future_status::ready
+                && refreshFuture.get();
+
+            if (!refreshed || !psn::Auth::instance().tokenValid()) {
+                if (auto view = weak.lock()) {
+                    view->connectionError = "akira/connection/psn_token_expired"_i18n;
+                    brls::Logger::error("{}", view->connectionError);
+                    view->connectionSuccess = false;
+                    view->connectionFinished = true;
+                    view->connectionRunning = false;
+                }
+                return nullptr;
             }
-            return nullptr;
+
+            brls::Logger::info("PSN token refreshed; continuing with holepunch");
         }
 
         brls::Logger::info("Initiating holepunch connection...");
@@ -278,6 +308,10 @@ void ConnectionView::onConnectionComplete()
             brls::Application::pushActivity(new brls::Activity(streamView.get()));
             streamView->startStream();
         });
+    } else if (SettingsManager::getInstance()->getConnectionShowStages()) {
+        ConnectionStage stage = static_cast<ConnectionStage>(currentStage.load());
+        failureText = brls::getStr(connectionFailureKeyForStage(stage));
+        connectFailed = true;
     } else {
         std::string error = connectionError;
         brls::sync([error]() {
@@ -300,9 +334,19 @@ void ConnectionView::draw(NVGcontext* vg, float x, float y, float width, float h
 
     Box::draw(vg, x, y, width, height, style, ctx);
 
-    // Render logs directly with NVG into the logArea space
     auto* logArea = this->getView("connection/logArea");
-    if (logArea) {
+    if (!logArea)
+        return;
+
+    float centerX = logArea->getX() + logArea->getWidth() / 2.0f;
+    float centerY = logArea->getY() + logArea->getHeight() / 2.0f;
+
+    if (connectFailed.load()) {
+        drawConnectionFailure(vg, centerX, centerY, failureText);
+    } else if (SettingsManager::getInstance()->getConnectionShowStages()) {
+        ConnectionStage stage = static_cast<ConnectionStage>(currentStage.load());
+        drawConnectionPulse(vg, centerX, centerY, brls::getStr(connectionStageLabelKey(stage)));
+    } else {
         renderLogs(vg, logArea->getX(), logArea->getY(),
                    logArea->getWidth(), logArea->getHeight());
     }

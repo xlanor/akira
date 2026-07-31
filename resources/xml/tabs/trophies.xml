@@ -1,0 +1,84 @@
+<brls:Box
+    width="auto"
+    height="auto"
+    axis="column"
+    grow="1.0">
+    <PsnGatedBox
+        id="trophies/gate"
+        width="auto"
+        height="auto"
+        axis="column"
+        grow="1.0">
+
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            justifyContent="spaceBetween"
+            alignItems="center"
+            backgroundColor="@theme/color/card"
+            cornerRadius="14"
+            paddingTop="12"
+            paddingBottom="12"
+            paddingLeft="15"
+            paddingRight="15"
+            marginTop="20"
+            marginLeft="@style/brls/tab_frame/content_padding_sides"
+            marginRight="@style/brls/tab_frame/content_padding_sides"
+            marginBottom="10">
+
+            <brls:Box
+                id="trophies/profile"
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"/>
+
+            <brls:Button
+                id="trophies/forceRefreshBtn"
+                text="@i18n/akira/trophies/force_refresh_btn"
+                style="bordered"
+                marginLeft="15"/>
+
+        </brls:Box>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            alignItems="center"
+            marginLeft="@style/brls/tab_frame/content_padding_sides"
+            marginRight="@style/brls/tab_frame/content_padding_sides"
+            marginBottom="6">
+
+            <brls:Button
+                id="trophies/sortBtn"
+                text="@i18n/akira/trophies/sort_btn"
+                style="bordered"
+                marginRight="10"/>
+
+            <brls:Button
+                id="trophies/filterBtn"
+                text="@i18n/akira/trophies/filter_btn"
+                style="bordered"/>
+
+        </brls:Box>
+
+        <RecyclingGrid
+            id="trophies/grid"
+            width="auto"
+            height="auto"
+            grow="1.0"
+            spanCount="3"
+            itemHeight="330"
+            itemSpace="18"
+            paddingTop="10"
+            paddingBottom="20"
+            paddingLeft="@style/brls/tab_frame/content_padding_sides"
+            paddingRight="@style/brls/tab_frame/content_padding_sides"/>
+
+
+    </PsnGatedBox>
+
+</brls:Box>

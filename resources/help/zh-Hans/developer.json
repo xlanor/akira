@@ -1,0 +1,12 @@
+{
+  "settings/devFakeHosts": {
+    "title": "模拟主机",
+    "body": "在主机网格中填充 20 台虚拟 PS5 以预览布局。仅用于显示 — 不会保存，也无法连接。",
+    "image": ""
+  },
+  "settings/simulateUpdate": {
+    "title": "模拟更新",
+    "body": "使用开发者模拟的版本触发更新提示，无需真实发布即可测试下载 / 校验 / 安装流程。",
+    "image": ""
+  }
+}

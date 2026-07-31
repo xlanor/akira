@@ -1,4 +1,5 @@
 #include "views/enter_pin_view.hpp"
+#include "ui/theme.hpp"
 #include <format>
 
 #include <borealis/core/i18n.hpp>
@@ -122,16 +123,16 @@ void EnterPinView::draw(NVGcontext* vg, float x, float y, float width, float hei
 {
     nvgBeginPath(vg);
     nvgRect(vg, x, y, width, height);
-    nvgFillColor(vg, nvgRGBA(30, 30, 30, 240));
+    nvgFillColor(vg, akira::ui::withAlpha(akira::ui::active().background, 240));
     nvgFill(vg);
 
     nvgFontSize(vg, 24);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+    nvgFillColor(vg, akira::ui::active().text);
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgText(vg, x + width / 2, y + height / 2 - 20, getTitle().c_str(), nullptr);
 
     nvgFontSize(vg, 16);
-    nvgFillColor(vg, nvgRGBA(180, 180, 180, 255));
+    nvgFillColor(vg, akira::ui::active().textMuted);
     std::string instruction = "akira/pin/press_a"_i18n;
     nvgText(vg, x + width / 2, y + height / 2 + 20, instruction.c_str(), nullptr);
 
