@@ -87,7 +87,7 @@
 
             <brls:Label
                 id="settings/version"
-                text="Akira v0.5.3"
+                text="Akira"
                 fontSize="16"
                 textColor="#999999"
                 marginTop="20"

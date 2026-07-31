@@ -8,6 +8,7 @@
 #include "views/settings_account_view.hpp"
 #include "views/settings_poweruser_view.hpp"
 #include "views/settings_developer_view.hpp"
+#include "views/settings_updates_view.hpp"
 #include "views/build_info_tab.hpp"
 #include "views/config_view_tab.hpp"
 #include "views/network_utilities_tab.hpp"
@@ -102,6 +103,7 @@ SettingsFrameView::~SettingsFrameView() {
 void SettingsFrameView::buildMenus() {
     menus.push_back({"akira/settings/menu_account"_i18n, {{"", []() -> brls::Box* { return new SettingsAccountView(); }}}});
     menus.push_back({"akira/settings/menu_general"_i18n, {{"", []() -> brls::Box* { return new SettingsGeneralView(); }}}});
+    menus.push_back({"akira/settings/menu_updates"_i18n, {{"", []() -> brls::Box* { return new SettingsUpdatesView(); }}}});
     menus.push_back({"akira/settings/menu_quality"_i18n, {{"", []() -> brls::Box* { return new SettingsPictureView(); }}}});
     menus.push_back({"akira/settings/menu_controls"_i18n, {{"", []() -> brls::Box* { return new SettingsControllerView(); }}}});
     menus.push_back({"akira/settings/menu_debug"_i18n, {{"", []() -> brls::Box* { return new SettingsDebugView(); }}}});

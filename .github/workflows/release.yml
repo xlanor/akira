@@ -18,15 +18,33 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Extract version from CMakeLists.txt
+      - name: Derive version and channel from tag
         id: version
         run: |
-          VERSION_MAJOR=$(grep 'set(VERSION_MAJOR' CMakeLists.txt | sed 's/[^0-9]*//g')
-          VERSION_MINOR=$(grep 'set(VERSION_MINOR' CMakeLists.txt | sed 's/[^0-9]*//g')
-          VERSION_REVISION=$(grep 'set(VERSION_REVISION' CMakeLists.txt | sed 's/[^0-9]*//g')
-          VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REVISION}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Detected version: ${VERSION}"
+          TAG="${GITHUB_REF_NAME}"
+          VERSION_MAJOR=$(grep 'set(VERSION_MAJOR' cmake/version.cmake | sed 's/[^0-9]*//g')
+          VERSION_MINOR=$(grep 'set(VERSION_MINOR' cmake/version.cmake | sed 's/[^0-9]*//g')
+          VERSION_PATCH=$(grep 'set(VERSION_PATCH' cmake/version.cmake | sed 's/[^0-9]*//g')
+          CORE="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}"
+
+          TAG_VERSION="${TAG#v}"
+          PRERELEASE=""
+          CHANNEL="stable"
+          if [[ "$TAG_VERSION" == *-* ]]; then
+            PRERELEASE="${TAG_VERSION#*-}"
+            CHANNEL="rc"
+          fi
+
+          if [ "${TAG_VERSION%%-*}" != "$CORE" ]; then
+            echo "::error::Tag ${TAG} core ${TAG_VERSION%%-*} does not match cmake/version.cmake ${CORE}"
+            exit 1
+          fi
+
+          echo "version=${TAG_VERSION}" >> $GITHUB_OUTPUT
+          echo "core=${CORE}" >> $GITHUB_OUTPUT
+          echo "prerelease=${PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "channel=${CHANNEL}" >> $GITHUB_OUTPUT
+          echo "Detected version: ${TAG_VERSION} (channel: ${CHANNEL})"
 
       - name: Log in to Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -38,6 +56,8 @@ jobs:
       - name: Build Akira
         run: |
           docker run --rm \
+            -e BUILD_CHANNEL="${{ steps.version.outputs.channel }}" \
+            -e VERSION_PRERELEASE="${{ steps.version.outputs.prerelease }}" \
             -v "${{ github.workspace }}:/build" \
             -w /build \
             ghcr.io/${{ github.repository_owner }}/akira-builder:latest \
@@ -65,6 +85,7 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.version.outputs.channel }}
 
   build-companion:
     strategy:
@@ -138,6 +159,26 @@ jobs:
           cp akira.nro switch/akira.nro
           zip -r akira-${{ needs.build.outputs.version }}.zip switch/
 
+      - name: Generate update feed (SHA256SUMS + manifest.json)
+        run: |
+          SHA256=$(sha256sum akira.nro | cut -d' ' -f1)
+          SIZE=$(stat -c%s akira.nro)
+          echo "${SHA256}  akira.nro" > SHA256SUMS
+          NRO_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/akira.nro"
+          NOTES_URL="https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          cat > manifest.json <<EOF
+          {
+            "version": "${{ needs.build.outputs.version }}",
+            "channel": "${{ needs.build.outputs.channel }}",
+            "tag": "${{ github.ref_name }}",
+            "nro_url": "${NRO_URL}",
+            "sha256": "${SHA256}",
+            "size": ${SIZE},
+            "notes_url": "${NOTES_URL}"
+          }
+          EOF
+          cat manifest.json
+
       - name: Create Release
         uses: softprops/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae # v2
         with:
@@ -147,9 +188,11 @@ jobs:
             akira.nro
             akira.elf
             akira-companion-*
+            SHA256SUMS
+            manifest.json
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          prerelease: ${{ needs.build.outputs.channel == 'rc' }}
           body: |
             Please read the [README](https://github.com/${{ github.repository }}#readme) before getting started.
 

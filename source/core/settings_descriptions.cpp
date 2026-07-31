@@ -10,8 +10,8 @@
 
 namespace akira {
 
-static const std::array<const char*, 7> kHelpFiles = {
-    "general", "quality", "controls", "debug", "account", "poweruser", "developer"
+static const std::array<const char*, 8> kHelpFiles = {
+    "general", "quality", "controls", "debug", "account", "poweruser", "developer", "updates"
 };
 
 static void mergeHelpFile(const std::string& path, std::unordered_map<std::string, SettingDescription>& m)

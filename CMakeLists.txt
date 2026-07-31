@@ -31,9 +31,6 @@ include(version)
 # Platform options
 list(APPEND APP_PLATFORM_OPTION
     -DBUILD_PACKAGE_NAME=${PACKAGE_NAME}
-    -DBUILD_VERSION_MAJOR=${VERSION_MAJOR}
-    -DBUILD_VERSION_MINOR=${VERSION_MINOR}
-    -DBUILD_VERSION_REVISION=${VERSION_REVISION}
 )
 
 # Threads
@@ -73,6 +70,8 @@ target_sources(${PROJECT_NAME} PRIVATE ${LWIP_SRCS} ${LWIP_RELAY_SRCS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     include
+    # Generated version header (configure_file in cmake/version.cmake)
+    ${CMAKE_BINARY_DIR}/generated
     # Shared IPC definitions
     ${CMAKE_CURRENT_SOURCE_DIR}/overlay/common/include
     # Borealis includes

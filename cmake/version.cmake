@@ -2,6 +2,14 @@ set(VERSION_MAJOR "0")
 set(VERSION_MINOR "5")
 set(VERSION_PATCH "3")
 
+if (NOT DEFINED BUILD_CHANNEL)
+    set(BUILD_CHANNEL "dev")
+endif()
+
+if (NOT DEFINED VERSION_PRERELEASE)
+    set(VERSION_PRERELEASE "")
+endif()
+
 find_package(Git QUIET)
 
 set(GIT_COMMIT "")
@@ -23,13 +31,26 @@ if (Git_FOUND)
     )
 endif()
 
-if (GIT_COMMIT STREQUAL "")
-    set(VERSION_REVISION "${VERSION_PATCH}")
-else()
+string(TIMESTAMP BUILD_DATE "%Y-%m-%d" UTC)
+
+set(BUILD_METADATA "")
+if (NOT GIT_COMMIT STREQUAL "")
+    set(BUILD_METADATA "${GIT_COMMIT}")
     if (NOT GIT_DIRTY STREQUAL "")
-        set(GIT_COMMIT "${GIT_COMMIT}-dirty")
+        set(BUILD_METADATA "${BUILD_METADATA}.dirty")
     endif()
-    set(VERSION_REVISION "${VERSION_PATCH}-${GIT_COMMIT}")
+endif()
+
+set(APP_VERSION_CORE "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
+
+set(APP_VERSION_NACP "${APP_VERSION_CORE}")
+if (NOT VERSION_PRERELEASE STREQUAL "")
+    set(APP_VERSION_NACP "${APP_VERSION_NACP}-${VERSION_PRERELEASE}")
+endif()
+
+set(APP_VERSION "${APP_VERSION_NACP}")
+if (NOT BUILD_METADATA STREQUAL "")
+    set(APP_VERSION "${APP_VERSION}+${BUILD_METADATA}")
 endif()
 
 set(APP_TITLE "Akira")
@@ -37,6 +58,11 @@ set(PROJECT_AUTHOR "xlanor")
 set(PACKAGE_NAME "io.github.akira")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/img/icon.jpg)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
-set(APP_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REVISION}")
 
-message(STATUS "Akira version: ${APP_VERSION}")
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/akira_version.h.in
+    ${CMAKE_BINARY_DIR}/generated/akira_version.h
+    @ONLY
+)
+
+message(STATUS "Akira version: ${APP_VERSION} (channel: ${BUILD_CHANNEL})")

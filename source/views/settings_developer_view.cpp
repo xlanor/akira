@@ -1,5 +1,6 @@
 #include "views/settings_developer_view.hpp"
 #include "views/host_list_tab.hpp"
+#include "views/update_flow.hpp"
 
 #include <borealis/core/i18n.hpp>
 
@@ -18,4 +19,10 @@ SettingsDeveloperView::SettingsDeveloperView() {
             settings->writeFile();
             HostListTab::notifyActiveProfileChanged();
         });
+
+    simulateUpdateCell->setText("akira/settings/simulate_update"_i18n);
+    simulateUpdateCell->registerClickAction([](brls::View*) {
+        akira::UpdateFlow::simulate();
+        return true;
+    });
 }

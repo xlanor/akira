@@ -80,6 +80,11 @@ private:
     bool unlockBitrateMax = false;
     bool autoReconnect = true;
     bool devFakeHosts = false;
+    std::string updateChannel = "stable";
+    bool autoCheckUpdates = true;
+    int64_t lastUpdateCheck = 0;
+    std::string updateInstallPath;
+    std::string devUpdateServer;
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
@@ -290,6 +295,17 @@ public:
     void setAutoReconnect(bool enabled);
     bool getDevFakeHosts() const;
     void setDevFakeHosts(bool enabled);
+
+    std::string getUpdateChannel() const;
+    void setUpdateChannel(const std::string& channel);
+    bool getAutoCheckUpdates() const;
+    void setAutoCheckUpdates(bool enabled);
+    int64_t getLastUpdateCheck() const;
+    void setLastUpdateCheck(int64_t epochSeconds);
+    std::string getUpdateInstallPath() const;
+    void setUpdateInstallPath(const std::string& path);
+    std::string getDevUpdateServer() const;
+    void setDevUpdateServer(const std::string& server);
     int getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const;
 
 

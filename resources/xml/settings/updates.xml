@@ -26,19 +26,34 @@
                 cornerRadius="14"
                 marginBottom="30">
 
+                <brls:SelectorCell
+                    id="settings/updateChannel"
+                    title="@i18n/akira/update/channel"
+                    marginLeft="15"
+                    marginRight="15"/>
+
                 <brls:BooleanCell
-                    id="settings/devFakeHosts"
-                    title="@i18n/akira/settings/dev_fake_hosts"
+                    id="settings/autoCheckUpdates"
+                    title="@i18n/akira/update/auto_check"
                     marginLeft="15"
                     marginRight="15"/>
 
                 <brls:DetailCell
-                    id="settings/simulateUpdate"
-                    title="@i18n/akira/settings/simulate_update"
+                    id="settings/checkForUpdates"
+                    title="@i18n/akira/update/check_now"
                     marginLeft="15"
                     marginRight="15"/>
 
             </brls:Box>
+
+            <brls:Label
+                id="settings/updateCurrentVersion"
+                text="Akira"
+                fontSize="15"
+                textColor="#999999"
+                marginTop="4"
+                marginLeft="15"
+                horizontalAlign="left"/>
 
         </brls:Box>
     </brls:ScrollingFrame>

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "core/version.hpp"
+
 using namespace brls::literals;
 
 SettingsGeneralView::SettingsGeneralView() {
@@ -127,6 +129,8 @@ void SettingsGeneralView::initLanguageSelector() {
 
 void SettingsGeneralView::initVersionUnlock() {
     lastPowerUserClick = std::chrono::steady_clock::now();
+
+    versionLabel->setText(std::string("Akira ") + akira::version::string());
 
     versionLabel->registerClickAction([this](brls::View*) {
         auto now = std::chrono::steady_clock::now();

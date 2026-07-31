@@ -3,5 +3,10 @@
     "title": "Fake hosts",
     "body": "Populate the host grid with 20 dummy PS5s to preview the layout. Display-only — never saved and never connectable.",
     "image": ""
+  },
+  "settings/simulateUpdate": {
+    "title": "Simulate update",
+    "body": "Trigger the update prompt with a developer-simulated build to exercise the download / verify / install flow without a real release.",
+    "image": ""
   }
 }

@@ -478,7 +478,31 @@
         "menu_power_user": "Power user",
         "trophies_enabled": "Show trophy page",
         "menu_developer": "Developer",
-        "dev_fake_hosts": "Fake hosts (20 PS5s)"
+        "dev_fake_hosts": "Fake hosts (20 PS5s)",
+        "menu_updates": "Updates",
+        "simulate_update": "Simulate update available",
+        "dev_update_server_hint": "Dev update server (host:port)"
+    },
+    "update": {
+        "channel": "Update channel",
+        "channel_stable": "Stable",
+        "channel_rc": "Release candidate",
+        "auto_check": "Check for updates on launch",
+        "check_now": "Check for updates",
+        "checking": "Checking…",
+        "up_to_date": "Up to date",
+        "available": "Update available: {}",
+        "failed": "Update check failed",
+        "downloading": "Downloading… {}%",
+        "verifying": "Verifying…",
+        "installed_relaunch": "Akira will close to finish updating. Please reopen it afterward.",
+        "update_now": "Update now",
+        "skip": "Skip this version",
+        "later": "Later",
+        "prompt_title": "Update available",
+        "prompt_body": "Akira {} is available (you are on {}).",
+        "verify_failed": "Downloaded update failed verification",
+        "install_failed": "Update install failed"
     },
     "network": {
         "check_nat": "Check NAT Type",

@@ -478,7 +478,31 @@
         "sso_expires": "SSO 令牌过期时间",
         "trophies_enabled": "显示奖杯页面",
         "menu_developer": "开发者",
-        "dev_fake_hosts": "模拟主机（20 台 PS5）"
+        "dev_fake_hosts": "模拟主机（20 台 PS5）",
+        "menu_updates": "更新",
+        "simulate_update": "模拟可用更新",
+        "dev_update_server_hint": "开发更新服务器 (host:port)"
+    },
+    "update": {
+        "channel": "更新通道",
+        "channel_stable": "稳定版",
+        "channel_rc": "候选版本",
+        "auto_check": "启动时检查更新",
+        "check_now": "检查更新",
+        "checking": "正在检查…",
+        "up_to_date": "已是最新版本",
+        "available": "有可用更新：{}",
+        "failed": "检查更新失败",
+        "downloading": "正在下载… {}%",
+        "verifying": "正在校验…",
+        "installed_relaunch": "Akira 将关闭以完成更新，请稍后重新打开。",
+        "update_now": "立即更新",
+        "skip": "跳过此版本",
+        "later": "稍后",
+        "prompt_title": "有可用更新",
+        "prompt_body": "Akira {} 已发布（当前版本 {}）。",
+        "verify_failed": "下载的更新未通过校验",
+        "install_failed": "更新安装失败"
     },
     "network": {
         "check_nat": "检测 NAT 类型",

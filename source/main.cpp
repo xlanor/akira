@@ -39,6 +39,8 @@
 #include "views/settings_frame_view.hpp"
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
+#include "core/update_manager.hpp"
+#include "views/update_flow.hpp"
 #include "core/thread_affinity.h"
 
 #include <borealis/core/i18n.hpp>
@@ -322,6 +324,8 @@ public:
             brls::Application::pushActivity(new brls::Activity(frame));
             return true;
         }, false);
+
+        akira::UpdateFlow::checkOnLaunch();
     }
 };
 
@@ -334,6 +338,8 @@ public:
 int main(int argc, char* argv[])
 {
     brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
+
+    akira::UpdateManager::setSelfPath(argc > 0 && argv[0] ? argv[0] : "");
 
     for (int i = 1; i < argc; i++)
     {

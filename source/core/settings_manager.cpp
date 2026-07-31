@@ -325,6 +325,16 @@ void SettingsManager::parseTomlFile() {
 
         if (auto val = config["dev_fake_hosts"].value<bool>())
             devFakeHosts = *val;
+        if (auto val = config["update_channel"].value<std::string>())
+            updateChannel = *val;
+        if (auto val = config["auto_check_updates"].value<bool>())
+            autoCheckUpdates = *val;
+        if (auto val = config["last_update_check"].value<int64_t>())
+            lastUpdateCheck = *val;
+        if (auto val = config["update_install_path"].value<std::string>())
+            updateInstallPath = *val;
+        if (auto val = config["dev_update_server"].value<std::string>())
+            devUpdateServer = *val;
         if (auto val = config["sleep_on_exit"].value<bool>())
             sleepOnExit = *val;
         if (auto val = config["request_idr_on_fec_failure"].value<bool>())
@@ -739,6 +749,14 @@ int SettingsManager::writeFile() {
         config.insert("auto_reconnect", autoReconnect);
     if (devFakeHosts)
         config.insert("dev_fake_hosts", devFakeHosts);
+    config.insert("update_channel", updateChannel);
+    config.insert("auto_check_updates", autoCheckUpdates);
+    if (lastUpdateCheck != 0)
+        config.insert("last_update_check", lastUpdateCheck);
+    if (!updateInstallPath.empty())
+        config.insert("update_install_path", updateInstallPath);
+    if (!devUpdateServer.empty())
+        config.insert("dev_update_server", devUpdateServer);
     if (sleepOnExit)
         config.insert("sleep_on_exit", sleepOnExit);
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
@@ -1500,6 +1518,46 @@ bool SettingsManager::getDevFakeHosts() const {
 
 void SettingsManager::setDevFakeHosts(bool enabled) {
     devFakeHosts = enabled;
+}
+
+std::string SettingsManager::getUpdateChannel() const {
+    return updateChannel;
+}
+
+void SettingsManager::setUpdateChannel(const std::string& channel) {
+    updateChannel = channel;
+}
+
+bool SettingsManager::getAutoCheckUpdates() const {
+    return autoCheckUpdates;
+}
+
+void SettingsManager::setAutoCheckUpdates(bool enabled) {
+    autoCheckUpdates = enabled;
+}
+
+int64_t SettingsManager::getLastUpdateCheck() const {
+    return lastUpdateCheck;
+}
+
+void SettingsManager::setLastUpdateCheck(int64_t epochSeconds) {
+    lastUpdateCheck = epochSeconds;
+}
+
+std::string SettingsManager::getUpdateInstallPath() const {
+    return updateInstallPath;
+}
+
+void SettingsManager::setUpdateInstallPath(const std::string& path) {
+    updateInstallPath = path;
+}
+
+std::string SettingsManager::getDevUpdateServer() const {
+    return devUpdateServer;
+}
+
+void SettingsManager::setDevUpdateServer(const std::string& server) {
+    devUpdateServer = server;
 }
 
 int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const {
