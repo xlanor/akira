@@ -179,6 +179,23 @@ jobs:
           EOF
           cat manifest.json
 
+      - name: Compose release body
+        run: |
+          {
+            if [ "${{ needs.build.outputs.channel }}" = "rc" ]; then
+              echo "## Read this first"
+              echo ""
+              echo "- **This is a release candidate and may contain bugs.**"
+              echo "- **Testers may wish to back up their configs before applying this release.**"
+              echo ""
+            fi
+            echo "Please read the [README](https://github.com/${{ github.repository }}#readme) before getting started."
+            echo ""
+            echo "- [Features](https://github.com/${{ github.repository }}/wiki/Additional-changes)"
+            echo ""
+            echo "**For setup and connection, please read the [Registering and Connecting (Unified)](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Unified)) guide carefully.**"
+          } > RELEASE_BODY.md
+
       - name: Create Release
         uses: softprops/action-gh-release@b25b93d384199fc0fc8c2e126b2d937a0cbeb2ae # v2
         with:
@@ -193,9 +210,4 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ needs.build.outputs.channel == 'rc' }}
-          body: |
-            Please read the [README](https://github.com/${{ github.repository }}#readme) before getting started.
-
-            - [Features](https://github.com/${{ github.repository }}/wiki/Additional-changes)
-
-            **For setup and connection, please read the [Registering and Connecting (Unified)](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Unified)) guide carefully.**
+          body_path: RELEASE_BODY.md
