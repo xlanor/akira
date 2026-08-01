@@ -98,6 +98,7 @@ static std::string getAppVersion() {
 
 void initCustomTheme()
 {
+    akira::ui::setActiveTheme(SettingsManager::getInstance()->getUiTheme());
     akira::ui::applyToBorealis();
 }
 

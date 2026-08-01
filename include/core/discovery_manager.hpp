@@ -85,6 +85,8 @@ public:
     int sendDiscovery(const char* ipAddress);
     int sendDiscovery(struct sockaddr* addr, size_t addrLen);
 
+    std::string getLocalSubnetCidr();
+
     void discoveryCallback(ChiakiDiscoveryHost* discoveredHost);
 
     void setOnHostDiscovered(HostDiscoveredCallback callback) {

@@ -81,6 +81,8 @@ private:
     bool autoReconnect = true;
     bool devFakeHosts = false;
     std::string updateChannel = "stable";
+    std::string uiTheme = "playstation";
+    std::string discoverySubnets;
     bool autoCheckUpdates = true;
     int64_t lastUpdateCheck = 0;
     std::string updateInstallPath;
@@ -298,6 +300,12 @@ public:
 
     std::string getUpdateChannel() const;
     void setUpdateChannel(const std::string& channel);
+
+    std::string getUiTheme() const;
+    void setUiTheme(const std::string& id);
+
+    std::string getDiscoverySubnets() const;
+    void setDiscoverySubnets(const std::string& subnets);
     bool getAutoCheckUpdates() const;
     void setAutoCheckUpdates(bool enabled);
     int64_t getLastUpdateCheck() const;

@@ -6,7 +6,7 @@ namespace akira::ui
 {
 static const Palette kPlayStation = {
     .id              = "playstation",
-    .name            = "PlayStation",
+    .name            = "Cobalt",
     .background      = nvgRGB(0x0b, 0x1a, 0x3a),
     .backgroundDeep  = nvgRGB(0x08, 0x0f, 0x20),
     .gradientTop     = nvgRGB(0x18, 0x33, 0x6e),
@@ -30,8 +30,62 @@ static const Palette kPlayStation = {
     .bronze          = nvgRGB(0xd0, 0x8a, 0x4f),
 };
 
+static const Palette kPlayStation30Light = {
+    .id              = "ps30-light",
+    .name            = "Anniversary (Light)",
+    .background      = nvgRGB(0xe7, 0xe6, 0xdc),
+    .backgroundDeep  = nvgRGB(0xdc, 0xdb, 0xd0),
+    .gradientTop     = nvgRGB(0xee, 0xed, 0xe4),
+    .gradientBottom  = nvgRGB(0xd8, 0xd7, 0xcc),
+    .surface         = nvgRGB(0xd1, 0xd2, 0xca),
+    .surfaceElevated = nvgRGB(0xc3, 0xc4, 0xbb),
+    .surfaceLine     = nvgRGBA(0x2a, 0x2b, 0x24, 0x26),
+    .accent          = nvgRGB(0x4f, 0x83, 0xcf),
+    .accentStrong    = nvgRGB(0x3f, 0x6f, 0xb8),
+    .focusA          = nvgRGB(0x8f, 0x90, 0x89),
+    .focusB          = nvgRGB(0xcf, 0xd0, 0xc8),
+    .text            = nvgRGB(0x2c, 0x2d, 0x28),
+    .textMuted       = nvgRGB(0x5c, 0x5d, 0x54),
+    .textDim         = nvgRGB(0x84, 0x85, 0x7b),
+    .success         = nvgRGB(0x3f, 0x9a, 0x6e),
+    .warning         = nvgRGB(0xc7, 0x94, 0x12),
+    .danger          = nvgRGB(0xcf, 0x4a, 0x54),
+    .media           = nvgRGB(0xb9, 0x5a, 0x90),
+    .gold            = nvgRGB(0xc7, 0x94, 0x12),
+    .silver          = nvgRGB(0x9a, 0x9b, 0x92),
+    .bronze          = nvgRGB(0xb0, 0x70, 0x3a),
+};
+
+static const Palette kPlayStation30 = {
+    .id              = "ps30",
+    .name            = "Anniversary (Dark)",
+    .background      = nvgRGB(0x2b, 0x2b, 0x2e),
+    .backgroundDeep  = nvgRGB(0x1b, 0x1b, 0x1e),
+    .gradientTop     = nvgRGB(0x3a, 0x3a, 0x3e),
+    .gradientBottom  = nvgRGB(0x16, 0x16, 0x18),
+    .surface         = nvgRGB(0x37, 0x37, 0x3b),
+    .surfaceElevated = nvgRGB(0x45, 0x45, 0x4a),
+    .surfaceLine     = nvgRGBA(0xff, 0xff, 0xff, 0x1c),
+    .accent          = nvgRGB(0x5b, 0x8f, 0xd6),
+    .accentStrong    = nvgRGB(0x45, 0x76, 0xc0),
+    .focusA          = nvgRGB(0xe0, 0xe0, 0xd8),
+    .focusB          = nvgRGB(0xa9, 0xaa, 0xa3),
+    .text            = nvgRGB(0xf0, 0xef, 0xe9),
+    .textMuted       = nvgRGB(0xb6, 0xb5, 0xac),
+    .textDim         = nvgRGB(0x7c, 0x7c, 0x74),
+    .success         = nvgRGB(0x57, 0xb9, 0x8c),
+    .warning         = nvgRGB(0xf0, 0xc2, 0x4a),
+    .danger          = nvgRGB(0xe0, 0x5a, 0x63),
+    .media           = nvgRGB(0xcf, 0x6f, 0xa5),
+    .gold            = nvgRGB(0xe8, 0xbd, 0x52),
+    .silver          = nvgRGB(0xcd, 0xcc, 0xc4),
+    .bronze          = nvgRGB(0xcf, 0x8a, 0x4f),
+};
+
 static const Palette* const kThemes[] = {
     &kPlayStation,
+    &kPlayStation30,
+    &kPlayStation30Light,
 };
 
 static const Palette* g_active = &kPlayStation;
@@ -121,6 +175,18 @@ void applyToBorealis()
     set("brls/highlight/color1", p.focusA);
     set("brls/highlight/color2", p.focusB);
     set("brls/highlight/background", p.background);
+
+    bool logoSelector = (p.id == "ps30" || p.id == "ps30-light");
+    auto glowOr = [&](NVGcolor c) { return logoSelector ? c : p.focusB; };
+    set("akira/highlight/multiglow", nvgRGBA(0, 0, 0, logoSelector ? 0xff : 0x00));
+    set("akira/highlight/glow1", glowOr(p.success));
+    set("akira/highlight/glow2", glowOr(p.danger));
+    set("akira/highlight/glow3", glowOr(p.accent));
+    set("akira/highlight/glow4", glowOr(p.media));
+    set("akira/highlight/ribbon1", glowOr(p.warning));
+    set("akira/highlight/ribbon2", glowOr(p.success));
+    set("akira/highlight/ribbon3", glowOr(p.danger));
+    set("akira/highlight/ribbon4", glowOr(p.accent));
 
     set("brls/spinner/bar_color", withAlpha(p.accent, 0x50));
 
