@@ -7,6 +7,7 @@
 #include "core/host.hpp"
 #include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
+#include "psn/models.hpp"
 #include "stream/session.hpp"
 #include "util/shared_view_holder.hpp"
 
@@ -72,7 +73,7 @@ public:
         this->addView(consoleImg);
 
         nameLabel = new brls::Label();
-        nameLabel->setFontSize(18);
+        nameLabel->setFontSize(22);
         nameLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         nameLabel->setMarginBottom(6);
         nameLabel->setAutoAnimate(true);
@@ -88,7 +89,7 @@ public:
         typePill->setMarginBottom(8);
 
         typeLabel = new brls::Label();
-        typeLabel->setFontSize(14);
+        typeLabel->setFontSize(16);
         typePill->addView(typeLabel);
         this->addView(typePill);
 
@@ -101,7 +102,7 @@ public:
         statusPill->setPaddingBottom(3);
 
         statusLabel = new brls::Label();
-        statusLabel->setFontSize(14);
+        statusLabel->setFontSize(16);
         statusPill->addView(statusLabel);
         this->addView(statusPill);
 
@@ -229,52 +230,7 @@ private:
     int lastDim = -1;
 
     void doConnect() {
-        if (HostListTab::isConnecting) {
-                return;
-            }
-
-            brls::Logger::info("Connect to {}", host->getHostName());
-
-            auto* settings = SettingsManager::getInstance();
-
-            bool isPS5 = host->isPS5();
-            bool needsAccountId = isPS5 || host->getChiakiTarget() >= CHIAKI_TARGET_PS4_9;
-            std::string accountId = settings->getPsnAccountId(host);
-            std::string onlineId = settings->getPsnOnlineId(host);
-
-            if (needsAccountId && accountId.empty()) {
-                auto* dialog = new brls::Dialog("akira/hosts/psn_account_id_required"_i18n);
-                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
-                    dialog->close();
-                });
-                dialog->open();
-                return;
-            }
-
-            if (!needsAccountId && onlineId.empty()) {
-                auto* dialog = new brls::Dialog("akira/hosts/psn_online_id_required"_i18n);
-                dialog->addButton("akira/common/ok"_i18n, [dialog]() {
-                    dialog->close();
-                });
-                dialog->open();
-                return;
-            }
-
-            HostListTab::isConnecting = true;
-            HostListTab::isActive = false;
-
-            if (host->isRemote()) {
-                auto connectionView = SharedViewHolder::holdNew<ConnectionView>(host);
-                brls::Application::pushActivity(new brls::Activity(connectionView.get()));
-                connectionView->setupAndStart();
-            } else {
-                auto streamView = SharedViewHolder::holdNew<StreamView>(host);
-                streamView->setupCallbacks();
-                brls::Application::pushActivity(new brls::Activity(streamView.get()));
-                streamView->startStream();
-            }
-
-            HostListTab::isConnecting = false;
+        HostListTab::connectToHost(host);
     }
 
     void doWake() {
@@ -518,7 +474,7 @@ public:
 
         auto* label = new brls::Label();
         label->setText("akira/add_host/add_console"_i18n);
-        label->setFontSize(18);
+        label->setFontSize(22);
         label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         label->setTextColor(akira::ui::active().textMuted);
         this->addView(label);
@@ -615,9 +571,115 @@ HostListTab::HostListTab() {
     });
 
     recentRail = new RecentlyPlayedRail();
+    recentRail->setResumeHandler([](const psn::PlayedGame& game) {
+        HostListTab::resumeGame(game);
+    });
     railSlot->addView(recentRail);
 
     syncHostList();
+}
+
+void HostListTab::connectToHost(Host* host) {
+    if (!host || HostListTab::isConnecting)
+        return;
+
+    brls::Logger::info("Connect to {}", host->getHostName());
+
+    auto* settings = SettingsManager::getInstance();
+    bool isPS5 = host->isPS5();
+    bool needsAccountId = isPS5 || host->getChiakiTarget() >= CHIAKI_TARGET_PS4_9;
+    std::string accountId = settings->getPsnAccountId(host);
+    std::string onlineId = settings->getPsnOnlineId(host);
+
+    if (needsAccountId && accountId.empty()) {
+        auto* dialog = new brls::Dialog("akira/hosts/psn_account_id_required"_i18n);
+        dialog->addButton("akira/common/ok"_i18n, [dialog]() { dialog->close(); });
+        dialog->open();
+        return;
+    }
+
+    if (!needsAccountId && onlineId.empty()) {
+        auto* dialog = new brls::Dialog("akira/hosts/psn_online_id_required"_i18n);
+        dialog->addButton("akira/common/ok"_i18n, [dialog]() { dialog->close(); });
+        dialog->open();
+        return;
+    }
+
+    HostListTab::isConnecting = true;
+    HostListTab::isActive = false;
+
+    if (host->isRemote()) {
+        auto connectionView = SharedViewHolder::holdNew<ConnectionView>(host);
+        brls::Application::pushActivity(new brls::Activity(connectionView.get()));
+        connectionView->setupAndStart();
+    } else {
+        auto streamView = SharedViewHolder::holdNew<StreamView>(host);
+        streamView->setupCallbacks();
+        brls::Application::pushActivity(new brls::Activity(streamView.get()));
+        streamView->startStream();
+    }
+
+    HostListTab::isConnecting = false;
+}
+
+void HostListTab::resumeGame(const psn::PlayedGame& game) {
+    if (HostListTab::isConnecting)
+        return;
+
+    bool wantPS5 = game.category.find("ps5") != std::string::npos;
+    bool wantPS4 = game.category.find("ps4") != std::string::npos;
+
+    auto* hosts = SettingsManager::getInstance()->getHostsMap();
+    Host* localReady = nullptr;
+    Host* remoteHost = nullptr;
+    Host* localStandby = nullptr;
+    Host* anyMatch = nullptr;
+
+    if (hosts) {
+        for (auto& entry : *hosts) {
+            Host* h = entry.second.get();
+            if (!h)
+                continue;
+            if (wantPS5 && !h->isPS5())
+                continue;
+            if (wantPS4 && h->isPS5())
+                continue;
+            if (!anyMatch)
+                anyMatch = h;
+            if (h->isRemote()) {
+                if (!remoteHost)
+                    remoteHost = h;
+            } else if (h->isReady()) {
+                if (!localReady)
+                    localReady = h;
+            } else if (h->isStandby()) {
+                if (!localStandby)
+                    localStandby = h;
+            }
+        }
+    }
+
+    if (localReady) {
+        connectToHost(localReady);
+        return;
+    }
+    if (remoteHost) {
+        connectToHost(remoteHost);
+        return;
+    }
+    if (localStandby) {
+        int result = localStandby->wakeup();
+        if (result == 0)
+            brls::Application::notify(brls::getStr("akira/hosts/resume_waking", localStandby->getHostName()));
+        else
+            brls::Application::notify(brls::getStr("akira/hosts/wake_failed", localStandby->getHostName()));
+        return;
+    }
+    if (anyMatch) {
+        connectToHost(anyMatch);
+        return;
+    }
+    brls::Application::notify("akira/hosts/resume_no_console"_i18n);
 }
 
 void HostListTab::initFindRemoteButton() {

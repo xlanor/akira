@@ -24,18 +24,18 @@
         <brls:Label
             id="chip/name"
             text="—"
-            fontSize="16"/>
+            fontSize="18"/>
 
         <brls:Label
             id="chip/sub"
             text=""
-            fontSize="12"/>
+            fontSize="14"/>
 
     </brls:Box>
 
     <brls:Label
         id="chip/plus"
         text="PS Plus"
-        fontSize="12"/>
+        fontSize="14"/>
 
 </brls:Box>

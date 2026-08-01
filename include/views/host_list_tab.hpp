@@ -13,6 +13,8 @@
 
 class HostItemView;
 
+namespace psn { struct PlayedGame; }
+
 class HostListTab : public brls::Box {
     friend class HostItemView;
 
@@ -43,6 +45,9 @@ private:
     RecentlyPlayedRail* recentRail = nullptr;
 
     void initFindRemoteButton();
+
+    static void connectToHost(Host* host);
+    static void resumeGame(const psn::PlayedGame& game);
 
     PsnActionButton findRemoteGate;
 

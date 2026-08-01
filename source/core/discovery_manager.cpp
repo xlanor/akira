@@ -7,6 +7,8 @@
 
 #include <cstring>
 #include <cstdlib>
+#include <cstdint>
+#include <vector>
 #include <switch.h>
 
 #include <arpa/inet.h>
@@ -105,12 +107,75 @@ void DiscoveryManager::setServiceEnabled(bool enable)
         options.cb = DiscoveryServiceCallback;
         options.cb_user = this;
 
+        std::vector<struct sockaddr_storage> targets;
+
         struct sockaddr_in addr_broadcast = {};
         addr_broadcast.sin_family = AF_INET;
         addr_broadcast.sin_addr.s_addr = addresses.broadcast;
-        options.broadcast_addrs = static_cast<struct sockaddr_storage*>(malloc(sizeof(struct sockaddr_storage)));
-        memcpy(options.broadcast_addrs, &addr_broadcast, sizeof(addr_broadcast));
-        options.broadcast_num = 1;
+        struct sockaddr_storage broadcastStore = {};
+        memcpy(&broadcastStore, &addr_broadcast, sizeof(addr_broadcast));
+        targets.push_back(broadcastStore);
+
+        auto* hostsForDiscovery = settings->getHostsMap();
+        if (hostsForDiscovery) {
+            for (auto& entry : *hostsForDiscovery) {
+                Host* h = entry.second.get();
+                if (!h || !h->isManual())
+                    continue;
+                std::string addr = h->getHostAddr();
+                if (addr.empty())
+                    continue;
+                struct sockaddr_in unicast = {};
+                unicast.sin_family = AF_INET;
+                if (inet_pton(AF_INET, addr.c_str(), &unicast.sin_addr) == 1) {
+                    struct sockaddr_storage unicastStore = {};
+                    memcpy(&unicastStore, &unicast, sizeof(unicast));
+                    targets.push_back(unicastStore);
+                    brls::Logger::info("Discovery: added manual unicast target {}", addr);
+                }
+            }
+        }
+
+        std::string subnetsCfg = settings->getDiscoverySubnets();
+        size_t start = 0;
+        while (start < subnetsCfg.size()) {
+            size_t end = subnetsCfg.find_first_of(", \t\n", start);
+            std::string token = subnetsCfg.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            start = (end == std::string::npos) ? subnetsCfg.size() : end + 1;
+            if (token.empty())
+                continue;
+
+            uint32_t bcast = 0;
+            size_t slash = token.find('/');
+            if (slash != std::string::npos) {
+                std::string ipPart = token.substr(0, slash);
+                int prefix = atoi(token.substr(slash + 1).c_str());
+                struct in_addr ina = {};
+                if (inet_pton(AF_INET, ipPart.c_str(), &ina) == 1 && prefix >= 0 && prefix <= 32) {
+                    uint32_t hostOrder = ntohl(ina.s_addr);
+                    uint32_t mask = (prefix == 0) ? 0 : (0xFFFFFFFFu << (32 - prefix));
+                    bcast = htonl((hostOrder & mask) | (~mask));
+                }
+            } else {
+                struct in_addr ina = {};
+                if (inet_pton(AF_INET, token.c_str(), &ina) == 1)
+                    bcast = ina.s_addr;
+            }
+
+            if (bcast != 0) {
+                struct sockaddr_in subnetAddr = {};
+                subnetAddr.sin_family = AF_INET;
+                subnetAddr.sin_addr.s_addr = bcast;
+                struct sockaddr_storage subnetStore = {};
+                memcpy(&subnetStore, &subnetAddr, sizeof(subnetAddr));
+                targets.push_back(subnetStore);
+                brls::Logger::info("Discovery: added subnet target {}", token);
+            }
+        }
+
+        options.broadcast_addrs = static_cast<struct sockaddr_storage*>(malloc(targets.size() * sizeof(struct sockaddr_storage)));
+        memcpy(options.broadcast_addrs, targets.data(), targets.size() * sizeof(struct sockaddr_storage));
+        options.broadcast_num = targets.size();
 
         struct sockaddr_in in_addr = {};
         in_addr.sin_family = AF_INET;
@@ -173,6 +238,37 @@ NetworkAddresses DiscoveryManager::getIPv4BroadcastAddr()
     result.local = current_addr;
 
     return result;
+}
+
+std::string DiscoveryManager::getLocalSubnetCidr()
+{
+    uint32_t current_addr = 0;
+    uint32_t subnet_mask = 0;
+
+    Result rc = nifmInitialize(NifmServiceType_User);
+    if (R_SUCCEEDED(rc))
+    {
+        nifmGetCurrentIpConfigInfo(&current_addr, &subnet_mask, NULL, NULL, NULL);
+        nifmExit();
+    }
+    else
+    {
+        return "";
+    }
+
+    if (current_addr == 0)
+        return "";
+
+    uint32_t network = current_addr & subnet_mask;
+    int prefix = __builtin_popcount(subnet_mask);
+
+    struct in_addr netAddr = {};
+    netAddr.s_addr = network;
+    char buf[INET_ADDRSTRLEN] = {};
+    if (!inet_ntop(AF_INET, &netAddr, buf, sizeof(buf)))
+        return "";
+
+    return std::string(buf) + "/" + std::to_string(prefix);
 }
 
 int DiscoveryManager::sendDiscovery(struct sockaddr* addr, size_t addrLen)
@@ -299,12 +395,20 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
 
     brls::sync([this, data, target]() {
         auto* hostsMap = settings->getHostsMap();
-        auto it = hostsMap->find(data->hostName);
 
-        Host* host;
+        Host* host = nullptr;
+        auto it = hostsMap->find(data->hostName);
         if (it != hostsMap->end()) {
             host = it->second.get();
-        } else {
+        } else if (!data->hostAddr.empty()) {
+            for (auto& entry : *hostsMap) {
+                if (entry.second && entry.second->getHostAddr() == data->hostAddr) {
+                    host = entry.second.get();
+                    break;
+                }
+            }
+        }
+        if (!host) {
             host = settings->getOrCreateHost(data->hostName);
             host->setHostType(HostType::Auto);
         }

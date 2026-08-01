@@ -10,6 +10,7 @@
 
     <brls:ScrollingFrame
         id="host/scroll"
+        scrollingBehavior="centered"
         width="auto"
         height="auto"
         grow="1.0">

@@ -327,6 +327,10 @@ void SettingsManager::parseTomlFile() {
             devFakeHosts = *val;
         if (auto val = config["update_channel"].value<std::string>())
             updateChannel = *val;
+        if (auto val = config["ui_theme"].value<std::string>())
+            uiTheme = *val;
+        if (auto val = config["discovery_subnets"].value<std::string>())
+            discoverySubnets = *val;
         if (auto val = config["auto_check_updates"].value<bool>())
             autoCheckUpdates = *val;
         if (auto val = config["last_update_check"].value<int64_t>())
@@ -750,6 +754,9 @@ int SettingsManager::writeFile() {
     if (devFakeHosts)
         config.insert("dev_fake_hosts", devFakeHosts);
     config.insert("update_channel", updateChannel);
+    config.insert("ui_theme", uiTheme);
+    if (!discoverySubnets.empty())
+        config.insert("discovery_subnets", discoverySubnets);
     config.insert("auto_check_updates", autoCheckUpdates);
     if (lastUpdateCheck != 0)
         config.insert("last_update_check", lastUpdateCheck);
@@ -1526,6 +1533,22 @@ std::string SettingsManager::getUpdateChannel() const {
 
 void SettingsManager::setUpdateChannel(const std::string& channel) {
     updateChannel = channel;
+}
+
+std::string SettingsManager::getUiTheme() const {
+    return uiTheme;
+}
+
+void SettingsManager::setUiTheme(const std::string& id) {
+    uiTheme = id;
+}
+
+std::string SettingsManager::getDiscoverySubnets() const {
+    return discoverySubnets;
+}
+
+void SettingsManager::setDiscoverySubnets(const std::string& subnets) {
+    discoverySubnets = subnets;
 }
 
 bool SettingsManager::getAutoCheckUpdates() const {

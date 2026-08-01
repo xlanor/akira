@@ -47,6 +47,27 @@
             </brls:Box>
 
             <brls:Header
+                title="@i18n/akira/settings/appearance"
+                marginBottom="10"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"
+                backgroundColor="@theme/color/card"
+                cornerRadius="14"
+                marginBottom="30">
+
+                <brls:SelectorCell
+                    id="settings/theme"
+                    title="@i18n/akira/settings/theme"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+            </brls:Box>
+
+            <brls:Header
                 title="@i18n/akira/settings/performance"
                 marginBottom="10"/>
 
@@ -82,6 +103,27 @@
                     title="@i18n/akira/settings/packet_loss_max"
                     marginLeft="15"
                     marginRight="15"/>
+
+            </brls:Box>
+
+            <brls:Header
+                title="@i18n/akira/settings/network"
+                marginBottom="10"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"
+                backgroundColor="@theme/color/card"
+                cornerRadius="14"
+                marginBottom="30">
+
+                <brls:Box
+                    id="settings/subnetsBox"
+                    width="auto"
+                    height="auto"
+                    axis="column"/>
 
             </brls:Box>
 

@@ -3,6 +3,7 @@
 
 #include <borealis.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
+#include <borealis/views/cells/cell_input.hpp>
 #include <borealis/views/cells/cell_selector.hpp>
 #include <borealis/views/cells/cell_slider.hpp>
 #include <chrono>
@@ -15,6 +16,8 @@ public:
 
 private:
     BRLS_BIND(brls::SelectorCell, languageSelector, "settings/language");
+    BRLS_BIND(brls::SelectorCell, themeSelector, "settings/theme");
+    BRLS_BIND(brls::Box, subnetsBox, "settings/subnetsBox");
     BRLS_BIND(brls::Label, versionLabel, "settings/version");
     BRLS_BIND(brls::BooleanCell, enableThreadAffinityToggle, "settings/enableThreadAffinity");
     BRLS_BIND(brls::BooleanCell, holepunchRetryToggle, "settings/holepunchRetry");
@@ -27,6 +30,10 @@ private:
     std::chrono::steady_clock::time_point lastPowerUserClick;
 
     void initLanguageSelector();
+    void initThemeSelector();
+    void rebuildSubnetsUI();
+    void promptAddSubnet();
+    void removeSubnet(const std::string& value);
     void initVersionUnlock();
     void initEnableThreadAffinityToggle();
     void initHolepunchRetryToggle();
