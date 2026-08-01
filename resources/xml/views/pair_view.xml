@@ -1,0 +1,82 @@
+<brls:Box
+    width="100%"
+    height="100%"
+    axis="column"
+    alignItems="center"
+    justifyContent="center"
+    backgroundColor="#000000"
+    paddingTop="30"
+    paddingLeft="40"
+    paddingRight="40"
+    paddingBottom="30">
+
+    <brls:Label
+        text="@i18n/akira/pair/title"
+        fontSize="28"
+        textColor="#FFFFFF"
+        horizontalAlign="center"
+        marginBottom="10"/>
+
+    <brls:Label
+        text="@i18n/akira/pair/instructions"
+        fontSize="18"
+        textColor="#AAAAAA"
+        horizontalAlign="center"
+        marginBottom="30"/>
+
+    <brls:Label
+        id="pair/code"
+        text="0 0 0 0"
+        fontSize="72"
+        textColor="#FFFFFF"
+        horizontalAlign="center"/>
+
+    <brls:Box
+        width="auto"
+        height="auto"
+        axis="row"
+        alignItems="center"
+        justifyContent="center"
+        marginTop="18">
+
+        <brls:Label
+            id="pair/addrIp"
+            text=""
+            fontSize="20"/>
+
+        <brls:Label
+            text="·"
+            fontSize="20"
+            textColor="#555555"
+            marginLeft="12"
+            marginRight="12"/>
+
+        <brls:Label
+            id="pair/addrPort"
+            text=""
+            fontSize="20"/>
+    </brls:Box>
+
+    <brls:Label
+        id="pair/timer"
+        text=""
+        fontSize="16"
+        textColor="#7788AA"
+        horizontalAlign="center"
+        marginTop="16"/>
+
+    <brls:Label
+        id="pair/status"
+        text="@i18n/akira/pair/status_waiting"
+        fontSize="20"
+        textColor="#888888"
+        horizontalAlign="center"
+        marginTop="10"
+        marginBottom="24"/>
+
+    <brls:Button
+        id="pair/close"
+        text="@i18n/akira/common/close"
+        style="bordered"/>
+
+</brls:Box>

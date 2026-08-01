@@ -1,5 +1,6 @@
 #include "views/profile_switcher_view.hpp"
 #include "views/host_list_tab.hpp"
+#include "views/pair_view.hpp"
 #include "ui/theme.hpp"
 #include "ui/motion.hpp"
 #include "core/trophy_manager.hpp"
@@ -312,25 +313,6 @@ void ProfileSwitcherView::confirmRemoveProfile(int64_t id, const std::string& la
 }
 
 void ProfileSwitcherView::addProfileFlow() {
-    brls::Application::getImeManager()->openForText(
-        [this](std::string text) {
-            Profile np;
-            np.onlineId = text;
-            int64_t id = settings->addProfile(np);
-            settings->setActiveProfileId(id);
-            settings->writeFile();
-            TrophyManager::getInstance()->onActiveProfileChanged();
-            HostListTab::notifyActiveProfileChanged();
-
-            if (card)
-                card->refresh();
-            if (onProfileChanged)
-                onProfileChanged();
-
-            brls::Application::notify("akira/settings/profile_added"_i18n);
-            setExpanded(false);
-        },
-        "akira/settings/add_profile"_i18n,
-        "akira/settings/add_profile_hint"_i18n,
-        16, "", 0);
+    setExpanded(false);
+    brls::Application::pushActivity(new brls::Activity(new PairView(true)));
 }

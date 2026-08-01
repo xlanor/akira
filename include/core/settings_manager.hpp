@@ -118,7 +118,6 @@ private:
     StreamProfile activeStreamProfile = StreamProfile::Local;
 
     // Companion server settings
-    std::string companionHost;
     int companionPort = 8080;
 
     ButtonMapping buttonMapping;
@@ -266,8 +265,6 @@ public:
     bool setChiakiTarget(Host* host, ChiakiTarget target);
     bool setChiakiTarget(Host* host, const std::string& value);
 
-    std::string getCompanionHost() const;
-    void setCompanionHost(const std::string& host);
     int getCompanionPort() const;
     void setCompanionPort(int port);
 

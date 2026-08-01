@@ -63,6 +63,28 @@
                 axis="column"/>
 
             <brls:Box
+                id="empty/message"
+                width="auto"
+                height="auto"
+                axis="column"
+                alignItems="center"
+                marginTop="20"
+                marginBottom="30"
+                visibility="gone">
+
+                <brls:Label
+                    text="@i18n/akira/hosts/no_consoles"
+                    fontSize="20"
+                    textColor="#888888"
+                    marginBottom="10"/>
+
+                <brls:Label
+                    text="@i18n/akira/hosts/no_consoles_hint"
+                    fontSize="14"
+                    textColor="#666666"/>
+            </brls:Box>
+
+            <brls:Box
                 id="host/railSlot"
                 width="auto"
                 height="auto"
@@ -71,35 +93,5 @@
         </brls:Box>
 
     </brls:ScrollingFrame>
-
-    <brls:Box
-        id="empty/message"
-        width="auto"
-        height="auto"
-        axis="column"
-        grow="1.0"
-        justifyContent="center"
-        alignItems="center"
-        paddingBottom="80"
-        visibility="gone">
-
-        <brls:Box
-            id="empty/addSlot"
-            width="auto"
-            height="auto"
-            axis="column"
-            alignItems="center"/>
-
-        <brls:Label
-            text="@i18n/akira/hosts/no_consoles"
-            fontSize="20"
-            textColor="#888888"
-            marginBottom="10"/>
-
-        <brls:Label
-            text="@i18n/akira/hosts/no_consoles_hint"
-            fontSize="14"
-            textColor="#666666"/>
-    </brls:Box>
 
 </brls:Box>

@@ -49,20 +49,14 @@
                 paddingBottom="15">
 
                 <brls:InputCell
-                    id="settings/companionHost"
-                    title="@i18n/akira/settings/companion_host"
-                    marginLeft="15"
-                    marginRight="15"/>
-
-                <brls:InputCell
                     id="settings/companionPort"
                     title="@i18n/akira/settings/companion_port"
                     marginLeft="15"
                     marginRight="15"/>
 
                 <brls:Button
-                    id="settings/fetchPsnBtn"
-                    text="@i18n/akira/settings/fetch_psn_btn"
+                    id="settings/pairBtn"
+                    text="@i18n/akira/settings/pair_btn"
                     style="bordered"
                     grow="1"
                     marginLeft="15"

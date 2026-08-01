@@ -69,14 +69,30 @@ func (s *AppState) Load() error {
 		return err
 	}
 
-	return json.Unmarshal(data, s)
+	if err := json.Unmarshal(data, s); err != nil {
+		return err
+	}
+
+	s.Npsso = ""
+	s.Tokens = nil
+	s.MobileTokens = nil
+	s.Account = nil
+	return nil
 }
 
 func (s *AppState) Save() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, err := json.MarshalIndent(s, "", "  ")
+	persist := struct {
+		DUID string `json:"duid,omitempty"`
+		Seed string `json:"seed,omitempty"`
+	}{
+		DUID: s.DUID,
+		Seed: s.Seed,
+	}
+
+	data, err := json.MarshalIndent(persist, "", "  ")
 	if err != nil {
 		return err
 	}

@@ -12,36 +12,20 @@
 
 
         <brls:Box
+            id="trophies/profile"
             width="auto"
             height="auto"
-            axis="row"
-            justifyContent="spaceBetween"
-            alignItems="center"
+            axis="column"
             backgroundColor="@theme/color/card"
             cornerRadius="14"
-            paddingTop="12"
-            paddingBottom="12"
-            paddingLeft="15"
-            paddingRight="15"
+            paddingTop="18"
+            paddingBottom="18"
+            paddingLeft="20"
+            paddingRight="20"
             marginTop="20"
             marginLeft="@style/brls/tab_frame/content_padding_sides"
             marginRight="@style/brls/tab_frame/content_padding_sides"
-            marginBottom="10">
-
-            <brls:Box
-                id="trophies/profile"
-                width="auto"
-                height="auto"
-                axis="column"
-                grow="1.0"/>
-
-            <brls:Button
-                id="trophies/forceRefreshBtn"
-                text="@i18n/akira/trophies/force_refresh_btn"
-                style="bordered"
-                marginLeft="15"/>
-
-        </brls:Box>
+            marginBottom="10"/>
 
         <brls:Box
             width="auto"

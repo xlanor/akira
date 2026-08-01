@@ -10,6 +10,7 @@
 #include "core/trophy_manager.hpp"
 #include "views/psn_action_button.hpp"
 #include "views/psn_gated_box.hpp"
+#include "views/progress_ring.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
 
 class TrophyCardCell : public RecyclingGridItem {
@@ -88,7 +89,7 @@ private:
     BRLS_BIND(PsnGatedBox, gate, "trophies/gate");
     BRLS_BIND(brls::Button, sortBtn, "trophies/sortBtn");
     BRLS_BIND(brls::Button, filterBtn, "trophies/filterBtn");
-    BRLS_BIND(brls::Button, forceRefreshBtn, "trophies/forceRefreshBtn");
+    brls::Button* forceRefreshBtn = nullptr;
 
     void load(bool forceRefresh);
     void buildProfileCard();
@@ -101,8 +102,7 @@ private:
     void refreshStatusLine();
 
     brls::Label* levelValue = nullptr;
-    brls::Label* progressLabel = nullptr;
-    brls::Rectangle* progressFill = nullptr;
+    ProgressRing* levelRing = nullptr;
     brls::Label* statusLabel = nullptr;
     brls::Image* tierImages[4] = {};
     brls::Label* tierCounts[4] = {};

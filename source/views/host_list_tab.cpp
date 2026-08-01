@@ -4,6 +4,7 @@
 #include "views/stream_view.hpp"
 #include "views/connection_view.hpp"
 #include "views/enter_pin_view.hpp"
+#include "views/pair_view.hpp"
 #include "core/host.hpp"
 #include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
@@ -490,6 +491,54 @@ private:
     brls::Animatable focusAnim{0.0f};
 };
 
+class SetupAccountCard : public brls::Box {
+public:
+    SetupAccountCard() {
+        this->setAxis(brls::Axis::COLUMN);
+        this->setAlignItems(brls::AlignItems::CENTER);
+        this->setJustifyContent(brls::JustifyContent::CENTER);
+        this->setWidth(300);
+        this->setHeight(238);
+        this->setPadding(20);
+        this->setBackgroundColor(brls::Application::getTheme().getColor("color/card"));
+        this->setCornerRadius(14);
+        this->setBorderColor(akira::ui::withAlpha(akira::ui::active().accent, 0x66));
+        this->setBorderThickness(2);
+        this->setFocusable(true);
+
+        auto* glyph = new brls::Label();
+        glyph->setText("\xEE\xA1\x93");
+        glyph->setFontSize(64);
+        glyph->setTextColor(akira::ui::active().accent);
+        glyph->setMarginBottom(10);
+        this->addView(glyph);
+
+        auto* label = new brls::Label();
+        label->setText("akira/hosts/setup_account"_i18n);
+        label->setFontSize(22);
+        label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        label->setTextColor(akira::ui::active().text);
+        this->addView(label);
+
+        auto* hint = new brls::Label();
+        hint->setText("akira/hosts/setup_account_hint"_i18n);
+        hint->setFontSize(15);
+        hint->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        hint->setTextColor(akira::ui::active().textMuted);
+        hint->setMarginTop(6);
+        this->addView(hint);
+
+        this->registerClickAction([](brls::View*) {
+            brls::Application::pushActivity(new brls::Activity(new PairView()));
+            return true;
+        });
+        akira::ui::motion::liftOnFocus(this, focusAnim);
+    }
+
+private:
+    brls::Animatable focusAnim{0.0f};
+};
+
 
 HostListTab::HostListTab() {
     currentInstance = this;
@@ -577,6 +626,12 @@ HostListTab::HostListTab() {
     railSlot->addView(recentRail);
 
     syncHostList();
+}
+
+brls::View* HostListTab::getDefaultFocus() {
+    if (emptyActionCard)
+        return emptyActionCard->getDefaultFocus();
+    return brls::Box::getDefaultFocus();
 }
 
 void HostListTab::connectToHost(Host* host) {
@@ -856,27 +911,41 @@ void HostListTab::syncHostList() {
     if (hasHosts && animateEntrance)
         entrancePlayed = true;
 
-    if (emptyAddSlot)
-        emptyAddSlot->clearViews();
-    auto* addCard = new AddHostCard();
+    bool hasProfile = !settings->getProfiles().empty();
+
+    emptyActionCard = nullptr;
+
     if (hasHosts) {
-        if (col == 0 || !row) {
-            row = new brls::Box();
-            row->setAxis(brls::Axis::ROW);
-            hostContainer->addView(row);
+        if (hasProfile) {
+            if (col == 0 || !row) {
+                row = new brls::Box();
+                row->setAxis(brls::Axis::ROW);
+                hostContainer->addView(row);
+            }
+            row->addView(new AddHostCard());
         }
-        row->addView(addCard);
-    } else if (emptyAddSlot) {
-        emptyAddSlot->addView(addCard);
+    } else {
+        brls::Box* card = hasProfile ? static_cast<brls::Box*>(new AddHostCard())
+                                     : static_cast<brls::Box*>(new SetupAccountCard());
+        auto* cardRow = new brls::Box();
+        cardRow->setAxis(brls::Axis::ROW);
+        cardRow->setWidthPercentage(100.0f);
+        cardRow->setJustifyContent(brls::JustifyContent::CENTER);
+        hostContainer->addView(cardRow);
+        cardRow->addView(card);
+        emptyActionCard = card;
     }
 
     if (emptyMessage) {
-        emptyMessage->setVisibility(hasHosts ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
+        emptyMessage->setVisibility((!hasHosts && hasProfile) ? brls::Visibility::VISIBLE
+                                                              : brls::Visibility::GONE);
     }
 
     if (childFocused) {
         if (hasHosts) {
             brls::Application::giveFocus(hostContainer);
+        } else if (emptyActionCard) {
+            brls::Application::giveFocus(emptyActionCard);
         } else if (findRemoteBtn) {
             brls::Application::giveFocus(findRemoteBtn);
         }

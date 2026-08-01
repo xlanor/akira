@@ -27,9 +27,8 @@ private:
     BRLS_BIND(brls::BooleanCell, trophiesEnabledCell, "settings/trophiesEnabled");
     BRLS_BIND(brls::InputCell, psnAccountIdInput, "settings/psnAccountId");
     BRLS_BIND(brls::InputCell, psnOnlineIdInput, "settings/psnOnlineId");
-    BRLS_BIND(brls::InputCell, companionHostInput, "settings/companionHost");
     BRLS_BIND(brls::InputCell, companionPortInput, "settings/companionPort");
-    BRLS_BIND(brls::Button, fetchPsnBtn, "settings/fetchPsnBtn");
+    BRLS_BIND(brls::Button, pairBtn, "settings/pairBtn");
     BRLS_BIND(brls::Button, refreshTokenBtn, "settings/refreshTokenBtn");
     BRLS_BIND(brls::Button, clearPsnBtn, "settings/clearPsnBtn");
     BRLS_BIND(brls::Button, revealCredentialsBtn, "settings/revealCredentials");

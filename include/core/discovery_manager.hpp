@@ -93,20 +93,6 @@ public:
         onHostDiscovered = std::move(callback);
     }
 
-    void fetchCompanionCredentials(
-        const std::string& host,
-        int port,
-        std::function<void(
-            const std::string& onlineId,
-            const std::string& accountId,
-            const std::string& accessToken,
-            const std::string& refreshToken,
-            int64_t expiresAt,
-            const std::string& duid
-        )> onSuccess,
-        std::function<void(const std::string&)> onError
-    );
-
     void refreshRemoteDevices(RemoteRefreshCallback onComplete = nullptr, bool userInitiated = false);
 
     psn::ActionStatus getRemoteRefreshStatus() const;

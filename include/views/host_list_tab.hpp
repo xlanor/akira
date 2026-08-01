@@ -27,6 +27,8 @@ public:
     void willAppear(bool resetState) override;
     void willDisappear(bool resetState) override;
 
+    brls::View* getDefaultFocus() override;
+
     void updateHostItem(Host* host);
 
     void syncHostList();
@@ -36,13 +38,13 @@ public:
 private:
     BRLS_BIND(brls::Box, hostContainer, "host/container");
     BRLS_BIND(brls::Box, emptyMessage, "empty/message");
-    BRLS_BIND(brls::Box, emptyAddSlot, "empty/addSlot");
     BRLS_BIND(brls::Box, chipSlot, "host/chipSlot");
     BRLS_BIND(brls::Box, railSlot, "host/railSlot");
     BRLS_BIND(brls::Button, findRemoteBtn, "host/findRemoteBtn");
 
     ProfileChipView* profileChip = nullptr;
     RecentlyPlayedRail* recentRail = nullptr;
+    brls::Box* emptyActionCard = nullptr;
 
     void initFindRemoteButton();
 

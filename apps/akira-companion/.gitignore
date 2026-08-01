@@ -4,3 +4,9 @@ akira-companion.exe
 
 # State file (contains tokens)
 state.json
+
+# Wails / frontend build artifacts
+frontend/node_modules
+frontend/dist/*
+!frontend/dist/gitkeep
+build/bin
