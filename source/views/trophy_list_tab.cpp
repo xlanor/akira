@@ -226,6 +226,7 @@ void TrophyGameCard::bind(const psn::TrophyTitle& title, std::function<void()> o
 {
     selectCallback = std::move(onSelect);
     this->setVisibility(brls::Visibility::VISIBLE);
+    this->setFocusable(true);
 
     nameLabel->setText(title.trophyTitleName.empty() ? title.npCommunicationId : title.trophyTitleName);
 
@@ -297,6 +298,7 @@ TrophyGameRowCell::TrophyGameRowCell()
 {
     this->setAxis(brls::Axis::ROW);
     this->setWidthPercentage(100.0f);
+    this->setFocusable(false);
 
     for (int i = 0; i < 3; i++)
     {
@@ -323,6 +325,7 @@ void TrophyGameRowCell::bindRow(const std::vector<psn::TrophyTitle>& rowTitles, 
         else
         {
             cards[i]->reset();
+            cards[i]->setFocusable(false);
             cards[i]->setVisibility(brls::Visibility::INVISIBLE);
         }
     }
