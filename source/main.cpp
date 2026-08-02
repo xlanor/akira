@@ -41,6 +41,7 @@
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/update_manager.hpp"
+#include "core/discovery_manager.hpp"
 #include "views/update_flow.hpp"
 #include "core/thread_affinity.h"
 
@@ -267,6 +268,9 @@ class MainActivity : public brls::Activity
 public:
     CONTENT_FROM_XML_RES("activity/main.xml");
 
+    brls::Label* discoveryStatusLabel = nullptr;
+    brls::RepeatingTimer discoveryStatusTimer;
+
     void onContentAvailable() override
     {
         brls::Logger::info("Main activity content available");
@@ -292,12 +296,50 @@ public:
                                 }
                             }
 
+                            auto* footerCol = new brls::Box();
+                            footerCol->setAxis(brls::Axis::COLUMN);
+                            footerCol->setDirection(brls::Direction::LEFT_TO_RIGHT);
+                            footerCol->setJustifyContent(brls::JustifyContent::CENTER);
+                            footerCol->setAlignItems(brls::AlignItems::FLEX_START);
+
                             auto* ipLabel = new brls::Label();
                             ipLabel->setText("akira/app/ip_prefix"_i18n + getLocalIpAddress());
                             ipLabel->setFontSize(18);
                             ipLabel->setTextColor(akira::ui::active().textDim);
-                            ipLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
-                            rowBox->addView(ipLabel);
+                            ipLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+                            footerCol->addView(ipLabel);
+
+                            discoveryStatusLabel = new brls::Label();
+                            discoveryStatusLabel->setFontSize(13);
+                            discoveryStatusLabel->setTextColor(akira::ui::active().textDim);
+                            discoveryStatusLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+                            footerCol->addView(discoveryStatusLabel);
+
+                            rowBox->addView(footerCol);
+
+                            discoveryStatusTimer.setCallback([this]() {
+                                if (!discoveryStatusLabel)
+                                    return;
+                                DiscoveryManager::SweepStatus st = DiscoveryManager::getInstance()->getSweepStatus();
+                                std::string text;
+                                if (!st.serviceRunning) {
+                                    text = "akira/app/discovery_off"_i18n;
+                                } else if (!st.sweepActive || st.subnets.empty()) {
+                                    text = "akira/app/discovery_local"_i18n;
+                                } else {
+                                    std::string subs;
+                                    for (size_t i = 0; i < st.subnets.size(); i++) {
+                                        if (i > 0)
+                                            subs += ", ";
+                                        subs += st.subnets[i];
+                                    }
+                                    text = "akira/app/discovery_running_for"_i18n + " " + subs;
+                                    if (!st.currentTarget.empty())
+                                        text += " · " + st.currentTarget;
+                                }
+                                discoveryStatusLabel->setText(text);
+                            });
+                            discoveryStatusTimer.start(500);
                         }
                     }
                 }

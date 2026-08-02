@@ -25,11 +25,12 @@ static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
 TrophyListTab* TrophyListTab::currentInstance = nullptr;
 TitleSort TrophyListTab::sortMode = TitleSort::Recent;
 TitleFilter TrophyListTab::filterMode = TitleFilter::All;
-std::unordered_set<TrophyCardCell*> TrophyCardCell::liveCells;
-std::unordered_set<std::string> TrophyCardCell::retriedIcons;
+std::unordered_set<TrophyGameCard*> TrophyGameCard::liveCards;
+std::unordered_set<std::string> TrophyGameCard::retriedIcons;
 
 static constexpr float CARD_COVER_HEIGHT = 206;
 static constexpr float CARD_ROW_HEIGHT = 332;
+static constexpr float PROFILE_HEADER_HEIGHT = 150;
 
 std::string formatPlayDuration(int64_t seconds)
 {
@@ -154,7 +155,7 @@ std::string formatTrophyCounts(const psn::TrophyCounts& counts)
     return out;
 }
 
-TrophyCardCell::TrophyCardCell()
+TrophyGameCard::TrophyGameCard()
 {
     this->setAxis(brls::Axis::COLUMN);
     this->setCornerRadius(14);
@@ -207,16 +208,25 @@ TrophyCardCell::TrophyCardCell()
 
     akira::ui::motion::liftOnFocus(this, focusAnim);
 
-    liveCells.insert(this);
+    this->registerClickAction([this](brls::View*) {
+        if (selectCallback)
+            selectCallback();
+        return true;
+    });
+
+    liveCards.insert(this);
 }
 
-TrophyCardCell::~TrophyCardCell()
+TrophyGameCard::~TrophyGameCard()
 {
-    liveCells.erase(this);
+    liveCards.erase(this);
 }
 
-void TrophyCardCell::bindTitle(const psn::TrophyTitle& title)
+void TrophyGameCard::bind(const psn::TrophyTitle& title, std::function<void()> onSelect)
 {
+    selectCallback = std::move(onSelect);
+    this->setVisibility(brls::Visibility::VISIBLE);
+
     nameLabel->setText(title.trophyTitleName.empty() ? title.npCommunicationId : title.trophyTitleName);
 
     detailLabel->setText(std::format("{}  ·  {}%  ·  {}/{}",
@@ -255,14 +265,14 @@ void TrophyCardCell::bindTitle(const psn::TrophyTitle& title)
         [](const std::string& url, const std::vector<uint8_t>& bytes) {
             bool decodeFailed = false;
 
-            for (TrophyCardCell* cell : liveCells)
+            for (TrophyGameCard* card : liveCards)
             {
-                if (cell->iconUrl != url)
+                if (card->iconUrl != url)
                     continue;
 
-                cell->cover->setImageFromMem(bytes.data(), static_cast<int>(bytes.size()));
+                card->cover->setImageFromMem(bytes.data(), static_cast<int>(bytes.size()));
 
-                if (cell->cover->getTexture() <= 0)
+                if (card->cover->getTexture() <= 0)
                     decodeFailed = true;
             }
 
@@ -276,51 +286,209 @@ void TrophyCardCell::bindTitle(const psn::TrophyTitle& title)
         });
 }
 
-void TrophyCardCell::prepareForReuse()
+void TrophyGameCard::reset()
 {
+    selectCallback = nullptr;
     iconUrl.clear();
     cover->clear();
 }
 
-void TrophyCardCell::cacheForReuse()
+TrophyGameRowCell::TrophyGameRowCell()
 {
-    iconUrl.clear();
-    cover->clear();
+    this->setAxis(brls::Axis::ROW);
+    this->setWidthPercentage(100.0f);
+
+    for (int i = 0; i < 3; i++)
+    {
+        cards[i] = new TrophyGameCard();
+        cards[i]->setGrow(1.0f);
+        if (i > 0)
+            cards[i]->setMarginLeft(18);
+        this->addView(cards[i]);
+    }
 }
 
-RecyclingGridItem* TrophyCardCell::create()
+void TrophyGameRowCell::bindRow(const std::vector<psn::TrophyTitle>& rowTitles, size_t startIndex)
 {
-    return new TrophyCardCell();
+    for (int i = 0; i < 3; i++)
+    {
+        size_t idx = startIndex + static_cast<size_t>(i);
+        if (idx < rowTitles.size())
+        {
+            const psn::TrophyTitle title = rowTitles[idx];
+            cards[i]->bind(title, [title]() {
+                brls::Application::pushActivity(new brls::Activity(new TrophyDetailView(title)));
+            });
+        }
+        else
+        {
+            cards[i]->reset();
+            cards[i]->setVisibility(brls::Visibility::INVISIBLE);
+        }
+    }
 }
 
-TrophyGridDataSource::TrophyGridDataSource(std::vector<psn::TrophyTitle> titles)
-    : titles(std::move(titles))
+void TrophyGameRowCell::prepareForReuse()
+{
+    for (int i = 0; i < 3; i++)
+        if (cards[i])
+            cards[i]->reset();
+}
+
+RecyclingGridItem* TrophyGameRowCell::create()
+{
+    return new TrophyGameRowCell();
+}
+
+TrophyProfileCell::TrophyProfileCell()
+{
+    this->setAxis(brls::Axis::ROW);
+    this->setAlignItems(brls::AlignItems::CENTER);
+    this->setHeight(PROFILE_HEADER_HEIGHT);
+    this->setCornerRadius(14);
+    this->setBackgroundColor(brls::Application::getTheme().getColor("color/card"));
+    this->setPadding(18, 20, 18, 20);
+    this->setFocusable(true);
+
+    levelRing = new ProgressRing();
+    levelRing->setWidth(104);
+    levelRing->setHeight(104);
+    levelRing->setThickness(8);
+    levelRing->setMarginRight(22);
+
+    levelValue = new brls::Label();
+    levelValue->setText("—");
+    levelValue->setFontSize(34);
+    levelValue->setSingleLine(true);
+    levelRing->addView(levelValue);
+
+    this->addView(levelRing);
+
+    static const char* tierRes[4] = {
+        "img/trophy/platinum.png",
+        "img/trophy/gold.png",
+        "img/trophy/silver.png",
+        "img/trophy/bronze.png"
+    };
+    static const char* tierLabel[4] = {
+        "akira/trophies/type_platinum",
+        "akira/trophies/type_gold",
+        "akira/trophies/type_silver",
+        "akira/trophies/type_bronze"
+    };
+
+    auto* tilesRow = new brls::Box(brls::Axis::ROW);
+    tilesRow->setGrow(1.0f);
+
+    for (int i = 0; i < 4; i++)
+    {
+        auto* tile = new brls::Box(brls::Axis::ROW);
+        tile->setGrow(1.0f);
+        if (i > 0)
+            tile->setMarginLeft(12);
+        tile->setAlignItems(brls::AlignItems::CENTER);
+        tile->setCornerRadius(10);
+        tile->setBackgroundColor(akira::ui::active().surfaceElevated);
+        tile->setPadding(12, 12, 12, 12);
+
+        auto* img = new brls::Image();
+        img->setImageFromRes(tierRes[i]);
+        img->setScalingType(brls::ImageScalingType::FIT);
+        img->setWidth(28);
+        img->setHeight(34);
+        img->setMarginRight(11);
+        tile->addView(img);
+
+        auto* textCol = new brls::Box(brls::Axis::COLUMN);
+
+        auto* count = new brls::Label();
+        count->setFontSize(23);
+        count->setText("0");
+        textCol->addView(count);
+
+        auto* label = new brls::Label();
+        label->setText(brls::getStr(tierLabel[i]));
+        label->setFontSize(13);
+        label->setTextColor(akira::ui::active().textDim);
+        label->setMarginTop(2);
+        textCol->addView(label);
+
+        tile->addView(textCol);
+
+        tierImages[i] = img;
+        tierCounts[i] = count;
+        tilesRow->addView(tile);
+    }
+
+    this->addView(tilesRow);
+}
+
+void TrophyProfileCell::bindSummary(const psn::TrophySummary& summary)
+{
+    levelValue->setText(std::to_string(summary.trophyLevel));
+
+    if (levelRing)
+        levelRing->setProgress(std::clamp(summary.progress, 0, 100) / 100.0f);
+
+    const int values[4] = {
+        summary.earnedTrophies.platinum,
+        summary.earnedTrophies.gold,
+        summary.earnedTrophies.silver,
+        summary.earnedTrophies.bronze
+    };
+
+    for (int i = 0; i < 4; i++)
+    {
+        tierCounts[i]->setText(std::to_string(values[i]));
+        tierImages[i]->setAlpha(values[i] > 0 ? 1.0f : 0.4f);
+    }
+}
+
+RecyclingGridItem* TrophyProfileCell::create()
+{
+    return new TrophyProfileCell();
+}
+
+TrophyGridDataSource::TrophyGridDataSource(std::vector<psn::TrophyTitle> titles, psn::TrophySummary summary, bool haveSummary)
+    : titles(std::move(titles)), summary(std::move(summary)), haveSummary(haveSummary)
 {
 }
 
 size_t TrophyGridDataSource::getItemCount()
 {
-    return titles.size();
+    return 1 + (titles.size() + 2) / 3;
+}
+
+float TrophyGridDataSource::heightForRow(brls::View* recycler, size_t index)
+{
+    return index == 0 ? PROFILE_HEADER_HEIGHT : CARD_ROW_HEIGHT;
 }
 
 RecyclingGridItem* TrophyGridDataSource::cellForRow(RecyclingView* recycler, size_t index)
 {
-    auto* cell = dynamic_cast<TrophyCardCell*>(recycler->dequeueReusableCell("TrophyCard"));
+    if (index == 0)
+    {
+        auto* cell = dynamic_cast<TrophyProfileCell*>(recycler->dequeueReusableCell("ProfileHeader"));
+        if (!cell)
+            return nullptr;
+
+        if (haveSummary)
+            cell->bindSummary(summary);
+
+        return cell;
+    }
+
+    auto* cell = dynamic_cast<TrophyGameRowCell*>(recycler->dequeueReusableCell("TrophyRow"));
     if (!cell)
         return nullptr;
 
-    if (index < titles.size())
-        cell->bindTitle(titles[index]);
+    cell->bindRow(titles, (index - 1) * 3);
 
     return cell;
 }
 
 void TrophyGridDataSource::onItemSelected(brls::Box* recycler, size_t index)
 {
-    if (index >= titles.size())
-        return;
-
-    brls::Application::pushActivity(new brls::Activity(new TrophyDetailView(titles[index])));
 }
 
 void TrophyGridDataSource::clearData()
@@ -334,9 +502,9 @@ TrophyListTab::TrophyListTab()
 
     currentInstance = this;
 
-    buildProfileCard();
-
-    grid->registerCell("TrophyCard", TrophyCardCell::create);
+    grid->registerCell("ProfileHeader", TrophyProfileCell::create);
+    grid->registerCell("TrophyRow", TrophyGameRowCell::create);
+    grid->isFlowMode = true;
     grid->estimatedRowHeight = CARD_ROW_HEIGHT;
 
     for (brls::Button* button : {sortBtn.getView(), filterBtn.getView()})
@@ -447,137 +615,16 @@ void TrophyListTab::willDisappear(bool resetState)
     Box::willDisappear(resetState);
 }
 
-void TrophyListTab::buildProfileCard()
-{
-    auto* topRow = new brls::Box(brls::Axis::ROW);
-    topRow->setWidthPercentage(100.0f);
-    topRow->setAlignItems(brls::AlignItems::CENTER);
-
-    levelRing = new ProgressRing();
-    levelRing->setWidth(104);
-    levelRing->setHeight(104);
-    levelRing->setThickness(8);
-    levelRing->setMarginRight(22);
-
-    levelValue = new brls::Label();
-    levelValue->setText("—");
-    levelValue->setFontSize(34);
-    levelValue->setSingleLine(true);
-    levelRing->addView(levelValue);
-
-    topRow->addView(levelRing);
-
-    static const char* tierRes[4] = {
-        "img/trophy/platinum.png",
-        "img/trophy/gold.png",
-        "img/trophy/silver.png",
-        "img/trophy/bronze.png"
-    };
-    static const char* tierLabel[4] = {
-        "akira/trophies/type_platinum",
-        "akira/trophies/type_gold",
-        "akira/trophies/type_silver",
-        "akira/trophies/type_bronze"
-    };
-
-    auto* tilesRow = new brls::Box(brls::Axis::ROW);
-    tilesRow->setGrow(1.0f);
-
-    for (int i = 0; i < 4; i++)
-    {
-        auto* tile = new brls::Box(brls::Axis::ROW);
-        tile->setGrow(1.0f);
-        if (i > 0)
-            tile->setMarginLeft(12);
-        tile->setAlignItems(brls::AlignItems::CENTER);
-        tile->setCornerRadius(10);
-        tile->setBackgroundColor(akira::ui::active().surfaceElevated);
-        tile->setPadding(12, 12, 12, 12);
-
-        auto* img = new brls::Image();
-        img->setImageFromRes(tierRes[i]);
-        img->setScalingType(brls::ImageScalingType::FIT);
-        img->setWidth(28);
-        img->setHeight(34);
-        img->setMarginRight(11);
-        tile->addView(img);
-
-        auto* textCol = new brls::Box(brls::Axis::COLUMN);
-
-        auto* count = new brls::Label();
-        count->setFontSize(23);
-        count->setText("0");
-        textCol->addView(count);
-
-        auto* label = new brls::Label();
-        label->setText(brls::getStr(tierLabel[i]));
-        label->setFontSize(13);
-        label->setTextColor(akira::ui::active().textDim);
-        label->setMarginTop(2);
-        textCol->addView(label);
-
-        tile->addView(textCol);
-
-        tierImages[i] = img;
-        tierCounts[i] = count;
-        tilesRow->addView(tile);
-    }
-
-    topRow->addView(tilesRow);
-    profileBox->addView(topRow);
-
-    auto* divider = new brls::Box(brls::Axis::ROW);
-    divider->setWidthPercentage(100.0f);
-    divider->setHeight(1);
-    divider->setBackgroundColor(akira::ui::active().surfaceLine);
-    divider->setMarginTop(18);
-    profileBox->addView(divider);
-
-    auto* footer = new brls::Box(brls::Axis::ROW);
-    footer->setWidthPercentage(100.0f);
-    footer->setAlignItems(brls::AlignItems::CENTER);
-    footer->setMarginTop(14);
-
-    statusLabel = new brls::Label();
-    statusLabel->setText("akira/trophies/loading"_i18n);
-    statusLabel->setFontSize(15);
-    statusLabel->setTextColor(akira::ui::active().textDim);
-    footer->addView(statusLabel);
-
-    auto* footerSpacer = new brls::Box(brls::Axis::ROW);
-    footerSpacer->setGrow(1.0f);
-    footer->addView(footerSpacer);
-
-    forceRefreshBtn = new brls::Button();
-    footer->addView(forceRefreshBtn);
-
-    profileBox->addView(footer);
-}
-
 void TrophyListTab::applySummary(const psn::TrophySummary& summary)
 {
-    levelValue->setText(std::to_string(summary.trophyLevel));
+    currentSummary = summary;
+    haveSummary = true;
 
-    if (levelRing)
-        levelRing->setProgress(std::clamp(summary.progress, 0, 100) / 100.0f);
-
-    const int values[4] = {
-        summary.earnedTrophies.platinum,
-        summary.earnedTrophies.gold,
-        summary.earnedTrophies.silver,
-        summary.earnedTrophies.bronze
-    };
-
-    for (int i = 0; i < 4; i++)
+    if (currentDataSource)
     {
-        if (values[i] != tierPrev[i])
-        {
-            akira::ui::motion::countTo(tierCounts[i], tierCountAnim[i],
-                tierPrev[i] < 0 ? 0 : static_cast<int>(std::lround(tierCountAnim[i].getValue())),
-                values[i], 600, [](int n) { return std::to_string(n); });
-            tierPrev[i] = values[i];
-        }
-        tierImages[i]->setAlpha(values[i] > 0 ? 1.0f : 0.4f);
+        currentDataSource->summary = summary;
+        currentDataSource->haveSummary = true;
+        grid->notifyDataChanged();
     }
 }
 
@@ -642,13 +689,16 @@ void TrophyListTab::rebuildGrid()
 
     if (rows.empty())
     {
+        currentDataSource = nullptr;
         grid->setEmpty(filterMode == TitleFilter::All
             ? "akira/trophies/empty"_i18n
             : "akira/trophies/empty_filter"_i18n);
         return;
     }
 
-    grid->setDataSource(new TrophyGridDataSource(std::move(rows)));
+    auto* dataSource = new TrophyGridDataSource(std::move(rows), currentSummary, haveSummary);
+    currentDataSource = dataSource;
+    grid->setDataSource(dataSource);
 
     TrophyManager::getInstance()->resolveGameProgress(titles, []() {
         if (currentInstance)

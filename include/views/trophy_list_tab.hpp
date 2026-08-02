@@ -13,16 +13,18 @@
 #include "views/progress_ring.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
 
-class TrophyCardCell : public RecyclingGridItem {
+#include <functional>
+
+class TrophyGameCard : public brls::Box {
 public:
-    TrophyCardCell();
-    ~TrophyCardCell() override;
+    TrophyGameCard();
+    ~TrophyGameCard() override;
 
-    void bindTitle(const psn::TrophyTitle& title);
-    void prepareForReuse() override;
-    void cacheForReuse() override;
+    void bind(const psn::TrophyTitle& title, std::function<void()> onSelect);
+    void reset();
 
-    static RecyclingGridItem* create();
+    static std::unordered_set<TrophyGameCard*> liveCards;
+    static std::unordered_set<std::string> retriedIcons;
 
 private:
     brls::Image* cover = nullptr;
@@ -35,18 +37,47 @@ private:
     brls::Animatable focusAnim{0.0f};
 
     std::string iconUrl;
+    std::function<void()> selectCallback;
+};
 
-    static std::unordered_set<TrophyCardCell*> liveCells;
-    static std::unordered_set<std::string> retriedIcons;
+class TrophyGameRowCell : public RecyclingGridItem {
+public:
+    TrophyGameRowCell();
+
+    void bindRow(const std::vector<psn::TrophyTitle>& titles, size_t startIndex);
+    void prepareForReuse() override;
+
+    static RecyclingGridItem* create();
+
+private:
+    TrophyGameCard* cards[3] = {};
+};
+
+class TrophyProfileCell : public RecyclingGridItem {
+public:
+    TrophyProfileCell();
+
+    void bindSummary(const psn::TrophySummary& summary);
+
+    static RecyclingGridItem* create();
+
+private:
+    brls::Label* levelValue = nullptr;
+    ProgressRing* levelRing = nullptr;
+    brls::Image* tierImages[4] = {};
+    brls::Label* tierCounts[4] = {};
 };
 
 class TrophyGridDataSource : public RecyclingGridDataSource {
 public:
-    explicit TrophyGridDataSource(std::vector<psn::TrophyTitle> titles);
+    TrophyGridDataSource(std::vector<psn::TrophyTitle> titles, psn::TrophySummary summary, bool haveSummary);
 
     std::vector<psn::TrophyTitle> titles;
+    psn::TrophySummary summary;
+    bool haveSummary = false;
 
     size_t getItemCount() override;
+    float heightForRow(brls::View* recycler, size_t index) override;
     RecyclingGridItem* cellForRow(RecyclingView* recycler, size_t index) override;
     void onItemSelected(brls::Box* recycler, size_t index) override;
     void clearData() override;
@@ -84,15 +115,14 @@ public:
     static TrophyListTab* currentInstance;
 
 private:
-    BRLS_BIND(brls::Box, profileBox, "trophies/profile");
     BRLS_BIND(RecyclingGrid, grid, "trophies/grid");
     BRLS_BIND(PsnGatedBox, gate, "trophies/gate");
     BRLS_BIND(brls::Button, sortBtn, "trophies/sortBtn");
     BRLS_BIND(brls::Button, filterBtn, "trophies/filterBtn");
-    brls::Button* forceRefreshBtn = nullptr;
+    BRLS_BIND(brls::Button, forceRefreshBtn, "trophies/forceRefreshBtn");
+    BRLS_BIND(brls::Label, statusLabel, "trophies/status");
 
     void load(bool forceRefresh);
-    void buildProfileCard();
     void applySummary(const psn::TrophySummary& summary);
     void applyTitles(const std::vector<psn::TrophyTitle>& titles);
     void rebuildGrid();
@@ -101,17 +131,9 @@ private:
     void refreshControlLabels();
     void refreshStatusLine();
 
-    brls::Label* levelValue = nullptr;
-    ProgressRing* levelRing = nullptr;
-    brls::Label* statusLabel = nullptr;
-    brls::Image* tierImages[4] = {};
-    brls::Label* tierCounts[4] = {};
-
-    brls::Animatable summaryFillAnim{0.0f};
-    brls::Animatable tierCountAnim[4] = {};
-    brls::Animatable entryAnim{1.0f};
-    int summaryPct = -1;
-    int tierPrev[4] = {-1, -1, -1, -1};
+    psn::TrophySummary currentSummary;
+    bool haveSummary = false;
+    TrophyGridDataSource* currentDataSource = nullptr;
 
     PsnActionButton forceRefreshGate;
 

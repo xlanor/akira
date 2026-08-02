@@ -1,6 +1,8 @@
 #include "views/settings_general_view.hpp"
 
 #include <borealis/core/i18n.hpp>
+#include <algorithm>
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <cctype>
@@ -9,6 +11,7 @@
 
 #include "core/version.hpp"
 #include "core/discovery_manager.hpp"
+#include "core/discovery_sweep.hpp"
 #include "ui/theme.hpp"
 
 using namespace brls::literals;
@@ -196,31 +199,6 @@ static std::string joinSubnets(const std::vector<std::string>& v) {
     return out;
 }
 
-static bool isValidSubnetEntry(const std::string& token) {
-    size_t slash = token.find('/');
-    std::string ipPart = (slash == std::string::npos) ? token : token.substr(0, slash);
-    if (ipPart.empty())
-        return false;
-
-    struct in_addr ina = {};
-    if (inet_pton(AF_INET, ipPart.c_str(), &ina) != 1)
-        return false;
-
-    if (slash != std::string::npos) {
-        std::string prefixPart = token.substr(slash + 1);
-        if (prefixPart.empty())
-            return false;
-        for (char c : prefixPart) {
-            if (!std::isdigit(static_cast<unsigned char>(c)))
-                return false;
-        }
-        int prefix = std::atoi(prefixPart.c_str());
-        if (prefix < 0 || prefix > 32)
-            return false;
-    }
-    return true;
-}
-
 static void restartDiscovery() {
     DiscoveryManager* dm = DiscoveryManager::getInstance();
     if (dm->isServiceEnabled()) {
@@ -317,7 +295,7 @@ void SettingsGeneralView::promptAddSubnet() {
         [this](std::string text) {
             if (text.empty())
                 return;
-            if (!isValidSubnetEntry(text)) {
+            if (!akira::discovery::isValidSweepCidr(text)) {
                 brls::sync([]() {
                     auto* dialog = new brls::Dialog("akira/settings/subnet_invalid"_i18n);
                     dialog->addButton("akira/common/ok"_i18n, [dialog]() { dialog->close(); });
@@ -325,8 +303,11 @@ void SettingsGeneralView::promptAddSubnet() {
                 });
                 return;
             }
+            std::string normalized = akira::discovery::normalizeSweepCidr(text);
             std::vector<std::string> subnets = splitSubnets(settings->getDiscoverySubnets());
-            subnets.push_back(text);
+            if (std::find(subnets.begin(), subnets.end(), normalized) != subnets.end())
+                return;
+            subnets.push_back(normalized);
             settings->setDiscoverySubnets(joinSubnets(subnets));
             settings->writeFile();
             restartDiscovery();

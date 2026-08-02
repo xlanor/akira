@@ -567,6 +567,11 @@ HostListTab::HostListTab() {
         HostListTab::currentInstance->updateHostItem(host);
     });
 
+    discovery->setOnHostsChanged([]() {
+        if (HostListTab::isActive && HostListTab::currentInstance)
+            HostListTab::currentInstance->syncHostList();
+    });
+
     if (!discovery->isServiceEnabled()) {
         discovery->setServiceEnabled(true);
     }
@@ -796,6 +801,7 @@ HostListTab::~HostListTab() {
     hostItems.clear();
 
     discovery->setOnHostDiscovered(nullptr);
+    discovery->setOnHostsChanged(nullptr);
 }
 
 void HostListTab::willAppear(bool resetState) {
@@ -866,7 +872,7 @@ void HostListTab::syncHostList() {
                 brls::Logger::error("Null host in hosts map for key: {}", name);
                 continue;
             }
-            if (!host->hasRpKey() && !host->isDiscovered())
+            if (!host->hasRpKey() && !host->isDiscovered() && !host->isManual())
                 continue;
             if (col == 0) {
                 row = new brls::Box();

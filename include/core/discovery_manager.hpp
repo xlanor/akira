@@ -29,6 +29,14 @@ class DiscoveryManager {
 public:
     using HostDiscoveredCallback = std::function<void(Host*)>;
     using RemoteRefreshCallback = std::function<void(const psn::AuthResult&)>;
+    using HostsChangedCallback = std::function<void()>;
+
+    struct SweepStatus {
+        bool serviceRunning = false;
+        bool sweepActive = false;
+        std::vector<std::string> subnets;
+        std::string currentTarget;
+    };
 
 private:
     SettingsManager* settings = nullptr;
@@ -68,10 +76,38 @@ private:
     static void* remoteDiscoveryThreadFunc(void* user);
     void runRemoteDiscoveryLoop();
 
+    ChiakiThread sweepThread;
+    ChiakiBoolPredCond sweepStopCond;
+    std::atomic<bool> sweepEnabled{false};
+    std::mutex sweepMutex;
+    std::vector<uint32_t> sweepTargets;
+    std::vector<uint32_t> liveForeignHosts;
+    std::vector<std::string> sweepSubnetLabels;
+    std::string sweepCurrentTarget;
+    size_t sweepChunkIndex = 0;
+    static constexpr uint64_t SWEEP_TICK_MS = 1000;
+    static constexpr int SWEEP_SCAN_EVERY_TICKS = 15;
+    static constexpr int SWEEP_CHUNK = 64;
+    static constexpr int SWEEP_MAX_TARGETS = 1024;
+
+    static void* sweepThreadFunc(void* user);
+    void runSweepLoop();
+    void sendSweepChunk();
+    void pingLiveForeignHosts();
+    void pingHostAddrNet(uint32_t addrNet);
+    void noteForeignResponder(uint32_t addrNet);
+
+    HostsChangedCallback onHostsChanged;
+
     DiscoveryManager();
 
 public:
     static DiscoveryManager* getInstance();
+
+    static void appendDiscoveryLog(const std::string& line);
+    static std::vector<std::string> getDiscoveryLogSnapshot();
+    static uint64_t getDiscoveryLogVersion();
+    static void clearDiscoveryLog();
 
     ~DiscoveryManager();
 
@@ -92,6 +128,13 @@ public:
     void setOnHostDiscovered(HostDiscoveredCallback callback) {
         onHostDiscovered = std::move(callback);
     }
+
+    void setOnHostsChanged(HostsChangedCallback callback) {
+        onHostsChanged = std::move(callback);
+    }
+
+    SweepStatus getSweepStatus();
+    void reconcileDiscoveredHosts(const std::vector<std::string>& liveIds);
 
     void refreshRemoteDevices(RemoteRefreshCallback onComplete = nullptr, bool userInitiated = false);
 

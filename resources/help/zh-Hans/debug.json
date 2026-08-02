@@ -33,5 +33,10 @@
     "title": "ffmpeg 日志",
     "body": "解码器（ffmpeg）日志。",
     "image": ""
+  },
+  "settings/openDiscoveryLog": {
+    "title": "查看发现日志",
+    "body": "实时发现活动：向其他子网 /24 的单播扫描与主机响应。请在上方启用“发现日志”以捕获。",
+    "image": ""
   }
 }

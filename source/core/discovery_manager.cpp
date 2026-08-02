@@ -1,4 +1,5 @@
 #include "core/discovery_manager.hpp"
+#include "core/discovery_sweep.hpp"
 #include "core/settings_manager.hpp"
 
 #include <borealis.hpp>
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdint>
+#include <deque>
 #include <vector>
 #include <switch.h>
 
@@ -20,10 +22,45 @@
 #include "util/http.hpp"
 #include "util/http_pool.hpp"
 
+static std::mutex g_discoveryLogMutex;
+static std::deque<std::string> g_discoveryLogLines;
+static std::atomic<uint64_t> g_discoveryLogVersion{0};
+static constexpr size_t DISCOVERY_LOG_MAX_LINES = 300;
+
+void DiscoveryManager::appendDiscoveryLog(const std::string& line)
+{
+    std::lock_guard<std::mutex> lock(g_discoveryLogMutex);
+    g_discoveryLogLines.push_back(line);
+    while (g_discoveryLogLines.size() > DISCOVERY_LOG_MAX_LINES)
+        g_discoveryLogLines.pop_front();
+    g_discoveryLogVersion.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t DiscoveryManager::getDiscoveryLogVersion()
+{
+    return g_discoveryLogVersion.load(std::memory_order_relaxed);
+}
+
+std::vector<std::string> DiscoveryManager::getDiscoveryLogSnapshot()
+{
+    std::lock_guard<std::mutex> lock(g_discoveryLogMutex);
+    return std::vector<std::string>(g_discoveryLogLines.begin(), g_discoveryLogLines.end());
+}
+
+void DiscoveryManager::clearDiscoveryLog()
+{
+    std::lock_guard<std::mutex> lock(g_discoveryLogMutex);
+    g_discoveryLogLines.clear();
+    g_discoveryLogVersion.fetch_add(1, std::memory_order_relaxed);
+}
+
 static void discovery_log_cb(ChiakiLogLevel level, const char* msg, void* user)
 {
     if (!SettingsManager::getInstance()->getDebugDiscoveryLog())
         return;
+
+    if (msg)
+        DiscoveryManager::appendDiscoveryLog(msg);
 
     ChiakiLog* mainLog = static_cast<ChiakiLog*>(user);
     if (mainLog)
@@ -37,10 +74,14 @@ static void discovery_log_cb(ChiakiLogLevel level, const char* msg, void* user)
 static void DiscoveryServiceCallback(ChiakiDiscoveryHost* discovered_hosts, size_t hosts_count, void* user)
 {
     DiscoveryManager* dm = static_cast<DiscoveryManager*>(user);
+    std::vector<std::string> liveIds;
     for (size_t i = 0; i < hosts_count; i++)
     {
         dm->discoveryCallback(&discovered_hosts[i]);
+        if (discovered_hosts[i].host_id)
+            liveIds.emplace_back(discovered_hosts[i].host_id);
     }
+    dm->reconcileDiscoveredHosts(liveIds);
 }
 
 DiscoveryManager* DiscoveryManager::getInstance()
@@ -136,6 +177,9 @@ void DiscoveryManager::setServiceEnabled(bool enable)
             }
         }
 
+        std::vector<uint32_t> flatTargets;
+        std::vector<std::string> labels;
+
         std::string subnetsCfg = settings->getDiscoverySubnets();
         size_t start = 0;
         while (start < subnetsCfg.size()) {
@@ -145,32 +189,35 @@ void DiscoveryManager::setServiceEnabled(bool enable)
             if (token.empty())
                 continue;
 
-            uint32_t bcast = 0;
-            size_t slash = token.find('/');
-            if (slash != std::string::npos) {
-                std::string ipPart = token.substr(0, slash);
-                int prefix = atoi(token.substr(slash + 1).c_str());
-                struct in_addr ina = {};
-                if (inet_pton(AF_INET, ipPart.c_str(), &ina) == 1 && prefix >= 0 && prefix <= 32) {
-                    uint32_t hostOrder = ntohl(ina.s_addr);
-                    uint32_t mask = (prefix == 0) ? 0 : (0xFFFFFFFFu << (32 - prefix));
-                    bcast = htonl((hostOrder & mask) | (~mask));
-                }
-            } else {
-                struct in_addr ina = {};
-                if (inet_pton(AF_INET, token.c_str(), &ina) == 1)
-                    bcast = ina.s_addr;
+            uint32_t base = 0;
+            int prefix = 0;
+            if (!akira::discovery::parseSweepCidr(token, base, prefix))
+                continue;
+
+            if (akira::discovery::subnetContainsLocal(addresses.local, base, prefix)) {
+                brls::Logger::info("Discovery: subnet {} is local, covered by broadcast", token);
+                continue;
             }
 
-            if (bcast != 0) {
-                struct sockaddr_in subnetAddr = {};
-                subnetAddr.sin_family = AF_INET;
-                subnetAddr.sin_addr.s_addr = bcast;
-                struct sockaddr_storage subnetStore = {};
-                memcpy(&subnetStore, &subnetAddr, sizeof(subnetAddr));
-                targets.push_back(subnetStore);
-                brls::Logger::info("Discovery: added subnet target {}", token);
-            }
+            uint32_t firstOff = 0;
+            uint32_t lastOff = 0;
+            akira::discovery::sweepHostOffsets(prefix, firstOff, lastOff);
+            for (uint32_t off = firstOff; off <= lastOff && flatTargets.size() < static_cast<size_t>(SWEEP_MAX_TARGETS); off++)
+                flatTargets.push_back(akira::discovery::sweepAddrNet(base, off));
+
+            if (flatTargets.size() >= static_cast<size_t>(SWEEP_MAX_TARGETS))
+                brls::Logger::warning("Discovery: sweep target cap {} reached, remaining hosts skipped", SWEEP_MAX_TARGETS);
+            labels.push_back(akira::discovery::normalizeSweepCidr(token));
+            brls::Logger::info("Discovery: added foreign sweep subnet {} ({} hosts)", token, akira::discovery::sweepHostCount(prefix));
+        }
+
+        {
+            std::lock_guard<std::mutex> lk(sweepMutex);
+            sweepTargets = std::move(flatTargets);
+            sweepSubnetLabels = std::move(labels);
+            liveForeignHosts.clear();
+            sweepCurrentTarget.clear();
+            sweepChunkIndex = 0;
         }
 
         options.broadcast_addrs = static_cast<struct sockaddr_storage*>(malloc(targets.size() * sizeof(struct sockaddr_storage)));
@@ -198,9 +245,42 @@ void DiscoveryManager::setServiceEnabled(bool enable)
             return;
         }
         brls::Logger::info("Discovery service started successfully!");
+
+        bool haveSweep = false;
+        {
+            std::lock_guard<std::mutex> lk(sweepMutex);
+            haveSweep = !sweepTargets.empty();
+        }
+        if (haveSweep && !sweepEnabled.load())
+        {
+            if (chiaki_bool_pred_cond_init(&sweepStopCond) == CHIAKI_ERR_SUCCESS)
+            {
+                sweepEnabled.store(true);
+                if (chiaki_thread_create(&sweepThread, sweepThreadFunc, this) != CHIAKI_ERR_SUCCESS)
+                {
+                    sweepEnabled.store(false);
+                    chiaki_bool_pred_cond_fini(&sweepStopCond);
+                    brls::Logger::error("Failed to start discovery sweep thread");
+                }
+                else
+                {
+                    brls::Logger::info("Discovery sweep thread started");
+                }
+            }
+        }
     }
     else
     {
+        if (sweepEnabled.load())
+        {
+            brls::Logger::info("Stopping discovery sweep thread...");
+            sweepEnabled.store(false);
+            chiaki_bool_pred_cond_signal(&sweepStopCond);
+            chiaki_thread_join(&sweepThread, nullptr);
+            chiaki_bool_pred_cond_fini(&sweepStopCond);
+            brls::Logger::info("Discovery sweep thread stopped");
+        }
+
         if (remoteDiscoveryEnabled.load())
         {
             brls::Logger::info("Stopping remote discovery thread...");
@@ -212,6 +292,15 @@ void DiscoveryManager::setServiceEnabled(bool enable)
         }
 
         chiaki_discovery_service_fini(&service);
+
+        {
+            std::lock_guard<std::mutex> lk(sweepMutex);
+            sweepTargets.clear();
+            sweepSubnetLabels.clear();
+            liveForeignHosts.clear();
+            sweepCurrentTarget.clear();
+            sweepChunkIndex = 0;
+        }
     }
 }
 
@@ -363,6 +452,29 @@ void DiscoveryManager::discoveryCallback(ChiakiDiscoveryHost* discoveredHost)
     data->deviceDiscoveryProtocolVersion = discoveredHost->device_discovery_protocol_version ? discoveredHost->device_discovery_protocol_version : "";
     data->state = discoveredHost->state;
     data->hasSystemVersion = discoveredHost->system_version && discoveredHost->device_discovery_protocol_version;
+
+    if (!data->hostAddr.empty())
+    {
+        struct in_addr hostIna = {};
+        if (inet_pton(AF_INET, data->hostAddr.c_str(), &hostIna) == 1)
+        {
+            uint32_t addrNet = hostIna.s_addr;
+            bool isSweepTarget = false;
+            {
+                std::lock_guard<std::mutex> lk(sweepMutex);
+                for (uint32_t t : sweepTargets)
+                {
+                    if (t == addrNet)
+                    {
+                        isSweepTarget = true;
+                        break;
+                    }
+                }
+            }
+            if (isSweepTarget)
+                noteForeignResponder(addrNet);
+        }
+    }
 
     ChiakiTarget target = CHIAKI_TARGET_PS4_UNKNOWN;
     if (data->hasSystemVersion)
@@ -684,4 +796,170 @@ void DiscoveryManager::runRemoteDiscoveryLoop()
 
     chiaki_bool_pred_cond_unlock(&remoteStopCond);
     brls::Logger::info("Remote discovery loop exiting");
+}
+
+void* DiscoveryManager::sweepThreadFunc(void* user)
+{
+    DiscoveryManager* dm = static_cast<DiscoveryManager*>(user);
+    dm->runSweepLoop();
+    return nullptr;
+}
+
+void DiscoveryManager::runSweepLoop()
+{
+    brls::Logger::info("Discovery sweep loop started");
+
+    ChiakiErrorCode err = chiaki_bool_pred_cond_lock(&sweepStopCond);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Failed to lock sweep condition");
+        return;
+    }
+
+    int tick = 0;
+    err = chiaki_bool_pred_cond_timedwait(&sweepStopCond, 2000);
+
+    while (err == CHIAKI_ERR_TIMEOUT && sweepEnabled.load())
+    {
+        pingLiveForeignHosts();
+        if (tick % SWEEP_SCAN_EVERY_TICKS == 0)
+            sendSweepChunk();
+        tick++;
+
+        err = chiaki_bool_pred_cond_timedwait(&sweepStopCond, SWEEP_TICK_MS);
+    }
+
+    chiaki_bool_pred_cond_unlock(&sweepStopCond);
+    brls::Logger::info("Discovery sweep loop exiting");
+}
+
+void DiscoveryManager::pingHostAddrNet(uint32_t addrNet)
+{
+    struct in_addr ina = {};
+    ina.s_addr = addrNet;
+    char buf[INET_ADDRSTRLEN] = {};
+    if (inet_ntop(AF_INET, &ina, buf, sizeof(buf)))
+    {
+        std::lock_guard<std::mutex> lk(sweepMutex);
+        sweepCurrentTarget = buf;
+    }
+
+    struct sockaddr_in dst = {};
+    dst.sin_family = AF_INET;
+    dst.sin_addr.s_addr = addrNet;
+
+    ChiakiDiscoveryPacket packet;
+    memset(&packet, 0, sizeof(packet));
+    packet.cmd = CHIAKI_DISCOVERY_CMD_SRCH;
+
+    packet.protocol_version = const_cast<char*>(CHIAKI_DISCOVERY_PROTOCOL_VERSION_PS4);
+    dst.sin_port = htons(CHIAKI_DISCOVERY_PORT_PS4);
+    chiaki_discovery_send(&service.discovery, &packet, reinterpret_cast<struct sockaddr*>(&dst), sizeof(dst));
+
+    packet.protocol_version = const_cast<char*>(CHIAKI_DISCOVERY_PROTOCOL_VERSION_PS5);
+    dst.sin_port = htons(CHIAKI_DISCOVERY_PORT_PS5);
+    chiaki_discovery_send(&service.discovery, &packet, reinterpret_cast<struct sockaddr*>(&dst), sizeof(dst));
+}
+
+void DiscoveryManager::pingLiveForeignHosts()
+{
+    std::vector<uint32_t> hosts;
+    {
+        std::lock_guard<std::mutex> lk(sweepMutex);
+        hosts = liveForeignHosts;
+    }
+    for (uint32_t addr : hosts)
+    {
+        if (!sweepEnabled.load())
+            return;
+        pingHostAddrNet(addr);
+    }
+}
+
+void DiscoveryManager::noteForeignResponder(uint32_t addrNet)
+{
+    std::lock_guard<std::mutex> lk(sweepMutex);
+    for (uint32_t existing : liveForeignHosts)
+    {
+        if (existing == addrNet)
+            return;
+    }
+    if (liveForeignHosts.size() >= static_cast<size_t>(SWEEP_MAX_TARGETS))
+        return;
+    liveForeignHosts.push_back(addrNet);
+}
+
+void DiscoveryManager::sendSweepChunk()
+{
+    std::vector<uint32_t> targets;
+    size_t chunk = 0;
+    {
+        std::lock_guard<std::mutex> lk(sweepMutex);
+        if (sweepTargets.empty())
+            return;
+        int numChunks = akira::discovery::sweepChunkCount(static_cast<int>(sweepTargets.size()), SWEEP_CHUNK);
+        chunk = sweepChunkIndex;
+        sweepChunkIndex = (sweepChunkIndex + 1) % (numChunks > 0 ? static_cast<size_t>(numChunks) : 1);
+        targets = sweepTargets;
+    }
+
+    size_t startIdx = chunk * SWEEP_CHUNK;
+    size_t endIdx = startIdx + SWEEP_CHUNK;
+    if (endIdx > targets.size())
+        endIdx = targets.size();
+
+    for (size_t i = startIdx; i < endIdx && sweepEnabled.load(); i++)
+        pingHostAddrNet(targets[i]);
+}
+
+DiscoveryManager::SweepStatus DiscoveryManager::getSweepStatus()
+{
+    SweepStatus s;
+    s.serviceRunning = serviceEnabled;
+    s.sweepActive = sweepEnabled.load();
+    std::lock_guard<std::mutex> lk(sweepMutex);
+    s.subnets = sweepSubnetLabels;
+    s.currentTarget = sweepCurrentTarget;
+    return s;
+}
+
+void DiscoveryManager::reconcileDiscoveredHosts(const std::vector<std::string>& liveIds)
+{
+    auto ids = std::make_shared<std::vector<std::string>>(liveIds);
+    brls::sync([this, ids]() {
+        auto* hostsMap = settings->getHostsMap();
+        if (!hostsMap)
+            return;
+
+        bool changed = false;
+        for (auto& entry : *hostsMap)
+        {
+            Host* host = entry.second.get();
+            if (!host)
+                continue;
+            if (host->hasRpKey() || host->isManual() || host->isRemote())
+                continue;
+            if (!host->isDiscovered())
+                continue;
+
+            bool present = false;
+            for (const auto& id : *ids)
+            {
+                if (!id.empty() && id == host->hostId)
+                {
+                    present = true;
+                    break;
+                }
+            }
+
+            if (!present)
+            {
+                host->discovered = false;
+                changed = true;
+            }
+        }
+
+        if (changed && onHostsChanged)
+            onHostsChanged();
+    });
 }
