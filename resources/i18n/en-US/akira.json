@@ -322,13 +322,13 @@
         "theme_restart": "You must restart to apply this theme.",
         "network": "Discovery Networks",
         "discovery_subnets": "Discovery subnets",
-        "discovery_subnets_placeholder": "192.168.50.0/24 or 192.168.50.30",
-        "discovery_subnets_hint": "Subnets (CIDR) or console IPs to auto-discover consoles on other subnets. Must be routable from this network.",
+        "discovery_subnets_placeholder": "192.168.50.0/24",
+        "discovery_subnets_hint": "Add a subnet (/24 to /32) to find consoles on another subnet; Akira sweeps it by unicast. On a bigger network (e.g. a /16)? Enter just the /24 your console is on.",
         "add_subnet": "+  Add subnet",
         "remove": "Remove",
         "this_network": "This network",
-        "discovery_subnets_prompt": "Enter a subnet in CIDR (e.g. 192.168.50.0/24) or a console IP",
-        "subnet_invalid": "Invalid entry. Use CIDR like 192.168.50.0/24 or a console IP.",
+        "discovery_subnets_prompt": "Enter a /24 to /32 subnet, e.g. 192.168.50.0/24",
+        "subnet_invalid": "Enter a /24 to /32 subnet, e.g. 192.168.50.0/24. For a bigger range, use the /24 the console is on.",
         "language": "Language",
         "language_desc": "Override display language. Requires app restart.",
         "lang_system": "System Default",
@@ -490,7 +490,11 @@
         "menu_updates": "Updates",
         "simulate_update": "Simulate update available",
         "dev_update_server_hint": "Dev update server (host:port)",
-        "pair_btn": "  Pair with Companion App"
+        "pair_btn": "  Pair with Companion App",
+        "discovery_log_viewer": "View Discovery Log",
+        "discovery_log_clear": "Clear",
+        "discovery_log_empty": "No discovery activity captured yet. Enable 'Discovery log' above, then open the console list.",
+        "discovery_log_off": "Discovery log is off"
     },
     "update": {
         "channel": "Update channel",
@@ -577,7 +581,10 @@
     "app": {
         "applet_warning": "Please launch Akira in application mode",
         "about": "Akira uses chiaki-ng for its remote capabilities",
-        "ip_prefix": "IP: "
+        "ip_prefix": "IP: ",
+        "discovery_off": "Discovery off",
+        "discovery_local": "Discovery running · local network",
+        "discovery_running_for": "Discovery running for"
     },
     "pair": {
         "title": "Pair with Companion",

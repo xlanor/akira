@@ -323,12 +323,12 @@
         "network": "发现网络",
         "this_network": "当前网络",
         "discovery_subnets": "发现子网",
-        "discovery_subnets_placeholder": "192.168.50.0/24 或 192.168.50.30",
-        "discovery_subnets_hint": "子网(CIDR)或主机 IP，用于自动发现其他子网上的主机。需可从当前网络路由。",
+        "discovery_subnets_placeholder": "192.168.50.0/24",
+        "discovery_subnets_hint": "添加子网(/24 至 /32)以发现其他子网上的主机；Akira 通过单播扫描。网络较大(如 /16)？只需输入主机所在的 /24。",
         "add_subnet": "＋  添加子网",
         "remove": "移除",
-        "discovery_subnets_prompt": "输入 CIDR 子网(如 192.168.50.0/24)或主机 IP",
-        "subnet_invalid": "无效条目。请使用 CIDR(如 192.168.50.0/24)或主机 IP。",
+        "discovery_subnets_prompt": "输入 /24 至 /32 子网，如 192.168.50.0/24",
+        "subnet_invalid": "请输入 /24 至 /32 子网，如 192.168.50.0/24。范围更大时，请使用主机所在的 /24。",
         "language": "语言",
         "language_desc": "覆盖显示语言。需要重启应用。",
         "lang_system": "跟随系统",
@@ -490,7 +490,11 @@
         "menu_updates": "更新",
         "simulate_update": "模拟可用更新",
         "dev_update_server_hint": "开发更新服务器 (host:port)",
-        "pair_btn": "  与伴侣应用配对"
+        "pair_btn": "  与伴侣应用配对",
+        "discovery_log_viewer": "查看发现日志",
+        "discovery_log_clear": "清除",
+        "discovery_log_empty": "尚未捕获到发现活动。请在上方启用“发现日志”，然后打开主机列表。",
+        "discovery_log_off": "发现日志已关闭"
     },
     "update": {
         "channel": "更新通道",
@@ -577,7 +581,10 @@
     "app": {
         "applet_warning": "请以应用程序模式启动 Akira",
         "about": "Akira 使用 chiaki-ng 实现远程游玩功能",
-        "ip_prefix": "IP："
+        "ip_prefix": "IP：",
+        "discovery_off": "发现已关闭",
+        "discovery_local": "发现运行中 · 本地网络",
+        "discovery_running_for": "发现运行中："
     },
     "pair": {
         "title": "与伴侣应用配对",

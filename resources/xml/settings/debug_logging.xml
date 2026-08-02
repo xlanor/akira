@@ -81,6 +81,14 @@
                     marginRight="15"/>
 
 
+                <brls:Button
+                    id="settings/openDiscoveryLog"
+                    text="@i18n/akira/settings/discovery_log_viewer"
+                    marginLeft="15"
+                    marginRight="15"
+                    marginTop="10"/>
+
+
             </brls:Box>
 
         </brls:Box>

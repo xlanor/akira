@@ -18,6 +18,7 @@ private:
     BRLS_BIND(brls::BooleanCell, debugChiakiLogToggle, "settings/debugChiakiLog");
     BRLS_BIND(brls::BooleanCell, debugDiscoveryLogToggle, "settings/debugDiscoveryLog");
     BRLS_BIND(brls::BooleanCell, debugFfmpegLogToggle, "settings/debugFfmpegLog");
+    BRLS_BIND(brls::Button, openDiscoveryLogBtn, "settings/openDiscoveryLog");
 
     SettingsManager* settings = nullptr;
 

@@ -10,31 +10,15 @@
         axis="column"
         grow="1.0">
 
-
-        <brls:Box
-            id="trophies/profile"
-            width="auto"
-            height="auto"
-            axis="column"
-            backgroundColor="@theme/color/card"
-            cornerRadius="14"
-            paddingTop="18"
-            paddingBottom="18"
-            paddingLeft="20"
-            paddingRight="20"
-            marginTop="20"
-            marginLeft="@style/brls/tab_frame/content_padding_sides"
-            marginRight="@style/brls/tab_frame/content_padding_sides"
-            marginBottom="10"/>
-
         <brls:Box
             width="auto"
             height="auto"
             axis="row"
             alignItems="center"
+            marginTop="16"
             marginLeft="@style/brls/tab_frame/content_padding_sides"
             marginRight="@style/brls/tab_frame/content_padding_sides"
-            marginBottom="6">
+            marginBottom="8">
 
             <brls:Button
                 id="trophies/sortBtn"
@@ -47,6 +31,22 @@
                 text="@i18n/akira/trophies/filter_btn"
                 style="bordered"/>
 
+            <brls:Box
+                width="auto"
+                height="auto"
+                grow="1.0"/>
+
+            <brls:Label
+                id="trophies/status"
+                text=""
+                fontSize="15"
+                marginRight="14"/>
+
+            <brls:Button
+                id="trophies/forceRefreshBtn"
+                text="@i18n/akira/trophies/refresh"
+                style="bordered"/>
+
         </brls:Box>
 
         <RecyclingGrid
@@ -54,14 +54,13 @@
             width="auto"
             height="auto"
             grow="1.0"
-            spanCount="3"
-            itemHeight="330"
+            spanCount="1"
+            itemHeight="332"
             itemSpace="18"
-            paddingTop="10"
+            paddingTop="4"
             paddingBottom="20"
             paddingLeft="@style/brls/tab_frame/content_padding_sides"
             paddingRight="@style/brls/tab_frame/content_padding_sides"/>
-
 
     </PsnGatedBox>
 

@@ -1,4 +1,5 @@
 #include "views/settings_debug_view.hpp"
+#include "views/discovery_log_view.hpp"
 
 #include <borealis/core/i18n.hpp>
 
@@ -17,6 +18,10 @@ SettingsDebugView::SettingsDebugView() {
     initDebugDiscoveryLogToggle();
     initDebugFfmpegLogToggle();
 
+    openDiscoveryLogBtn->registerClickAction([](brls::View*) {
+        brls::Application::pushActivity(new brls::Activity(new DiscoveryLogView()));
+        return true;
+    });
 }
 
 void SettingsDebugView::initEnableFileLoggingToggle() {
