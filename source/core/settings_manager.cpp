@@ -381,8 +381,6 @@ void SettingsManager::parseTomlFile() {
         }
         if (auto val = config["gyro_source"].value<int64_t>())
             globalGyroSource = static_cast<GyroSource>(*val);
-        if (auto val = config["companion_host"].value<std::string>())
-            companionHost = *val;
         if (auto val = config["companion_port"].value<int64_t>())
             companionPort = static_cast<int>(*val);
         if (auto val = config["local_video_bitrate"].value<int64_t>())
@@ -553,7 +551,7 @@ void SettingsManager::parseLegacyFile() {
     enum class ConfigItem {
         Unknown, HostName, HostAddr, PsnOnlineId, PsnAccountId, PsnRefreshToken,
         PsnAccessToken, ConsolePIN, RpKey, RpKeyType, RpRegistKey, VideoResolution,
-        VideoFps, Target, Haptic, RemoteDuid, CompanionHost, CompanionPort,
+        VideoFps, Target, Haptic, RemoteDuid, CompanionPort,
         PsnTokenExpiresAt, GlobalDuid
     };
 
@@ -573,7 +571,6 @@ void SettingsManager::parseLegacyFile() {
         {ConfigItem::Target, std::regex("^\\s*target\\s*=\\s*\"?(\\d+)\"?")},
         {ConfigItem::Haptic, std::regex("^\\s*haptic\\s*=\\s*\"?(\\d+)\"?")},
         {ConfigItem::RemoteDuid, std::regex("^\\s*remote_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")},
-        {ConfigItem::CompanionHost, std::regex("^\\s*companion_host\\s*=\\s*\"?([\\w.-]+)\"?")},
         {ConfigItem::CompanionPort, std::regex("^\\s*companion_port\\s*=\\s*\"?(\\d+)\"?")},
         {ConfigItem::PsnTokenExpiresAt, std::regex("^\\s*psn_token_expires_at\\s*=\\s*\"?(\\d+)\"?")},
         {ConfigItem::GlobalDuid, std::regex("^\\s*global_duid\\s*=\\s*\"?([0-9a-fA-F]+)\"?")}
@@ -688,9 +685,6 @@ void SettingsManager::parseLegacyFile() {
             case ConfigItem::Target:
                 if (currentHost) setChiakiTarget(currentHost, value);
                 break;
-            case ConfigItem::CompanionHost:
-                companionHost = value;
-                break;
             case ConfigItem::CompanionPort:
                 companionPort = std::atoi(value.c_str());
                 if (companionPort <= 0 || companionPort > 65535) companionPort = 8080;
@@ -732,8 +726,6 @@ int SettingsManager::writeFile() {
     config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
     config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
     config.insert("haptic", std::to_underlying(globalHaptic));
-    if (!companionHost.empty())
-        config.insert("companion_host", companionHost);
     config.insert("companion_port", companionPort);
     if (holepunchRetry)
         config.insert("holepunch_retry", holepunchRetry);
@@ -1263,14 +1255,6 @@ bool SettingsManager::setChiakiTarget(Host* host, ChiakiTarget target) {
 
 bool SettingsManager::setChiakiTarget(Host* host, const std::string& value) {
     return setChiakiTarget(host, static_cast<ChiakiTarget>(std::atoi(value.c_str())));
-}
-
-std::string SettingsManager::getCompanionHost() const {
-    return companionHost;
-}
-
-void SettingsManager::setCompanionHost(const std::string& host) {
-    companionHost = host;
 }
 
 int SettingsManager::getCompanionPort() const {

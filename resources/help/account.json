@@ -1,17 +1,12 @@
 {
-  "settings/companionHost": {
-    "title": "Companion host",
-    "body": "Address of the companion helper that fetches your credentials.",
-    "image": ""
-  },
   "settings/companionPort": {
-    "title": "Companion port",
-    "body": "Port the companion helper listens on.",
+    "title": "Pairing port",
+    "body": "Port this Switch listens on for pairing pushes from the companion app.",
     "image": ""
   },
-  "settings/fetchPsnBtn": {
-    "title": "Fetch from PSN",
-    "body": "Pull your online ID, tokens and DUID from the companion.",
+  "settings/pairBtn": {
+    "title": "Pair with companion",
+    "body": "Show a 4-digit code and wait for the desktop companion to push your PSN credentials over the network.",
     "image": ""
   },
   "settings/revealCredentials": {

@@ -15,7 +15,6 @@ PsnGatedBox::PsnGatedBox()
     placeholder->setTextColor(akira::ui::active().textDim);
     placeholder->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     placeholder->setVerticalAlign(brls::VerticalAlign::CENTER);
-    placeholder->setGrow(1.0f);
     placeholder->setVisibility(brls::Visibility::GONE);
     this->addView(placeholder);
 

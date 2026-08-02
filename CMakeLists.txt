@@ -52,6 +52,7 @@ include(vendored_libs)
 ###########################################
 file(GLOB_RECURSE MAIN_SRC CONFIGURE_DEPENDS source/*.cpp)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/source/stream/nxext_ipc_server.c)
+list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/source/core/pair/microecc/uECC.c)
 
 # Switch wrapper for libnx initialization
 list(APPEND MAIN_SRC ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)

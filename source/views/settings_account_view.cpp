@@ -1,5 +1,6 @@
 #include "views/settings_account_view.hpp"
 #include "views/host_list_tab.hpp"
+#include "views/pair_view.hpp"
 #include "ui/theme.hpp"
 #include "core/discovery_manager.hpp"
 #include "core/trophy_manager.hpp"
@@ -128,19 +129,6 @@ void SettingsAccountView::initAuthSection() {
         ""
     );
 
-    std::string currentHost = settings->getCompanionHost();
-    companionHostInput->init(
-        "akira/settings/companion_host"_i18n,
-        currentHost,
-        [this](std::string text) {
-            settings->setCompanionHost(text);
-            settings->writeFile();
-            brls::Logger::info("Companion host set to {}", text);
-        },
-        "akira/settings/companion_host_placeholder"_i18n,
-        "akira/settings/companion_host_hint"_i18n
-    );
-
     std::string currentPort = std::format("{}", settings->getCompanionPort());
     companionPortInput->init(
         "akira/settings/companion_port"_i18n,
@@ -159,73 +147,10 @@ void SettingsAccountView::initAuthSection() {
         "akira/settings/companion_port_hint"_i18n
     );
 
-    fetchPsnBtn->setStyle(&BUTTONSTYLE_GREEN);
-    fetchPsnBtn->setBackgroundColor(akira::ui::active().success);
+    pairBtn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
 
-    fetchPsnBtn->registerClickAction([this](brls::View* view) {
-        std::string host = companionHostInput->getValue();
-        std::string portStr = companionPortInput->getValue();
-
-        if (host.empty()) {
-            brls::Application::notify("akira/settings/enter_companion_host_first"_i18n);
-            return true;
-        }
-
-        int port = std::atoi(portStr.c_str());
-        if (port <= 0 || port > 65535) {
-            port = 8080;
-        }
-
-        brls::Application::notify("akira/settings/fetching_credentials"_i18n);
-
-        DiscoveryManager::getInstance()->fetchCompanionCredentials(
-            host, port,
-            [](const std::string& onlineId, const std::string& accountId,
-               const std::string& accessToken, const std::string& refreshToken,
-               int64_t expiresAt, const std::string& duid) {
-                SettingsManager* settings = SettingsManager::getInstance();
-
-                if (!onlineId.empty()) {
-                    settings->setPsnOnlineId(nullptr, onlineId);
-                    brls::Logger::info("PSN Online ID set to {}", onlineId);
-                }
-                if (!accountId.empty()) {
-                    settings->setPsnAccountId(nullptr, accountId);
-                    brls::Logger::info("PSN Account ID set");
-                    if (SettingsAccountView::currentInstance) {
-                        SettingsAccountView::currentInstance->psnAccountIdInput->setValue(accountId);
-                    }
-                }
-                if (!accessToken.empty()) {
-                    settings->setPsnAccessToken(accessToken);
-                }
-                if (!refreshToken.empty()) {
-                    settings->setPsnRefreshToken(refreshToken);
-                }
-                if (expiresAt > 0) {
-                    settings->setPsnTokenExpiresAt(expiresAt);
-                    brls::Logger::info("PSN token expires at {}", expiresAt);
-                }
-                if (!duid.empty()) {
-                    settings->setGlobalDuid(duid);
-                    brls::Logger::info("DUID set from companion");
-                }
-                settings->writeFile();
-                brls::Application::notify("akira/settings/credentials_fetched"_i18n);
-                brls::Logger::info("Fetched PSN credentials from companion");
-
-                if (SettingsAccountView::currentInstance) {
-                    SettingsAccountView::currentInstance->updateCredentialsDisplay();
-                    if (SettingsAccountView::currentInstance->profileSwitcher)
-                        SettingsAccountView::currentInstance->profileSwitcher->refresh();
-                }
-            },
-            [](const std::string& error) {
-                brls::Application::notify(brls::getStr("akira/settings/fetch_failed", error));
-                brls::Logger::error("Failed to fetch PSN credentials: {}", error);
-            }
-        );
-
+    pairBtn->registerClickAction([](brls::View*) {
+        brls::Application::pushActivity(new brls::Activity(new PairView()));
         return true;
     });
 

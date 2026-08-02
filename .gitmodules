@@ -53,3 +53,6 @@
 [submodule "references/sphaira"]
 	path = references/sphaira
 	url = https://github.com/ITotalJustice/sphaira.git
+[submodule "references/pylux"]
+	path = references/pylux
+	url = https://github.com/ForWard-Technologies-LLC/Pylux.git

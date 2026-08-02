@@ -13,8 +13,6 @@ import (
 	"strings"
 
 	"akira-companion/internal/state"
-
-	qrcode "github.com/skip2/go-qrcode"
 )
 
 func getBasicAuthHeader() string {
@@ -225,10 +223,3 @@ func userIDToBase64(userID string) string {
 	return base64.StdEncoding.EncodeToString(buf)
 }
 
-func GenerateQRCode(content string) ([]byte, error) {
-	png, err := qrcode.Encode(content, qrcode.Medium, 256)
-	if err != nil {
-		return nil, err
-	}
-	return png, nil
-}

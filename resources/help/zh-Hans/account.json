@@ -1,17 +1,12 @@
 {
-  "settings/companionHost": {
-    "title": "伴侣主机",
-    "body": "获取你凭据的伴侣助手的地址。",
-    "image": ""
-  },
   "settings/companionPort": {
-    "title": "伴侣端口",
-    "body": "伴侣助手监听的端口。",
+    "title": "配对端口",
+    "body": "本机监听伴侣应用配对推送所用的端口。",
     "image": ""
   },
-  "settings/fetchPsnBtn": {
-    "title": "从 PSN 获取",
-    "body": "从伴侣拉取你的在线 ID、令牌和 DUID。",
+  "settings/pairBtn": {
+    "title": "与伴侣应用配对",
+    "body": "显示 4 位配对码并等待桌面伴侣应用通过网络推送你的 PSN 凭据。",
     "image": ""
   },
   "settings/revealCredentials": {

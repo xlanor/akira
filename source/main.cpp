@@ -37,6 +37,7 @@
 #include "views/enter_pin_view.hpp"
 #include "views/connection_view.hpp"
 #include "views/settings_frame_view.hpp"
+#include "views/setup_account_view.hpp"
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/update_manager.hpp"
@@ -320,6 +321,12 @@ public:
         }, false);
 
         this->registerAction("akira/tabs/settings"_i18n, brls::ControllerButton::BUTTON_RB, [](brls::View*) {
+            if (SettingsManager::getInstance()->getProfiles().empty()) {
+                auto* setupFrame = new brls::AppletFrame(new SetupAccountView());
+                decorateAkiraHeader(setupFrame);
+                brls::Application::pushActivity(new brls::Activity(setupFrame));
+                return true;
+            }
             auto* frame = new brls::AppletFrame(new SettingsFrameView());
             decorateAkiraHeader(frame);
             brls::Application::pushActivity(new brls::Activity(frame));

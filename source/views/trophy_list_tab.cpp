@@ -339,13 +339,16 @@ TrophyListTab::TrophyListTab()
     grid->registerCell("TrophyCard", TrophyCardCell::create);
     grid->estimatedRowHeight = CARD_ROW_HEIGHT;
 
-    for (brls::Button* button : {forceRefreshBtn.getView(), sortBtn.getView(), filterBtn.getView()})
+    for (brls::Button* button : {sortBtn.getView(), filterBtn.getView()})
         button->setStyle(&BUTTONSTYLE_BLUE);
 
     sortBtn->setBackgroundColor(akira::ui::active().surfaceElevated);
     filterBtn->setBackgroundColor(akira::ui::active().surfaceElevated);
+
+    forceRefreshBtn->setStyle(&BUTTONSTYLE_BLUE);
     forceRefreshBtn->setBackgroundColor(akira::ui::active().surfaceElevated);
     forceRefreshBtn->setShrink(0.0f);
+    forceRefreshBtn->setCornerRadius(8);
 
     sortBtn->registerClickAction([this](brls::View* view) {
         showSortPicker();
@@ -362,7 +365,7 @@ TrophyListTab::TrophyListTab()
     forceRefreshGate.attach(
         forceRefreshBtn,
         akira::ui::active().surfaceElevated,
-        "akira/trophies/force_refresh_btn"_i18n,
+        "akira/trophies/refresh"_i18n,
         "akira/trophies/force_refresh_busy"_i18n,
         "akira/trophies/force_refresh_wait",
         [this]() {
@@ -446,50 +449,23 @@ void TrophyListTab::willDisappear(bool resetState)
 
 void TrophyListTab::buildProfileCard()
 {
-    auto* row = new brls::Box(brls::Axis::ROW);
-    row->setAlignItems(brls::AlignItems::CENTER);
+    auto* topRow = new brls::Box(brls::Axis::ROW);
+    topRow->setWidthPercentage(100.0f);
+    topRow->setAlignItems(brls::AlignItems::CENTER);
 
-    auto* levelCol = new brls::Box(brls::Axis::COLUMN);
-
-    auto* levelCaption = new brls::Label();
-    levelCaption->setText("akira/trophies/profile_level_caption"_i18n);
-    levelCaption->setFontSize(16);
-    levelCaption->setTextColor(akira::ui::active().textDim);
-    levelCol->addView(levelCaption);
+    levelRing = new ProgressRing();
+    levelRing->setWidth(104);
+    levelRing->setHeight(104);
+    levelRing->setThickness(8);
+    levelRing->setMarginRight(22);
 
     levelValue = new brls::Label();
     levelValue->setText("—");
-    levelValue->setFontSize(36);
-    levelValue->setMarginTop(2);
-    levelCol->addView(levelValue);
+    levelValue->setFontSize(34);
+    levelValue->setSingleLine(true);
+    levelRing->addView(levelValue);
 
-    row->addView(levelCol);
-
-    auto* progressCol = new brls::Box(brls::Axis::COLUMN);
-    progressCol->setGrow(1.0f);
-    progressCol->setMarginLeft(28);
-    progressCol->setJustifyContent(brls::JustifyContent::CENTER);
-
-    progressLabel = new brls::Label();
-    progressLabel->setText("");
-    progressLabel->setFontSize(16);
-    progressLabel->setTextColor(akira::ui::active().textDim);
-    progressCol->addView(progressLabel);
-
-    auto* track = new brls::Box(brls::Axis::ROW);
-    track->setHeight(6);
-    track->setCornerRadius(3);
-    track->setBackgroundColor(brls::Application::getTheme().getColor("color/grey_3"));
-    track->setMarginTop(6);
-
-    progressFill = new brls::Rectangle();
-    progressFill->setHeight(6);
-    progressFill->setCornerRadius(3);
-    progressFill->setColor(akira::ui::active().accent);
-    track->addView(progressFill);
-
-    progressCol->addView(track);
-    row->addView(progressCol);
+    topRow->addView(levelRing);
 
     static const char* tierRes[4] = {
         "img/trophy/platinum.png",
@@ -497,60 +473,93 @@ void TrophyListTab::buildProfileCard()
         "img/trophy/silver.png",
         "img/trophy/bronze.png"
     };
+    static const char* tierLabel[4] = {
+        "akira/trophies/type_platinum",
+        "akira/trophies/type_gold",
+        "akira/trophies/type_silver",
+        "akira/trophies/type_bronze"
+    };
 
-    auto* tierStrip = new brls::Box(brls::Axis::ROW);
-    tierStrip->setMarginLeft(28);
-    tierStrip->setAlignItems(brls::AlignItems::CENTER);
+    auto* tilesRow = new brls::Box(brls::Axis::ROW);
+    tilesRow->setGrow(1.0f);
 
     for (int i = 0; i < 4; i++)
     {
-        auto* col = new brls::Box(brls::Axis::COLUMN);
-        col->setAlignItems(brls::AlignItems::CENTER);
+        auto* tile = new brls::Box(brls::Axis::ROW);
+        tile->setGrow(1.0f);
         if (i > 0)
-            col->setMarginLeft(16);
+            tile->setMarginLeft(12);
+        tile->setAlignItems(brls::AlignItems::CENTER);
+        tile->setCornerRadius(10);
+        tile->setBackgroundColor(akira::ui::active().surfaceElevated);
+        tile->setPadding(12, 12, 12, 12);
 
         auto* img = new brls::Image();
         img->setImageFromRes(tierRes[i]);
         img->setScalingType(brls::ImageScalingType::FIT);
-        img->setWidth(30);
-        img->setHeight(37);
-        col->addView(img);
+        img->setWidth(28);
+        img->setHeight(34);
+        img->setMarginRight(11);
+        tile->addView(img);
+
+        auto* textCol = new brls::Box(brls::Axis::COLUMN);
 
         auto* count = new brls::Label();
-        count->setFontSize(19);
+        count->setFontSize(23);
         count->setText("0");
-        count->setMarginTop(2);
-        col->addView(count);
+        textCol->addView(count);
+
+        auto* label = new brls::Label();
+        label->setText(brls::getStr(tierLabel[i]));
+        label->setFontSize(13);
+        label->setTextColor(akira::ui::active().textDim);
+        label->setMarginTop(2);
+        textCol->addView(label);
+
+        tile->addView(textCol);
 
         tierImages[i] = img;
         tierCounts[i] = count;
-        tierStrip->addView(col);
+        tilesRow->addView(tile);
     }
 
-    row->addView(tierStrip);
-    profileBox->addView(row);
+    topRow->addView(tilesRow);
+    profileBox->addView(topRow);
+
+    auto* divider = new brls::Box(brls::Axis::ROW);
+    divider->setWidthPercentage(100.0f);
+    divider->setHeight(1);
+    divider->setBackgroundColor(akira::ui::active().surfaceLine);
+    divider->setMarginTop(18);
+    profileBox->addView(divider);
+
+    auto* footer = new brls::Box(brls::Axis::ROW);
+    footer->setWidthPercentage(100.0f);
+    footer->setAlignItems(brls::AlignItems::CENTER);
+    footer->setMarginTop(14);
 
     statusLabel = new brls::Label();
     statusLabel->setText("akira/trophies/loading"_i18n);
-    statusLabel->setFontSize(16);
+    statusLabel->setFontSize(15);
     statusLabel->setTextColor(akira::ui::active().textDim);
-    statusLabel->setMarginTop(8);
-    profileBox->addView(statusLabel);
+    footer->addView(statusLabel);
+
+    auto* footerSpacer = new brls::Box(brls::Axis::ROW);
+    footerSpacer->setGrow(1.0f);
+    footer->addView(footerSpacer);
+
+    forceRefreshBtn = new brls::Button();
+    footer->addView(forceRefreshBtn);
+
+    profileBox->addView(footer);
 }
 
 void TrophyListTab::applySummary(const psn::TrophySummary& summary)
 {
     levelValue->setText(std::to_string(summary.trophyLevel));
-    progressLabel->setText(brls::getStr("akira/trophies/profile_next",
-        summary.progress, summary.trophyLevel + 1));
 
-    int pct = std::clamp(summary.progress, 0, 100);
-    if (pct != summaryPct)
-    {
-        akira::ui::motion::fillTo(progressFill, summaryFillAnim,
-            summaryPct < 0 ? 0.0f : summaryFillAnim.getValue(), static_cast<float>(pct), 600);
-        summaryPct = pct;
-    }
+    if (levelRing)
+        levelRing->setProgress(std::clamp(summary.progress, 0, 100) / 100.0f);
 
     const int values[4] = {
         summary.earnedTrophies.platinum,
