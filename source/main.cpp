@@ -42,6 +42,7 @@
 #include "core/settings_manager.hpp"
 #include "core/update_manager.hpp"
 #include "core/discovery_manager.hpp"
+#include "psn/token_refresher.hpp"
 #include "views/update_flow.hpp"
 #include "core/thread_affinity.h"
 
@@ -500,6 +501,7 @@ int main(int argc, char* argv[])
     if (appletType == AppletType_Application)
     {
         brls::Application::pushActivity(new MainActivity());
+        psn::TokenRefresher::instance().start();
     }
     else
     {
@@ -516,6 +518,8 @@ int main(int argc, char* argv[])
     }
 
     brls::Logger::info("Application exiting");
+
+    psn::TokenRefresher::instance().stop();
 
     SDL_Quit();
     curl_global_cleanup();

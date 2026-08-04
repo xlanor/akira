@@ -1,0 +1,128 @@
+---
+id: registering 
+title: Registering your PSN account 
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import Device from '@site/src/components/Device';
+
+# Registering your PSN account 
+:::info[Please read this section very, very carefully]
+I keep getting questions and complaints from people who havent read the documentation. Please, read
+:::
+
+## 1. Set up your PlayStation console for remote play<Device kind="playstation" />
+
+### a. Enable remote play
+
+<Tabs groupId="console">
+<TabItem value="ps5" label="PS5" default>
+
+Go to `Settings -> System -> Remote Play` and turn on:
+
+- `Enable Remote Play`
+
+</TabItem>
+<TabItem value="ps4" label="PS4">
+
+1. Go to `Settings -> Remote Play Connection Settings` and turn on:
+   - `Enable Remote Play`
+2. Go to `Settings -> Account Management -> Activate as Your Primary PS4` and select:
+   - `Activate`
+
+</TabItem>
+</Tabs>
+
+### b. Enable waking your console from rest mode
+
+<Tabs groupId="console">
+<TabItem value="ps5" label="PS5" default>
+
+Go to `Settings -> System -> Power Saving -> Features Available in Rest Mode` and turn on:
+
+- `Stay Connected to the Internet`
+- `Enable Turning on PS5 from Network`
+
+</TabItem>
+<TabItem value="ps4" label="PS4">
+
+Go to `Settings -> Power Save Settings -> Set Function Available in Rest Mode` and turn on:
+
+- `Stay Connected to the Internet`
+- `Enable turning on PS4 from Network`
+
+</TabItem>
+</Tabs>
+
+:::note
+Over PSN, PS4 remote connection only works with the primary console on your account. That's a Sony limitation, not ours.
+:::
+
+## 2. Log in to PSN in the companion app<Device kind="pc" />
+
+:::note[Companion]
+You only ever need to use the companion for registring an account.
+:::
+
+The companion app provides a simplified way of fetching tokens and transmitting them to the switch.
+
+Because most of the userbase is incapable of performing this action manually, the companion app is the only way avaliable for first time users.
+
+Grab the Akira Companion app from the release and run it.
+
+On Linux, `chmod +x` it first, then run it.
+
+:::note[macOS]
+macOS blocks unknown publishers by default. Allow it under `System Settings -> Privacy & Security`. 
+:::
+
+![Companion sign-in (guided-paste) screen](/img/pair/01-companion-signin.png)
+
+1. **Sign in to PlayStation.** Click **Open PlayStation.com**, sign in (top-right), come back.
+2. **Open the NPSSO page.** Click **Open NPSSO page**. Now that you're signed in, it shows `{"npsso":"..."}`.
+
+   ![Browser showing the npsso JSON](/img/pair/02-npsso-json.png)
+
+3. **Paste the npsso token.** Copy the value between the quotes (drop the `"`), paste it in, click **Sign in**.
+
+
+![Companion "Send to your Switch" screen](/img/pair/03-companion-send.png)
+
+:::note[Unconnectable]
+If you are unable to automatically discover your switch, please make sure that your switch and computer are on the same subnet, otherwise please enter the ip in manually.
+:::
+
+## 3. Open the pairing screen on the switch <Device kind="switch" />
+
+On the switch, as a new user, you can pair through either the settings page or the "Set up your account" tab on your host page.
+
+![pairing1](/img/pair/pairing2.jpg)
+![pairing2](/img/pair/pairing1.jpg)
+
+You will now see a pairing screen with your switch's ip address, port, and a 4-digit code.
+
+![pairing3](/img/pair/pairing3.jpg)
+
+Leave thi screen open until the pairing is complete. 
+
+## 4. Pair with the switch from your desktop<Device kind="pc" />
+
+Back on the computer, on the **Send to your Switch** screen:
+
+- Same network? The Switch shows up under **Found on your network**. Click it to fill in the IP and port.
+- Different subnet, or it didn't show up? Type the Switch IP and port from the Pair screen. Manual always works.
+
+![pairing4](/img/pair/pairing4.png)
+![pairing5](/img/pair/pairing5.png)
+
+Enter the 4-digit code, then click **Send credentials**.
+
+![pairing6](/img/pair/pairing6.png)
+
+The companion now has sent the tokens to the switch, and you should be ready to proceed without the companion. Go back to the host screen on the switch
+
+![pairing7](/img/pair/pairing7.jpg)
+
+Your PSN account now lives on the switch. Next: [add and register a console](./connecting-your-first-host).
+

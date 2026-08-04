@@ -74,7 +74,18 @@
         "local": "本地",
         "options": "选项",
         "ready": "就绪",
-        "standby": "待机"
+        "standby": "待机",
+        "register_how": "你想如何注册？",
+        "register_auto": "自动（通过 PSN）",
+        "register_pin": "输入 PIN",
+        "registering_psn": "正在通过 PSN 注册…",
+        "register_cancel_hint": "按 B 取消",
+        "auto_register_fallback": "无法通过 PSN 注册，请改用 8 位 PIN。",
+        "register_stage_fmt": "第 {}/{} 步：{}",
+        "register_stage_account": "正在刷新账号",
+        "register_stage_console": "正在查找主机",
+        "register_stage_connect": "正在连接",
+        "register_stage_finish": "正在注册"
     },
     "trophies": {
         "title": "奖杯",

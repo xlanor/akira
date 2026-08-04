@@ -1,0 +1,29 @@
+{
+  "docs": [
+    "intro",
+    {
+      "type": "category",
+      "label": "Setup",
+      "collapsed": false,
+      "items": [
+        "setup/registering-and-connecting"
+      ]
+    },
+    "features",
+    {
+      "type": "category",
+      "label": "Advanced",
+      "items": [
+        "advanced/wireguard"
+      ]
+    },
+    {
+      "type": "category",
+      "label": "Reference",
+      "items": [
+        "reference/io-bindings"
+      ]
+    },
+    "developing"
+  ]
+}

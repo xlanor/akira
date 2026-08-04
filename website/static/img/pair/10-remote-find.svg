@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500" role="img" aria-label="Placeholder: Find Remote → link to a local console">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#141a26"/>
+      <stop offset="1" stop-color="#0d1017"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" rx="16" fill="url(#bg)"/>
+  <rect x="12" y="12" width="776" height="476" rx="12" fill="none" stroke="#2f6bff" stroke-width="2" stroke-dasharray="10 8" opacity="0.55"/>
+  <g transform="translate(400 150)" fill="none" stroke="#5e8bff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-46" y="-34" width="92" height="68" rx="10"/>
+    <circle cx="0" cy="2" r="20"/>
+    <rect x="-16" y="-46" width="32" height="16" rx="5" fill="#5e8bff" stroke="none"/>
+  </g>
+  <text x="400" y="250" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="2" fill="#7aa0ff">SWITCH · AKIRA</text>
+  <text x="400" y="252" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"><tspan x="400" y="300" font-size="26" font-weight="600" fill="#e7ecf5">Find Remote →</tspan><tspan x="400" y="336" font-size="26" font-weight="600" fill="#e7ecf5">link to a local console</tspan></text>
+  <text x="400" y="470" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#4a5570">placeholder — replace with a real screenshot</text>
+</svg>

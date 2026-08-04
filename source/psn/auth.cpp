@@ -162,6 +162,28 @@ bool Auth::tokenValid() const
     return (expiresAt - 60) > now;
 }
 
+bool Auth::needsProactiveRefresh(int64_t windowSeconds) const
+{
+    if (storedRefreshToken().empty())
+        return false;
+
+    int64_t expiresAt = storedExpiresAt();
+    if (expiresAt <= 0)
+        return true;
+
+    int64_t now = static_cast<int64_t>(std::time(nullptr));
+    return (expiresAt - windowSeconds) <= now;
+}
+
+int64_t Auth::secondsUntilExpiry() const
+{
+    int64_t expiresAt = storedExpiresAt();
+    if (expiresAt <= 0)
+        return -1;
+
+    return expiresAt - static_cast<int64_t>(std::time(nullptr));
+}
+
 void Auth::clearTokens(const std::string& reason)
 {
     brls::Logger::error("PSN {}: refresh token rejected ({}), clearing stored token data", label(), reason);

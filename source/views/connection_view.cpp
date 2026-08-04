@@ -345,7 +345,9 @@ void ConnectionView::draw(NVGcontext* vg, float x, float y, float width, float h
         drawConnectionFailure(vg, centerX, centerY, failureText);
     } else if (SettingsManager::getInstance()->getConnectionShowStages()) {
         ConnectionStage stage = static_cast<ConnectionStage>(currentStage.load());
-        drawConnectionPulse(vg, centerX, centerY, brls::getStr(connectionStageLabelKey(stage)));
+        int raw = static_cast<int>(stage);
+        int idx = raw < 1 ? 1 : (raw > 6 ? 6 : raw);
+        drawConnectionRing(vg, centerX, centerY, brls::getStr(connectionStageLabelKey(stage)), idx, 6);
     } else {
         renderLogs(vg, logArea->getX(), logArea->getY(),
                    logArea->getWidth(), logArea->getHeight());

@@ -62,6 +62,8 @@ public:
 
     bool linked() const;
     bool tokenValid() const;
+    bool needsProactiveRefresh(int64_t windowSeconds) const;
+    int64_t secondsUntilExpiry() const;
     std::string accessToken() const;
 
     SessionState state() const;

@@ -265,8 +265,10 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
 
         if (settings->getConnectionShowStages()) {
             ConnectionStage stage = static_cast<ConnectionStage>(currentStage.load());
-            drawConnectionPulse(vg, x + width / 2, y + height / 2,
-                brls::getStr(connectionStageLabelKey(stage)));
+            int raw = static_cast<int>(stage);
+            int idx = raw < 1 ? 1 : (raw > 6 ? 6 : raw);
+            drawConnectionRing(vg, x + width / 2, y + height / 2,
+                brls::getStr(connectionStageLabelKey(stage)), idx, 6);
         } else {
             nvgFontSize(vg, 24);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
@@ -317,8 +319,10 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
 
         if (settings->getConnectionShowStages()) {
             ConnectionStage stage = static_cast<ConnectionStage>(currentStage.load());
-            drawConnectionPulse(vg, x + width / 2, y + height / 2,
-                brls::getStr(connectionStageLabelKey(stage)));
+            int raw = static_cast<int>(stage);
+            int idx = raw < 1 ? 1 : (raw > 6 ? 6 : raw);
+            drawConnectionRing(vg, x + width / 2, y + height / 2,
+                brls::getStr(connectionStageLabelKey(stage)), idx, 6);
         } else {
             renderLogs(vg, x, y, width, height);
         }
@@ -478,6 +482,13 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             return;
         }
 
+        if (self->loginPinEnteredThisSession && reason != CHIAKI_QUIT_REASON_STOPPED) {
+            brls::Logger::info("onQuit: first-time login PIN was entered, auto-reconnecting");
+            self->loginPinEnteredThisSession = false;
+            self->attemptReconnect();
+            return;
+        }
+
         bool duringConnect = !self->videoPipelineActive;
 
         self->stopStream();
@@ -529,13 +540,17 @@ void StreamView::onLoginPinRequest(bool pinIncorrect)
 
     Host* hostPtr = host;
     SettingsManager* settingsPtr = settings;
+    auto weak = weak_from_this();
 
-    brls::sync([hostPtr, settingsPtr, pinIncorrect]() {
+    brls::sync([weak, hostPtr, settingsPtr, pinIncorrect]() {
         auto* pinView = new EnterPinView(hostPtr, PinViewType::Login, pinIncorrect);
 
-        pinView->setOnPinEntered([hostPtr, settingsPtr](const std::string& pin) {
+        pinView->setOnPinEntered([weak, hostPtr, settingsPtr](const std::string& pin) {
             brls::Logger::info("Login PIN entered, sending to session");
             hostPtr->setLoginPIN(pin);
+
+            if (auto self = weak.lock())
+                self->loginPinEnteredThisSession = true;
 
             settingsPtr->setConsolePIN(hostPtr, pin);
             settingsPtr->writeFile();
@@ -544,7 +559,6 @@ void StreamView::onLoginPinRequest(bool pinIncorrect)
         pinView->setOnCancel([hostPtr]() {
             brls::Logger::info("Login PIN cancelled, stopping session");
             hostPtr->stopSession();
-            brls::Application::popActivity();
         });
 
         brls::Application::pushActivity(new brls::Activity(pinView));

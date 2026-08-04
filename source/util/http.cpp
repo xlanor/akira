@@ -154,7 +154,8 @@ HttpResponse httpPerform(const HttpRequest& request)
 
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1L);
+    curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1L);
     if (CURLSH* share = sharedDnsCache())
     {
         curl_easy_setopt(curl, CURLOPT_SHARE, share);

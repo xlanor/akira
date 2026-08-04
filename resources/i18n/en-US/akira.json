@@ -74,7 +74,18 @@
         "error_psn_account_id": "Error: PSN Account ID is required. Configure in Settings.",
         "error_psn_online_id": "Error: PSN Online ID is required for PS4 < 7.0.",
         "error_console_type": "Error: Console type not recognized.",
-        "error_registration_failed": "Error: Registration failed."
+        "error_registration_failed": "Error: Registration failed.",
+        "register_how": "How do you want to register?",
+        "register_auto": "Automatic (over PSN)",
+        "register_pin": "Enter PIN",
+        "registering_psn": "Registering over PSN…",
+        "register_cancel_hint": "Press B to cancel",
+        "auto_register_fallback": "Couldn't register over PSN. Enter the 8-digit PIN instead.",
+        "register_stage_fmt": "Step {}/{}: {}",
+        "register_stage_account": "Refreshing account",
+        "register_stage_console": "Finding your console",
+        "register_stage_connect": "Connecting",
+        "register_stage_finish": "Registering"
     },
     "trophies": {
         "title": "Trophies",

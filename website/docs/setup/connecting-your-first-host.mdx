@@ -1,0 +1,68 @@
+---
+id: connecting-your-first-host
+title: Connecting
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import Device from '@site/src/components/Device';
+
+# Add a host (local)<Device kind="switch" />
+
+Autodiscovery only works on the same subnet.
+
+On another subnet, use **Add Console** and type its IP.
+
+![discovered](/img/pair/discovered.jpg)
+
+# Register the console<Device kind="switch" />
+
+Registering the console is required before you can use the console. There are two main mechanism
+
+- Automatic (Over PSN), which relies on being able to punch through to your PS,
+- Enter PIN, where you have to go to settings and set up the 8 digit pin.
+
+<Tabs groupId="regmode">
+<TabItem value="auto" label="Automatic (over PSN)" default>
+
+1. You must have registered your PSN tokens first. If you came from a legacy version of akira, you would not have this if you didn't set it up.
+2. Select the console on the host list and hit **Register**.
+3. In the dialog, pick **Automatic (over PSN)**.
+
+![Automatic registration in progress](/img/pair/authinprogress.jpg)
+
+Give it some time, if its able to punch through, it would then bring you back to the home screen
+
+![Automatic registration in progress](/img/pair/homescreenregistered.jpg)
+
+
+</TabItem>
+<TabItem value="pin" label="Enter PIN">
+
+Fallback method.
+
+1. On the console, open the pairing screen and read off the 8-digit PIN:
+   - **PS5:** `Settings -> System -> Remote Play -> Link Device`
+   - **PS4:** `Settings -> Remote Play Connection Settings -> Add Device`
+2. On the switch, hit **Register**, then pick **Enter PIN**.
+3. Type the 8 digits. That's it.
+
+![Entering the 8-digit PIN](/img/pair/8digitpin.jpg)
+
+</TabItem>
+</Tabs>
+
+# Add a host (remote)<Device kind="switch" />
+
+:::caution
+Remote play over the internet is a coin flip. UDP hole-punching may or may not work. The same [prerequisites](https://streetpea.github.io/chiaki-ng/setup/remoteconnection/) as chiaki-ng apply:
+
+- Console on the latest firmware.
+- Register it first (above). That's where the registration key comes from.
+- Over PSN, PS4 only works with the primary console on your account. Sony's rule.
+:::
+
+Hit **Find Remote**, then link it to a local console if registered via manual, otherwise, if the name matches, it will auto associate it to the new console.
+
+
+![Entering the 8-digit PIN](/img/pair/findremote.jpg)

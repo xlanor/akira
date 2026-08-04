@@ -22,7 +22,7 @@ ConnectionStage matchConnectionStage(const std::string& logLine, ConnectionStage
 const char* connectionStageLabelKey(ConnectionStage stage);
 const char* connectionFailureKeyForStage(ConnectionStage stage);
 const char* connectionFailureKeyForReason(ChiakiQuitReason reason);
-void drawConnectionPulse(NVGcontext* vg, float cx, float cy, const std::string& label);
+void drawConnectionRing(NVGcontext* vg, float cx, float cy, const std::string& label, int stageIndex, int stageTotal);
 void drawConnectionFailure(NVGcontext* vg, float cx, float cy, const std::string& message);
 
 #endif // AKIRA_CONNECTION_STAGE_HPP
