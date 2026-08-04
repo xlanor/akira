@@ -5,6 +5,7 @@
 #include "core/discovery_manager.hpp"
 #include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
+#include "psn/token_refresher.hpp"
 
 #include <borealis/core/i18n.hpp>
 #include <format>
@@ -178,20 +179,12 @@ void SettingsAccountView::initAuthSection() {
 
         brls::Application::notify("akira/settings/refreshing_token"_i18n);
 
-        psn::Auth::instance().refresh(
-            []() {
-                brls::Application::notify("akira/settings/token_refreshed"_i18n);
-                brls::Logger::info("PSN token refreshed");
-                if (SettingsAccountView::currentInstance) {
-                    SettingsAccountView::currentInstance->updateCredentialsDisplay();
-                }
-            },
-            [](psn::AuthError kind, const std::string& error) {
-                brls::Application::notify(brls::getStr("akira/settings/refresh_failed", error));
-                brls::Logger::error("Failed to refresh PSN token ({}): {}",
-                    kind == psn::AuthError::Invalid ? "invalid" : "transient", error);
+        psn::TokenRefresher::instance().refreshNow([]() {
+            brls::Application::notify("akira/settings/token_refreshed"_i18n);
+            if (SettingsAccountView::currentInstance) {
+                SettingsAccountView::currentInstance->updateCredentialsDisplay();
             }
-        );
+        });
 
         refreshTokenGate.apply();
 

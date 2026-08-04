@@ -46,6 +46,7 @@ private:
     bool videoPipelineActive = false;
     bool intentionalDisconnect = false;
     bool reconnecting = false;
+    bool loginPinEnteredThisSession = false;
     uint32_t sessionGeneration = 0;
     std::chrono::steady_clock::time_point minusHoldStart;
     bool minusWasHeld = false;

@@ -1,0 +1,58 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  vertical-align: middle;
+  margin-left: 0.5em;
+  padding: 0.15em 0.6em;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  background: var(--ifm-color-emphasis-100);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.badge svg {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+.label {
+  position: relative;
+  top: 0.03em;
+}
+
+.badge[data-kind='switch'] {
+  border-color: rgba(230, 0, 18, 0.45);
+  color: #e60012;
+  background: rgba(230, 0, 18, 0.08);
+}
+
+.badge[data-kind='pc'] {
+  border-color: rgba(47, 107, 255, 0.45);
+  color: #2f6bff;
+  background: rgba(47, 107, 255, 0.08);
+}
+
+.badge[data-kind='playstation'] {
+  border-color: rgba(0, 112, 209, 0.5);
+  color: #0070d1;
+  background: rgba(0, 112, 209, 0.08);
+}
+
+[data-theme='dark'] .badge[data-kind='switch'] {
+  color: #ff5a68;
+}
+
+[data-theme='dark'] .badge[data-kind='pc'] {
+  color: #7aa0ff;
+}
+
+[data-theme='dark'] .badge[data-kind='playstation'] {
+  color: #4aa3ff;
+}

@@ -9,6 +9,7 @@
 #include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
 #include "psn/models.hpp"
+#include "util/http_pool.hpp"
 #include "stream/session.hpp"
 #include "util/shared_view_holder.hpp"
 
@@ -18,6 +19,10 @@ using namespace brls::literals;
 #include <ctime>
 #include <algorithm>
 #include <cctype>
+#include <thread>
+#include <atomic>
+#include <future>
+#include <chrono>
 
 static const brls::ButtonStyle BUTTONSTYLE_BLUE = {
     .shadowType              = brls::ShadowType::GENERIC,
@@ -50,6 +55,23 @@ bool HostListTab::isConnecting = false;
 bool HostListTab::isRegistering = false;
 bool HostListTab::isActive = false;
 
+
+static brls::Activity* s_autoRegProgress = nullptr;
+static brls::Label* s_autoRegStageLabel = nullptr;
+static std::atomic<bool> s_autoRegCanceled{false};
+
+static void setAutoRegStage(int index, int total) {
+    if (!s_autoRegStageLabel)
+        return;
+    std::string name;
+    switch (index) {
+        case 1: name = "akira/hosts/register_stage_account"_i18n; break;
+        case 2: name = "akira/hosts/register_stage_console"_i18n; break;
+        case 3: name = "akira/hosts/register_stage_connect"_i18n; break;
+        default: name = "akira/hosts/register_stage_finish"_i18n; break;
+    }
+    s_autoRegStageLabel->setText(brls::getStr("akira/hosts/register_stage_fmt", index, total, name));
+}
 
 class HostItemView : public brls::Box {
 public:
@@ -154,7 +176,7 @@ public:
         if (host->isRemote() && host->needsLink()) {
             pillText = "akira/hosts/link"_i18n;
             fg = akira::ui::active().accent;
-        } else if (host->isDiscovered() && !host->hasRpKey() && !host->isRemote()) {
+        } else if (!host->hasRpKey() && (host->isDiscovered() || host->canAutoRegister())) {
             pillText = "akira/hosts/register"_i18n;
             fg = akira::ui::active().accent;
         } else if (host->isStandby() && host->hasRpKey()) {
@@ -190,9 +212,11 @@ public:
 
     void doPrimaryAction() {
         if (host->isRemote() && host->needsLink()) doLink();
-        else if (host->isDiscovered() && !host->hasRpKey() && !host->isRemote()) doRegister();
+        else if (!host->hasRpKey() && (host->isDiscovered() || host->canAutoRegister())) doRegister();
         else if (host->isStandby() && host->hasRpKey() && !host->isRemote()) doWake();
         else if (host->hasRpKey()) doConnect();
+        else brls::Logger::warning("No primary action for {} (remote={}, needsLink={}, discovered={}, rpkey={}, canAuto={})",
+            host->getHostName(), host->isRemote(), host->needsLink(), host->isDiscovered(), host->hasRpKey(), host->canAutoRegister());
     }
 
     void openContextMenu() {
@@ -208,6 +232,7 @@ public:
         }
         if (options.empty()) return;
         auto* dropdown = new brls::Dropdown("akira/hosts/options"_i18n, options,
+            [](int) {}, 0,
             [this, ids](int sel) {
                 if (sel < 0 || sel >= static_cast<int>(ids.size())) return;
                 if (ids[sel] == 0) doConsolePIN();
@@ -253,6 +278,10 @@ private:
             brls::Logger::info("Register button clicked for {}", host->getHostName());
 
             auto* settings = SettingsManager::getInstance();
+            brls::Logger::info("Register {}: remoteDuid='{}' hasToken={} hasAccountId={} canAuto={}",
+                host->getHostName(), host->getRemoteDuid(),
+                !settings->getPsnAccessToken().empty(),
+                !settings->getPsnAccountId(host).empty(), host->canAutoRegister());
             bool isPS5 = host->isPS5();
             bool needsAccountId = isPS5 || host->getChiakiTarget() >= CHIAKI_TARGET_PS4_9;
             std::string accountId = settings->getPsnAccountId(host);
@@ -276,67 +305,222 @@ private:
                 return;
             }
 
-            HostListTab::isRegistering = true;
+            if (host->canAutoRegister()) {
+                std::vector<std::string> options = {
+                    "akira/hosts/register_auto"_i18n,
+                    "akira/hosts/register_pin"_i18n
+                };
+                Host* hp = host;
+                auto* dropdown = new brls::Dropdown("akira/hosts/register_how"_i18n, options,
+                    [](int) {}, 0,
+                    [hp](int sel) {
+                        if (sel == 0) {
+                            startAutoRegistration(hp);
+                        } else if (sel == 1) {
+                            startPinRegistration(hp);
+                        }
+                    });
+                brls::Application::pushActivity(new brls::Activity(dropdown));
+                return;
+            }
 
-            Host* hostPtr = host;
+            startPinRegistration(host);
+    }
 
-            host->setOnRegistSuccess([hostPtr]() {
-                brls::Logger::info("onRegistSuccess callback fired, queuing sync...");
-                brls::sync([hostPtr]() {
-                    brls::Logger::info("onRegistSuccess: inside brls::sync");
-                    HostListTab::isRegistering = false;
-                    brls::Application::notify("akira/hosts/registration_success"_i18n);
-                    SettingsManager::getInstance()->writeFile();
-                    if (HostListTab::currentInstance) {
-                        HostListTab::currentInstance->updateHostItem(hostPtr);
-                    }
-                });
-            });
+    static void startPinRegistration(Host* host) {
+        if (HostListTab::isRegistering) {
+            return;
+        }
 
-            host->setOnRegistFailed([]() {
-                brls::sync([]() {
-                    HostListTab::isRegistering = false;
-                    brls::Application::notify("akira/hosts/registration_failed"_i18n);
-                });
-            });
+        Host* hostPtr = host;
 
-            host->setOnRegistCanceled([]() {
-                brls::sync([]() {
-                    HostListTab::isRegistering = false;
-                    brls::Application::notify("akira/hosts/registration_canceled"_i18n);
-                });
-            });
-
-            auto* pinView = new EnterPinView(host, PinViewType::Registration);
-            pinView->setOnCancel([]() {
-                brls::Logger::info("PIN entry cancelled");
-            });
-            pinView->setOnPinEntered([hostPtr](const std::string& pin) {
-                brls::Logger::info("PIN entered, starting registration");
-                int pinValue = std::atoi(pin.c_str());
-                int result = hostPtr->registerHost(pinValue);
-                if (result != HOST_REGISTER_OK) {
-                    std::string errorMsg;
-                    switch (result) {
-                        case HOST_REGISTER_ERROR_SETTING_PSNACCOUNTID:
-                            errorMsg = "akira/hosts/error_psn_account_id"_i18n;
-                            break;
-                        case HOST_REGISTER_ERROR_SETTING_PSNONLINEID:
-                            errorMsg = "akira/hosts/error_psn_online_id"_i18n;
-                            break;
-                        case HOST_REGISTER_ERROR_UNDEFINED_TARGET:
-                            errorMsg = "akira/hosts/error_console_type"_i18n;
-                            break;
-                        default:
-                            errorMsg = "akira/hosts/error_registration_failed"_i18n;
-                            break;
-                    }
-                    brls::Logger::error("Registration failed: {}", errorMsg);
-                    brls::Application::notify(errorMsg);
+        host->setOnRegistSuccess([hostPtr]() {
+            brls::sync([hostPtr]() {
+                HostListTab::isRegistering = false;
+                brls::Application::notify("akira/hosts/registration_success"_i18n);
+                SettingsManager::getInstance()->writeFile();
+                if (HostListTab::currentInstance) {
+                    HostListTab::currentInstance->updateHostItem(hostPtr);
                 }
             });
+        });
 
-            brls::Application::pushActivity(new brls::Activity(pinView));
+        host->setOnRegistFailed([]() {
+            brls::sync([]() {
+                HostListTab::isRegistering = false;
+                brls::Application::notify("akira/hosts/registration_failed"_i18n);
+            });
+        });
+
+        host->setOnRegistCanceled([]() {
+            brls::sync([]() {
+                HostListTab::isRegistering = false;
+                brls::Application::notify("akira/hosts/registration_canceled"_i18n);
+            });
+        });
+
+        auto* pinView = new EnterPinView(host, PinViewType::Registration);
+        pinView->setOnCancel([]() {
+            HostListTab::isRegistering = false;
+            brls::Logger::info("PIN entry cancelled");
+        });
+        pinView->setOnPinEntered([hostPtr](const std::string& pin) {
+            HostListTab::isRegistering = true;
+            int pinValue = std::atoi(pin.c_str());
+            int result = hostPtr->registerHost(pinValue);
+            if (result != HOST_REGISTER_OK) {
+                HostListTab::isRegistering = false;
+                std::string errorMsg;
+                switch (result) {
+                    case HOST_REGISTER_ERROR_SETTING_PSNACCOUNTID:
+                        errorMsg = "akira/hosts/error_psn_account_id"_i18n;
+                        break;
+                    case HOST_REGISTER_ERROR_SETTING_PSNONLINEID:
+                        errorMsg = "akira/hosts/error_psn_online_id"_i18n;
+                        break;
+                    case HOST_REGISTER_ERROR_UNDEFINED_TARGET:
+                        errorMsg = "akira/hosts/error_console_type"_i18n;
+                        break;
+                    default:
+                        errorMsg = "akira/hosts/error_registration_failed"_i18n;
+                        break;
+                }
+                brls::Application::notify(errorMsg);
+            }
+        });
+
+        brls::Application::pushActivity(new brls::Activity(pinView));
+    }
+
+    static void dismissAutoRegProgress() {
+        s_autoRegStageLabel = nullptr;
+        if (s_autoRegProgress) {
+            s_autoRegProgress = nullptr;
+            brls::Application::popActivity();
+        }
+    }
+
+    static void showAutoRegProgress(Host* host) {
+        auto* box = new brls::Box();
+        box->setAxis(brls::Axis::COLUMN);
+        box->setJustifyContent(brls::JustifyContent::CENTER);
+        box->setAlignItems(brls::AlignItems::CENTER);
+        box->setWidthPercentage(100.0f);
+        box->setHeightPercentage(100.0f);
+        box->setBackgroundColor(nvgRGB(0, 0, 0));
+
+        auto* spinner = new brls::ProgressSpinner();
+        spinner->setWidth(64);
+        spinner->setHeight(64);
+        box->addView(spinner);
+
+        auto* label = new brls::Label();
+        label->setText("akira/hosts/registering_psn"_i18n);
+        label->setFontSize(22);
+        label->setMarginTop(24);
+        box->addView(label);
+        s_autoRegStageLabel = label;
+
+        auto* hint = new brls::Label();
+        hint->setText("akira/hosts/register_cancel_hint"_i18n);
+        hint->setFontSize(16);
+        hint->setTextColor(nvgRGB(0x88, 0x88, 0x88));
+        hint->setMarginTop(12);
+        box->addView(hint);
+
+        box->setFocusable(true);
+        box->registerAction("akira/common/cancel"_i18n, brls::ControllerButton::BUTTON_B,
+            [host](brls::View*) {
+                s_autoRegCanceled = true;
+                host->cancelHolepunch();
+                HostListTab::isRegistering = false;
+                dismissAutoRegProgress();
+                return true;
+            }, false);
+
+        auto* activity = new brls::Activity(box);
+        s_autoRegProgress = activity;
+        brls::Application::pushActivity(activity);
+        brls::Application::giveFocus(box);
+    }
+
+    static void startAutoRegistration(Host* host) {
+        if (HostListTab::isRegistering) {
+            return;
+        }
+        HostListTab::isRegistering = true;
+        s_autoRegCanceled = false;
+
+        Host* hostPtr = host;
+
+        host->setOnRegistSuccess([hostPtr]() {
+            brls::sync([hostPtr]() {
+                HostListTab::isRegistering = false;
+                dismissAutoRegProgress();
+                brls::Application::notify("akira/hosts/registration_success"_i18n);
+                SettingsManager::getInstance()->writeFile();
+                if (HostListTab::currentInstance) {
+                    HostListTab::currentInstance->updateHostItem(hostPtr);
+                }
+            });
+        });
+
+        host->setOnRegistFailed([hostPtr]() {
+            brls::sync([hostPtr]() {
+                HostListTab::isRegistering = false;
+                dismissAutoRegProgress();
+                if (s_autoRegCanceled) {
+                    return;
+                }
+                brls::Application::notify("akira/hosts/auto_register_fallback"_i18n);
+                startPinRegistration(hostPtr);
+            });
+        });
+
+        host->setOnRegistCanceled([]() {
+            brls::sync([]() {
+                HostListTab::isRegistering = false;
+                dismissAutoRegProgress();
+            });
+        });
+
+        host->setOnRegistStage([](int index, int total) {
+            brls::sync([index, total]() {
+                setAutoRegStage(index, total);
+            });
+        });
+
+        showAutoRegProgress(host);
+        setAutoRegStage(1, 4);
+
+        HttpPool::instance().submit([hostPtr](HttpSession& session) {
+            int result = HOST_REGISTER_ERROR_HOLEPUNCH;
+            try {
+                if (!psn::Auth::instance().tokenValid()) {
+                    brls::Logger::info("Auto-register: token stale, refreshing before holepunch");
+                    psn::Auth::instance().ensureSession(session, false);
+                    brls::Logger::info("Auto-register: token refresh returned (valid={})",
+                        psn::Auth::instance().tokenValid());
+                }
+                result = hostPtr->registerHostAuto();
+            } catch (const std::exception& e) {
+                brls::Logger::error("Auto-register worker threw: {}", e.what());
+            } catch (...) {
+                brls::Logger::error("Auto-register worker threw unknown exception");
+            }
+
+            if (result != HOST_REGISTER_OK) {
+                brls::sync([hostPtr]() {
+                    HostListTab::isRegistering = false;
+                    dismissAutoRegProgress();
+                    if (s_autoRegCanceled) {
+                        return;
+                    }
+                    brls::Application::notify("akira/hosts/auto_register_fallback"_i18n);
+                    startPinRegistration(hostPtr);
+                });
+            }
+        });
     }
 
     void doLink() {

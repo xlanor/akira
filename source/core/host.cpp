@@ -315,6 +315,141 @@ int Host::registerHost(int pin)
     return HOST_REGISTER_OK;
 }
 
+bool Host::canAutoRegister() const
+{
+    if (settings->getPsnAccessToken().empty())
+        return false;
+    if (settings->getPsnAccountId(const_cast<Host*>(this)).empty())
+        return false;
+    if (!isPS5() && target < CHIAKI_TARGET_PS4_9)
+        return false;
+    return true;
+}
+
+bool Host::resolveRemoteDuid()
+{
+    std::string accessToken = settings->getPsnAccessToken();
+    if (accessToken.empty())
+        return false;
+
+    ChiakiHolepunchConsoleType type = isPS5() ?
+        CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5 : CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4;
+
+    ChiakiHolepunchDeviceInfo* devices = nullptr;
+    size_t count = 0;
+    ChiakiErrorCode err = chiaki_holepunch_list_devices(
+        accessToken.c_str(), type, &devices, &count, log);
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Auto-register: failed to list PSN devices: {}", chiaki_error_string(err));
+        return false;
+    }
+
+    bool found = false;
+    for (size_t i = 0; i < count; i++)
+    {
+        if (hostName == devices[i].device_name)
+        {
+            std::string duid;
+            duid.reserve(64);
+            for (size_t j = 0; j < 32; j++)
+                std::format_to(std::back_inserter(duid), "{:02x}", devices[i].device_uid[j]);
+            remoteDuid = duid;
+            found = true;
+            brls::Logger::info("Auto-register: resolved DUID for {} from PSN device list", hostName);
+            break;
+        }
+    }
+
+    chiaki_holepunch_free_device_list(&devices);
+    return found;
+}
+
+int Host::registerHostAuto()
+{
+    std::string accountId = settings->getPsnAccountId(this);
+    if (accountId.empty())
+        return HOST_REGISTER_ERROR_SETTING_PSNACCOUNTID;
+
+    brls::Logger::info("Auto-register step 1: enter for {}", hostName);
+    brls::Logger::flushAsyncLogs();
+
+    if (onRegistStage)
+        onRegistStage(2, 4);
+
+    if (remoteDuid.empty())
+    {
+        brls::Logger::info("Auto-register step 2: resolving DUID via list_devices for {}", hostName);
+        brls::Logger::flushAsyncLogs();
+        if (!resolveRemoteDuid())
+        {
+            brls::Logger::error("Auto-register: {} not found in PSN device list", hostName);
+            return HOST_REGISTER_ERROR_HOLEPUNCH;
+        }
+        brls::Logger::info("Auto-register step 2 done: DUID resolved for {}", hostName);
+        brls::Logger::flushAsyncLogs();
+    }
+
+    if (target <= CHIAKI_TARGET_PS4_UNKNOWN)
+        target = isPS5() ? CHIAKI_TARGET_PS5_1 : CHIAKI_TARGET_PS4_10;
+
+    brls::Logger::info("Auto-register step 3: starting holepunch for {}", hostName);
+    brls::Logger::flushAsyncLogs();
+
+    if (onRegistStage)
+        onRegistStage(3, 4);
+
+    ChiakiErrorCode err = connectHolepunch();
+    brls::Logger::info("Auto-register step 4: holepunch returned {}", chiaki_error_string(err));
+    brls::Logger::flushAsyncLogs();
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Auto-register: holepunch failed: {}", chiaki_error_string(err));
+        cleanupHolepunch();
+        return HOST_REGISTER_ERROR_HOLEPUNCH;
+    }
+
+    chiaki_socket_t* ctrlSock = chiaki_get_holepunch_sock(holepunchSession, CHIAKI_HOLEPUNCH_PORT_TYPE_CTRL);
+    if (!ctrlSock)
+    {
+        brls::Logger::error("Auto-register: no CTRL socket after holepunch");
+        cleanupHolepunch();
+        return HOST_REGISTER_ERROR_HOLEPUNCH;
+    }
+
+    autoRegistRudp = chiaki_rudp_init(ctrlSock, log);
+    if (!autoRegistRudp)
+    {
+        brls::Logger::error("Auto-register: rudp init failed");
+        cleanupHolepunch();
+        return HOST_REGISTER_ERROR_HOLEPUNCH;
+    }
+
+    autoRegistHinfo = chiaki_get_regist_info(holepunchSession);
+
+    memset(&registInfo, 0, sizeof(registInfo));
+    registInfo.target = target;
+    registInfo.holepunch_info = &autoRegistHinfo;
+    registInfo.rudp = autoRegistRudp;
+    registInfo.host = nullptr;
+    registInfo.broadcast = false;
+    registInfo.psn_online_id = nullptr;
+    registInfo.pin = 0;
+    registInfo.console_pin = 0;
+
+    size_t accountIdSize = sizeof(registInfo.psn_account_id);
+    chiaki_base64_decode(accountId.c_str(), accountId.length(), registInfo.psn_account_id, &accountIdSize);
+
+    autoRegistActive = true;
+    brls::Logger::info("Auto-register step 5: rudp + regist info ready, starting regist for {}", hostName);
+    brls::Logger::flushAsyncLogs();
+
+    if (onRegistStage)
+        onRegistStage(4, 4);
+    chiaki_regist_start(&regist, log, &registInfo, RegistEventCallback, this);
+    return HOST_REGISTER_OK;
+}
+
 int Host::initSession(Session* streamSession)
 {
     return initSessionWithHolepunch(streamSession, nullptr);
@@ -676,6 +811,17 @@ void Host::registCallback(ChiakiRegistEvent* event)
 
     chiaki_regist_stop(&regist);
     chiaki_regist_fini(&regist);
+
+    if (autoRegistActive)
+    {
+        autoRegistActive = false;
+        if (autoRegistRudp)
+        {
+            chiaki_rudp_fini(autoRegistRudp);
+            autoRegistRudp = nullptr;
+        }
+        cleanupHolepunch();
+    }
 }
 
 ChiakiErrorCode Host::initHolepunchSession()

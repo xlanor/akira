@@ -13,6 +13,7 @@
 #include <chiaki/opusdecoder.h>
 #include <chiaki/log.h>
 #include <chiaki/remote/holepunch.h>
+#include <chiaki/remote/rudp.h>
 
 #include "settings_manager.hpp"
 #include "registration.hpp"
@@ -26,7 +27,8 @@ enum HostRegisterError {
     HOST_REGISTER_OK = 0,
     HOST_REGISTER_ERROR_SETTING_PSNACCOUNTID = 1,
     HOST_REGISTER_ERROR_SETTING_PSNONLINEID = 2,
-    HOST_REGISTER_ERROR_UNDEFINED_TARGET = 3
+    HOST_REGISTER_ERROR_UNDEFINED_TARGET = 3,
+    HOST_REGISTER_ERROR_HOLEPUNCH = 4
 };
 
 enum class HostType {
@@ -89,6 +91,10 @@ private:
     ChiakiOpusDecoder opusDecoder;
     ChiakiRegist regist;
     ChiakiRegistInfo registInfo;
+
+    ChiakiRudp autoRegistRudp = nullptr;
+    ChiakiHolepunchRegistInfo autoRegistHinfo{};
+    bool autoRegistActive = false;
     ChiakiControllerState controllerState;
     std::map<uint32_t, int8_t> fingerIdTouchId;
 
@@ -101,6 +107,7 @@ private:
     std::function<void()> onRegistCanceled;
     std::function<void()> onRegistFailed;
     std::function<void()> onRegistSuccess;
+    std::function<void(int, int)> onRegistStage;
     std::function<void()> onMotionReset;
 
 public:
@@ -185,6 +192,9 @@ public:
     // Wakeup and registration
     int wakeup();
     int registerHost(int pin);
+    int registerHostAuto();
+    bool canAutoRegister() const;
+    bool resolveRemoteDuid();
     void applyRegistrationData(ChiakiRegisteredHost* regHost);
     void copyRegistrationFrom(const Host* other);
     const Registration* activeRegistration() const;
@@ -206,6 +216,7 @@ public:
     void setOnRegistCanceled(std::function<void()> callback) { onRegistCanceled = std::move(callback); }
     void setOnRegistFailed(std::function<void()> callback) { onRegistFailed = std::move(callback); }
     void setOnRegistSuccess(std::function<void()> callback) { onRegistSuccess = std::move(callback); }
+    void setOnRegistStage(std::function<void(int, int)> callback) { onRegistStage = std::move(callback); }
     void setOnMotionReset(std::function<void()> callback) { onMotionReset = std::move(callback); }
 };
 
