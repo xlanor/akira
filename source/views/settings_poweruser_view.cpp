@@ -19,11 +19,18 @@ SettingsPowerUserView::SettingsPowerUserView() {
     initPortGuessingCountSlider();
     initPortGuessingSocksSlider();
     initAutoReconnectToggle();
+    initHideAccountNameToggle();
     initPsnRequestBudgetSlider();
     initPsnRequestWindowSlider();
 
     runBenchmarkBtn->registerClickAction([this](brls::View*) {
         runGhashBenchmark();
+        return true;
+    });
+
+    flushTrophyCacheBtn->registerClickAction([](brls::View*) {
+        TrophyManager::getInstance()->flushCache();
+        brls::Application::notify("akira/settings/trophy_cache_flushed"_i18n);
         return true;
     });
 
@@ -49,6 +56,17 @@ void SettingsPowerUserView::initIpcStatsToggle() {
             settings->setIpcStatsEnabled(isOn);
             settings->writeFile();
             brls::Logger::info("IPC Stats set to {}", isOn ? "true" : "false");
+        }
+    );
+}
+
+void SettingsPowerUserView::initHideAccountNameToggle() {
+    hideAccountNameToggle->init(
+        "akira/settings/hide_account_name"_i18n,
+        settings->getHideAccountName(),
+        [this](bool isOn) {
+            settings->setHideAccountName(isOn);
+            settings->writeFile();
         }
     );
 }

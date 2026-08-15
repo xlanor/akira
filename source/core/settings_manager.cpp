@@ -325,6 +325,9 @@ void SettingsManager::parseTomlFile() {
 
         if (auto val = config["dev_fake_hosts"].value<bool>())
             devFakeHosts = *val;
+
+        if (auto val = config["hide_account_name"].value<bool>())
+            hideAccountName = *val;
         if (auto val = config["update_channel"].value<std::string>())
             updateChannel = *val;
         if (auto val = config["ui_theme"].value<std::string>())
@@ -393,6 +396,19 @@ void SettingsManager::parseTomlFile() {
         else
             remoteVideoBitrate = getDefaultBitrateForResolution(remoteVideoResolution);
 
+        cloudVideoBitrate = config["cloud_video_bitrate"].value<int64_t>().value_or(10000);
+        cloudVideoResolution = config["cloud_video_resolution"].value<int64_t>().value_or(1080);
+        if (auto val = config["cloud_fsr_enabled"].value<bool>())
+            cloudFsrEnabled = *val;
+        cloudDatacenterPscloud = config["cloud_datacenter_pscloud"].value<std::string>().value_or("");
+        cloudDatacenterPsnow = config["cloud_datacenter_psnow"].value<std::string>().value_or("");
+        cloudDatacentersJsonPscloud = config["cloud_datacenters_pscloud"].value<std::string>().value_or("");
+        cloudDatacentersJsonPsnow = config["cloud_datacenters_psnow"].value<std::string>().value_or("");
+        cloudSortState = static_cast<int>(config["cloud_sort_state"].value<int64_t>().value_or(0));
+        cloudAttrPassed = config["cloud_attr_passed"].value<bool>().value_or(false);
+        cloudFavorites = config["cloud_favorites"].value<std::string>().value_or("");
+        cloudShortcuts = config["cloud_shortcuts"].value<std::string>().value_or("");
+
         if (auto val = config["vpn_video_bitrate"].value<int64_t>())
             vpnVideoBitrate = static_cast<int>(*val);
 
@@ -452,8 +468,12 @@ void SettingsManager::parseTomlFile() {
                 profile.mobileSsoRefreshToken = (*pt)["mobile_sso_refresh_token"].value<std::string>().value_or("");
                 profile.mobileSsoAccessToken = (*pt)["mobile_sso_access_token"].value<std::string>().value_or("");
                 profile.mobileSsoExpiresAt = (*pt)["mobile_sso_expires_at"].value<int64_t>().value_or(0);
+                profile.npsso = (*pt)["npsso"].value<std::string>().value_or("");
+                profile.npssoLastCheckedAt = (*pt)["npsso_last_checked_at"].value<int64_t>().value_or(0);
+                profile.npssoValid = (*pt)["npsso_valid"].value<bool>().value_or(false);
                 profile.duid = (*pt)["duid"].value<std::string>().value_or("");
                 profile.trophiesEnabled = (*pt)["trophies_enabled"].value<bool>().value_or(true);
+                profile.cloudShortcuts = (*pt)["cloud_shortcuts"].value<std::string>().value_or("");
 
                 profiles.push_back(profile);
                 if (profile.id >= nextProfileId)
@@ -463,6 +483,17 @@ void SettingsManager::parseTomlFile() {
 
         if (auto val = config["active_profile_id"].value<int64_t>())
             activeProfileId = *val;
+
+        if (!cloudShortcuts.empty()) {
+            for (Profile& p : profiles) {
+                if (p.id == activeProfileId) {
+                    if (p.cloudShortcuts.empty())
+                        p.cloudShortcuts = cloudShortcuts;
+                    break;
+                }
+            }
+            cloudShortcuts.clear();
+        }
 
         if (auto* consolesArr = config["consoles"].as_array()) {
             for (auto& elem : *consolesArr) {
@@ -723,6 +754,16 @@ int SettingsManager::writeFile() {
     config.insert("local_video_bitrate", localVideoBitrate);
     config.insert("remote_video_bitrate", remoteVideoBitrate);
     config.insert("vpn_video_bitrate", vpnVideoBitrate);
+    config.insert("cloud_video_bitrate", cloudVideoBitrate);
+    config.insert("cloud_video_resolution", cloudVideoResolution);
+    config.insert("cloud_fsr_enabled", cloudFsrEnabled);
+    if (!cloudDatacenterPscloud.empty()) config.insert("cloud_datacenter_pscloud", cloudDatacenterPscloud);
+    if (!cloudDatacenterPsnow.empty()) config.insert("cloud_datacenter_psnow", cloudDatacenterPsnow);
+    if (!cloudDatacentersJsonPscloud.empty()) config.insert("cloud_datacenters_pscloud", cloudDatacentersJsonPscloud);
+    if (!cloudDatacentersJsonPsnow.empty()) config.insert("cloud_datacenters_psnow", cloudDatacentersJsonPsnow);
+    if (cloudSortState != 0) config.insert("cloud_sort_state", cloudSortState);
+    if (cloudAttrPassed) config.insert("cloud_attr_passed", true);
+    if (!cloudFavorites.empty()) config.insert("cloud_favorites", cloudFavorites);
     config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
     config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
     config.insert("haptic", std::to_underlying(globalHaptic));
@@ -745,6 +786,8 @@ int SettingsManager::writeFile() {
         config.insert("auto_reconnect", autoReconnect);
     if (devFakeHosts)
         config.insert("dev_fake_hosts", devFakeHosts);
+    if (hideAccountName)
+        config.insert("hide_account_name", hideAccountName);
     config.insert("update_channel", updateChannel);
     config.insert("ui_theme", uiTheme);
     if (!discoverySubnets.empty())
@@ -848,8 +891,12 @@ int SettingsManager::writeFile() {
             if (!p.mobileSsoRefreshToken.empty()) pt.insert("mobile_sso_refresh_token", p.mobileSsoRefreshToken);
             if (!p.mobileSsoAccessToken.empty()) pt.insert("mobile_sso_access_token", p.mobileSsoAccessToken);
             if (p.mobileSsoExpiresAt > 0) pt.insert("mobile_sso_expires_at", p.mobileSsoExpiresAt);
+            if (!p.npsso.empty()) pt.insert("npsso", p.npsso);
+            if (p.npssoLastCheckedAt > 0) pt.insert("npsso_last_checked_at", p.npssoLastCheckedAt);
+            if (p.npssoLastCheckedAt > 0) pt.insert("npsso_valid", p.npssoValid);
             if (!p.duid.empty()) pt.insert("duid", p.duid);
             if (!p.trophiesEnabled) pt.insert("trophies_enabled", false);
+            if (!p.cloudShortcuts.empty()) pt.insert("cloud_shortcuts", p.cloudShortcuts);
             profilesArr.push_back(pt);
         }
         if (!profilesArr.empty())
@@ -1188,6 +1235,85 @@ void SettingsManager::setVpnVideoBitrate(int value) {
     vpnVideoBitrate = value;
 }
 
+int SettingsManager::getCloudVideoBitrate() const {
+    return cloudVideoBitrate;
+}
+
+void SettingsManager::setCloudVideoBitrate(int value) {
+    cloudVideoBitrate = value;
+}
+
+int SettingsManager::getCloudVideoResolution() const {
+    return cloudVideoResolution;
+}
+
+void SettingsManager::setCloudVideoResolution(int value) {
+    cloudVideoResolution = value;
+}
+
+bool SettingsManager::getCloudFsrEnabled() const {
+    return cloudFsrEnabled;
+}
+
+void SettingsManager::setCloudFsrEnabled(bool enabled) {
+    cloudFsrEnabled = enabled;
+}
+
+std::string SettingsManager::getCloudDatacenter(bool pscloud) const {
+    return pscloud ? cloudDatacenterPscloud : cloudDatacenterPsnow;
+}
+
+void SettingsManager::setCloudDatacenter(bool pscloud, const std::string& datacenter) {
+    if (pscloud)
+        cloudDatacenterPscloud = datacenter;
+    else
+        cloudDatacenterPsnow = datacenter;
+}
+
+std::string SettingsManager::getCloudDatacentersJson(bool pscloud) const {
+    return pscloud ? cloudDatacentersJsonPscloud : cloudDatacentersJsonPsnow;
+}
+
+void SettingsManager::setCloudDatacentersJson(bool pscloud, const std::string& json) {
+    if (pscloud)
+        cloudDatacentersJsonPscloud = json;
+    else
+        cloudDatacentersJsonPsnow = json;
+}
+
+int SettingsManager::getCloudSortState() const {
+    return cloudSortState;
+}
+
+void SettingsManager::setCloudSortState(int value) {
+    cloudSortState = value;
+}
+
+bool SettingsManager::getCloudAttrPassed() const {
+    return cloudAttrPassed;
+}
+
+void SettingsManager::setCloudAttrPassed(bool value) {
+    cloudAttrPassed = value;
+}
+
+std::string SettingsManager::getCloudFavorites() const {
+    return cloudFavorites;
+}
+
+std::string SettingsManager::getCloudShortcuts() const {
+    const Profile* p = getActiveProfile();
+    return p ? p->cloudShortcuts : "";
+}
+
+void SettingsManager::setCloudShortcuts(const std::string& json) {
+    ensureActiveProfile()->cloudShortcuts = json;
+}
+
+void SettingsManager::setCloudFavorites(const std::string& json) {
+    cloudFavorites = json;
+}
+
 ChiakiVideoResolutionPreset SettingsManager::getVpnVideoResolution() const {
     return vpnVideoResolution;
 }
@@ -1328,6 +1454,38 @@ void SettingsManager::clearPsnMobileSsoData() {
         p->mobileSsoExpiresAt = 0;
     }
     brls::Logger::info("PSN mobile SSO token data cleared");
+}
+
+std::string SettingsManager::getPsnNpsso() const {
+    const Profile* p = getActiveProfile();
+    return p ? p->npsso : "";
+}
+
+void SettingsManager::setPsnNpsso(const std::string& npsso) {
+    Profile* p = ensureActiveProfile();
+    if (p->npsso != npsso) {
+        p->npsso = npsso;
+        p->npssoLastCheckedAt = 0;
+        p->npssoValid = false;
+    }
+}
+
+int64_t SettingsManager::getPsnNpssoLastCheckedAt() const {
+    const Profile* p = getActiveProfile();
+    return p ? p->npssoLastCheckedAt : 0;
+}
+
+void SettingsManager::setPsnNpssoLastCheckedAt(int64_t checkedAt) {
+    ensureActiveProfile()->npssoLastCheckedAt = checkedAt;
+}
+
+bool SettingsManager::getPsnNpssoValid() const {
+    const Profile* p = getActiveProfile();
+    return p ? p->npssoValid : false;
+}
+
+void SettingsManager::setPsnNpssoValid(bool valid) {
+    ensureActiveProfile()->npssoValid = valid;
 }
 
 void SettingsManager::clearPsnTokenData() {
@@ -1507,6 +1665,20 @@ bool SettingsManager::getDevFakeHosts() const {
     return devFakeHosts;
 }
 
+bool SettingsManager::getHideAccountName() const {
+    return hideAccountName;
+}
+
+void SettingsManager::setHideAccountName(bool enabled) {
+    hideAccountName = enabled;
+}
+
+std::string SettingsManager::maskAccountName(const std::string& name) const {
+    if (!hideAccountName || name.size() <= 2)
+        return name;
+    return name.substr(0, 2) + "***";
+}
+
 void SettingsManager::setDevFakeHosts(bool enabled) {
     devFakeHosts = enabled;
 }
@@ -1616,6 +1788,7 @@ bool SettingsManager::getEasuEnabled() const {
     switch (activeStreamProfile) {
         case StreamProfile::Remote: return remoteFsrEnabled;
         case StreamProfile::Vpn: return vpnFsrEnabled;
+        case StreamProfile::Cloud: return cloudFsrEnabled;
         case StreamProfile::Local:
         default: return localFsrEnabled;
     }
@@ -1626,6 +1799,11 @@ int SettingsManager::getEasuTargetHeight() const {
     switch (activeStreamProfile) {
         case StreamProfile::Remote: res = remoteVideoResolution; break;
         case StreamProfile::Vpn: res = vpnVideoResolution; break;
+        case StreamProfile::Cloud:
+            res = cloudVideoResolution <= 720
+                ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
+                : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+            break;
         case StreamProfile::Local:
         default: res = localVideoResolution; break;
     }

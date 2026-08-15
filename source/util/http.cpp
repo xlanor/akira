@@ -4,10 +4,18 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <mutex>
 
 #include "util/curl_wrappers.hpp"
+
+static std::atomic<unsigned long long> g_httpEpoch{0};
+
+void httpMarkConnectionsStale()
+{
+    g_httpEpoch.fetch_add(1, std::memory_order_relaxed);
+}
 
 static std::array<std::mutex, CURL_LOCK_DATA_LAST> g_shareLocks;
 
@@ -152,10 +160,11 @@ HttpResponse httpPerform(const HttpRequest& request)
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, request.connectTimeoutSec);
     }
 
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, request.followLocation ? 1L : 0L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
-    curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1L);
-    curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1L);
+    curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 0L);
+    curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, request.freshConnect ? 1L : 0L);
+    curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 1L);
     if (CURLSH* share = sharedDnsCache())
     {
         curl_easy_setopt(curl, CURLOPT_SHARE, share);
@@ -198,6 +207,12 @@ HttpSession::~HttpSession()
 
 HttpResponse HttpSession::perform(HttpRequest request)
 {
+    unsigned long long current = g_httpEpoch.load(std::memory_order_relaxed);
+    if (epoch != current)
+    {
+        request.freshConnect = true;
+        epoch = current;
+    }
     request.reuseHandle = handle;
     return httpPerform(request);
 }

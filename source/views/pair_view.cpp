@@ -1,5 +1,6 @@
 #include "views/pair_view.hpp"
 
+#include "cloud/service.hpp"
 #include "core/settings_manager.hpp"
 #include "core/trophy_manager.hpp"
 #include "views/host_list_tab.hpp"
@@ -184,6 +185,8 @@ void PairView::applyCredentials(const PairedCredentials& creds, bool createProfi
         settings->setPsnRefreshToken(creds.refreshToken);
     if (creds.expiresAt > 0)
         settings->setPsnTokenExpiresAt(creds.expiresAt);
+    if (!creds.npsso.empty())
+        settings->setPsnNpsso(creds.npsso);
     if (!creds.duid.empty())
         settings->setGlobalDuid(creds.duid);
 
@@ -198,5 +201,7 @@ void PairView::applyCredentials(const PairedCredentials& creds, bool createProfi
     brls::Logger::info("Imported PSN credentials from pairing push");
 
     TrophyManager::getInstance()->onActiveProfileChanged();
+    cloud::Service::instance().markActiveProfileDirty();
+    cloud::Service::instance().refreshActiveProfile(true);
     HostListTab::notifyActiveProfileChanged();
 }

@@ -52,7 +52,6 @@
                     marginLeft="15"
                     marginRight="15"/>
 
-
                 <brls:SliderCell
                     id="settings/portGuessingCount"
                     title="@i18n/akira/settings/port_guess_count"
@@ -74,6 +73,13 @@
                     marginRight="15"/>
 
 
+                <brls:BooleanCell
+                    id="settings/hideAccountName"
+                    title="@i18n/akira/settings/hide_account_name"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
                 <brls:SliderCell
                     id="settings/psnRequestBudget"
                     title="@i18n/akira/settings/psn_request_budget"
@@ -91,6 +97,14 @@
                 <brls:Button
                     id="settings/runBenchmark"
                     text="@i18n/akira/settings/run_benchmark"
+                    marginLeft="15"
+                    marginRight="15"
+                    marginTop="10"/>
+
+
+                <brls:Button
+                    id="settings/flushTrophyCache"
+                    text="@i18n/akira/settings/flush_trophy_cache"
                     marginLeft="15"
                     marginRight="15"
                     marginTop="10"/>

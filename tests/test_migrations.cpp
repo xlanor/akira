@@ -8,6 +8,7 @@
 #include "core/migrations/m000_baseline.hpp"
 #include "core/migrations/m001_unify_psn_auth.hpp"
 #include "core/migrations/m002_multi_profile.hpp"
+#include "core/migrations/m003_drop_hardened_nat.hpp"
 
 namespace {
 
@@ -21,6 +22,7 @@ toml::table run_migrate(std::string_view src)
     chiaki_migrations::register_m000_baseline(m);
     chiaki_migrations::register_m001_unify_psn_auth(m);
     chiaki_migrations::register_m002_multi_profile(m);
+    chiaki_migrations::register_m003_drop_hardened_nat(m);
 
     toml::table doc = toml::parse(src);
     m.migrate(doc);
@@ -130,7 +132,7 @@ rp_key_type = 0
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 3);
+    CHECK_EQ(version_of(doc), 4);
 
     CHECK_EQ(arr_size(doc, "profiles"), 1);
     const toml::table* p0 = nth(doc, "profiles", 0);
@@ -217,7 +219,7 @@ rp_key_type = 0
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 3);
+    CHECK_EQ(version_of(doc), 4);
     CHECK_EQ(arr_size(doc, "profiles"), 1);
     CHECK_EQ(tstr(nth(doc, "profiles", 0), "account_id"), std::string("TEVH"));
 
@@ -247,7 +249,7 @@ nickname = "PS5"
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 3);
+    CHECK_EQ(version_of(doc), 4);
     CHECK_EQ(arr_size(doc, "profiles"), 1);
     CHECK_EQ(arr_size(doc, "consoles"), 1);
     CHECK_EQ(tstr(nth(doc, "profiles", 0), "account_id"), std::string("WA=="));
@@ -259,7 +261,7 @@ TEST(migration_empty_new_user)
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 3);
+    CHECK_EQ(version_of(doc), 4);
     CHECK(!doc.contains("profiles"));
     CHECK(!doc.contains("consoles"));
     CHECK(!doc.contains("active_profile_id"));
@@ -278,4 +280,33 @@ psn_account_id = "TUU="
     CHECK(!doc.contains("consoles"));
     CHECK(!doc.contains("registrations"));
     CHECK_EQ(tint(&doc, "active_profile_id"), 1);
+}
+
+TEST(migration_drops_hardened_nat_traversal)
+{
+    static constexpr std::string_view src = R"(
+version = 3
+hardened_nat_traversal = true
+port_guessing = true
+)";
+
+    toml::table doc = run_migrate(src);
+
+    CHECK_EQ(version_of(doc), 4);
+    CHECK(!doc.contains("hardened_nat_traversal"));
+    CHECK(doc.contains("port_guessing"));
+}
+
+TEST(migration_without_hardened_nat_key_is_safe)
+{
+    static constexpr std::string_view src = R"(
+version = 3
+port_guessing = true
+)";
+
+    toml::table doc = run_migrate(src);
+
+    CHECK_EQ(version_of(doc), 4);
+    CHECK(!doc.contains("hardened_nat_traversal"));
+    CHECK(doc.contains("port_guessing"));
 }

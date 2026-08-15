@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -111,6 +112,25 @@ private:
     std::function<void()> onMotionReset;
 
 public:
+    struct CloudSessionConfig {
+        ChiakiServiceType serviceType = CHIAKI_SERVICE_TYPE_REMOTE_PLAY;
+        std::string host;
+        uint16_t port = 0;
+        std::string launchSpec;
+        std::string handshakeKey;
+        std::string sessionId;
+        uint8_t psnWrapperType = 0;
+        uint32_t mtuIn = 0;
+        uint32_t mtuOut = 0;
+        uint64_t rttUs = 0;
+        std::string entitlementId;
+        std::string platform;
+    };
+
+private:
+    std::optional<CloudSessionConfig> cloudSession;
+
+public:
     explicit Host(const std::string& name);
     ~Host();
 
@@ -136,6 +156,7 @@ public:
     bool hasRpKey() const { return activeRegistration() != nullptr; }
     bool isReady() const { return state == CHIAKI_DISCOVERY_HOST_STATE_READY; }
     bool isPS5() const;
+    bool isCloud() const { return cloudSession.has_value(); }
     bool isRemote() const { return hostType == HostType::Remote; }
     bool isManual() const { return hostType == HostType::Manual; }
     bool isAuto() const { return hostType == HostType::Auto; }
@@ -161,6 +182,9 @@ public:
     // Per-host haptic setting (-1=inherit, 0=disabled, 1=weak, 2=strong)
     int getHapticRaw() const { return haptic; }
     void setHapticRaw(int value) { haptic = value; }
+    void setCloudSessionConfig(const CloudSessionConfig& config) { cloudSession = config; }
+    void clearCloudSessionConfig() { cloudSession.reset(); }
+    const CloudSessionConfig* getCloudSessionConfig() const { return cloudSession ? &*cloudSession : nullptr; }
 
     // Send login PIN to active session
     void setLoginPIN(const std::string& pin);

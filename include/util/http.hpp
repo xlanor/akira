@@ -28,9 +28,13 @@ struct HttpRequest {
     long timeoutSec = 15;
     long connectTimeoutSec = 0;
     bool verifyPeer = false;
+    bool followLocation = true;
+    bool freshConnect = false;
 
     void* reuseHandle = nullptr;
 };
+
+void httpMarkConnectionsStale();
 
 HttpResponse httpPerform(const HttpRequest& request);
 
@@ -49,6 +53,7 @@ public:
 
 private:
     void* handle = nullptr;
+    unsigned long long epoch = 0;
 };
 
 #endif // AKIRA_HTTP_HPP

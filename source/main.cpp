@@ -24,6 +24,8 @@
 #include <curl/curl.h>
 #include "crypto/libnx/gmac.h"
 #include "ui/theme.hpp"
+#include "util/http.hpp"
+#include "util/http_pool.hpp"
 
 #include "views/host_list_tab.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
@@ -40,8 +42,10 @@
 #include "views/setup_account_view.hpp"
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
+#include "cloud/http_bridge.hpp"
 #include "core/update_manager.hpp"
 #include "core/discovery_manager.hpp"
+#include "ui/akira_header.hpp"
 #include "psn/token_refresher.hpp"
 #include "views/update_flow.hpp"
 #include "core/thread_affinity.h"
@@ -189,7 +193,7 @@ private:
     std::string lastTime;
 };
 
-static void decorateAkiraHeader(brls::AppletFrame* appletFrame)
+void decorateAkiraHeader(brls::AppletFrame* appletFrame)
 {
     if (!appletFrame)
         return;
@@ -264,6 +268,47 @@ static void decorateAkiraHeader(brls::AppletFrame* appletFrame)
     }
 }
 
+void akiraOpenTrophies()
+{
+    if (!SettingsManager::getInstance()->getActiveProfileTrophiesEnabled()) {
+        brls::Application::notify("akira/trophies/disabled_for_profile"_i18n);
+        return;
+    }
+    auto* view = TrophyListTab::create();
+    view->registerAction("akira/common/back"_i18n, brls::ControllerButton::BUTTON_B, [](brls::View*) {
+        brls::Application::popActivity();
+        return true;
+    }, false);
+    auto* frame = new brls::AppletFrame(view);
+    decorateAkiraHeader(frame);
+    brls::Application::pushActivity(new brls::Activity(frame));
+}
+
+void akiraOpenSettings()
+{
+    if (SettingsManager::getInstance()->getProfiles().empty()) {
+        auto* setupFrame = new brls::AppletFrame(new SetupAccountView());
+        decorateAkiraHeader(setupFrame);
+        brls::Application::pushActivity(new brls::Activity(setupFrame));
+        return;
+    }
+    auto* frame = new brls::AppletFrame(new SettingsFrameView());
+    decorateAkiraHeader(frame);
+    brls::Application::pushActivity(new brls::Activity(frame));
+}
+
+void registerAkiraTabActions(brls::View* view)
+{
+    view->registerAction("akira/tabs/trophies"_i18n, brls::ControllerButton::BUTTON_LB, [](brls::View*) {
+        akiraOpenTrophies();
+        return true;
+    }, false);
+    view->registerAction("akira/tabs/settings"_i18n, brls::ControllerButton::BUTTON_RB, [](brls::View*) {
+        akiraOpenSettings();
+        return true;
+    }, false);
+}
+
 class MainActivity : public brls::Activity
 {
 public:
@@ -271,6 +316,12 @@ public:
 
     brls::Label* discoveryStatusLabel = nullptr;
     brls::RepeatingTimer discoveryStatusTimer;
+
+    void onResume() override
+    {
+        brls::Activity::onResume();
+        HostListTab::refreshRailsIfActive();
+    }
 
     void onContentAvailable() override
     {
@@ -348,31 +399,12 @@ public:
         }
 
         this->registerAction("akira/tabs/trophies"_i18n, brls::ControllerButton::BUTTON_LB, [](brls::View*) {
-            if (!SettingsManager::getInstance()->getActiveProfileTrophiesEnabled()) {
-                brls::Application::notify("akira/trophies/disabled_for_profile"_i18n);
-                return true;
-            }
-            auto* view = TrophyListTab::create();
-            view->registerAction("akira/common/back"_i18n, brls::ControllerButton::BUTTON_B, [](brls::View*) {
-                brls::Application::popActivity();
-                return true;
-            }, false);
-            auto* frame = new brls::AppletFrame(view);
-            decorateAkiraHeader(frame);
-            brls::Application::pushActivity(new brls::Activity(frame));
+            akiraOpenTrophies();
             return true;
         }, false);
 
         this->registerAction("akira/tabs/settings"_i18n, brls::ControllerButton::BUTTON_RB, [](brls::View*) {
-            if (SettingsManager::getInstance()->getProfiles().empty()) {
-                auto* setupFrame = new brls::AppletFrame(new SetupAccountView());
-                decorateAkiraHeader(setupFrame);
-                brls::Application::pushActivity(new brls::Activity(setupFrame));
-                return true;
-            }
-            auto* frame = new brls::AppletFrame(new SettingsFrameView());
-            decorateAkiraHeader(frame);
-            brls::Application::pushActivity(new brls::Activity(frame));
+            akiraOpenSettings();
             return true;
         }, false);
 
@@ -424,6 +456,11 @@ int main(int argc, char* argv[])
     brls::getStyle().addMetric("brls/tab_frame/sidebar_width", 369.0f);
     brls::getStyle().addMetric("brls/sidebar/item_font_size", 24.0f);
 
+    brls::Application::getWindowFocusChangedEvent()->subscribe([](bool focused) {
+        if (focused)
+            httpMarkConnectionsStale();
+    });
+
     if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0)
     {
         brls::Logger::error("SDL_Init failed: {}", SDL_GetError());
@@ -453,6 +490,7 @@ int main(int argc, char* argv[])
 #endif
     SettingsManager::getInstance()->setLogger(&chiakiLog);
     Session::GetInstance()->SetLogger(&chiakiLog);
+    cloud::registerHttpBridge();
 
     static FILE* logFile = nullptr;
     if (SettingsManager::getInstance()->getEnableFileLogging()) {
@@ -519,7 +557,11 @@ int main(int argc, char* argv[])
 
     brls::Logger::info("Application exiting");
 
+    DiscoveryManager::getInstance()->setServiceEnabled(false);
+
     psn::TokenRefresher::instance().stop();
+
+    HttpPool::instance().stop();
 
     SDL_Quit();
     curl_global_cleanup();

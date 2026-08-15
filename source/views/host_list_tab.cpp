@@ -1,4 +1,8 @@
 #include "views/host_list_tab.hpp"
+#include "cloud/library_view.hpp"
+#include "cloud/cloud_connection_view.hpp"
+#include "ui/akira_header.hpp"
+#include "cloud/service.hpp"
 #include "ui/theme.hpp"
 #include "ui/motion.hpp"
 #include "views/stream_view.hpp"
@@ -17,6 +21,7 @@
 using namespace brls::literals;
 
 #include <ctime>
+#include <functional>
 #include <algorithm>
 #include <cctype>
 #include <thread>
@@ -54,6 +59,7 @@ HostListTab* HostListTab::currentInstance = nullptr;
 bool HostListTab::isConnecting = false;
 bool HostListTab::isRegistering = false;
 bool HostListTab::isActive = false;
+bool HostListTab::connectionActive = false;
 
 
 static brls::Activity* s_autoRegProgress = nullptr;
@@ -723,6 +729,141 @@ private:
     brls::Animatable focusAnim{0.0f};
 };
 
+class CloudCard : public brls::Box {
+public:
+    CloudCard()
+    {
+        cloud::Snapshot snapshot = cloud::Service::instance().snapshotForActiveProfile();
+        const auto& pal = akira::ui::active();
+
+        this->setAxis(brls::Axis::COLUMN);
+        this->setAlignItems(brls::AlignItems::CENTER);
+        this->setJustifyContent(brls::JustifyContent::FLEX_START);
+        this->setWidth(174);
+        this->setHeight(238);
+        this->setPadding(16);
+        this->setMarginRight(14);
+        this->setMarginBottom(14);
+        this->setCornerRadius(14);
+        this->setFocusable(true);
+
+        std::string pillText = "akira/cloud/pill_unavailable"_i18n;
+        NVGcolor pillColor = pal.textDim;
+        std::string subText = snapshot.status.detail;
+        bool active = true;
+
+        switch (snapshot.status.availability)
+        {
+            case cloud::Availability::Ready:
+                pillText = "akira/cloud/pill_ready"_i18n;
+                pillColor = pal.success;
+                subText = brls::getStr("akira/cloud/card_count", snapshot.status.gameCount);
+                break;
+            case cloud::Availability::Checking:
+                pillText = "akira/cloud/pill_checking"_i18n;
+                pillColor = pal.accent;
+                subText = "akira/cloud/card_checking"_i18n;
+                break;
+            case cloud::Availability::NeedsPairing:
+                pillText = "akira/cloud/pill_pair"_i18n;
+                pillColor = pal.accent;
+                subText = "akira/cloud/card_link"_i18n;
+                break;
+            case cloud::Availability::Warning:
+            case cloud::Availability::LaunchBlocked:
+                pillText = "akira/cloud/pill_limited"_i18n;
+                pillColor = pal.warning;
+                break;
+            case cloud::Availability::Error:
+                pillText = "akira/cloud/pill_offline"_i18n;
+                pillColor = pal.danger;
+                subText = "akira/cloud/card_offline"_i18n;
+                break;
+            case cloud::Availability::Empty:
+                pillColor = pal.textDim;
+                subText = "akira/cloud/card_none"_i18n;
+                active = false;
+                break;
+            case cloud::Availability::NoProfile:
+            default:
+                active = false;
+                break;
+        }
+
+        this->setBackgroundColor(active
+            ? akira::ui::withAlpha(pal.accentStrong, 0x24)
+            : pal.surface);
+        if (active)
+        {
+            this->setBorderColor(akira::ui::withAlpha(pal.accent, 0x55));
+            this->setBorderThickness(1);
+        }
+
+        auto* glyph = new brls::Label();
+        glyph->setText("\xEE\x8A\xBD");
+        glyph->setFontSize(52);
+        glyph->setTextColor(active ? pal.accent : pal.textDim);
+        glyph->setMarginTop(10);
+        glyph->setMarginBottom(12);
+        this->addView(glyph);
+
+        auto* name = new brls::Label();
+        name->setText("akira/cloud/card_badge"_i18n);
+        name->setFontSize(20);
+        name->setWidth(142);
+        name->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        name->setTextColor(active ? pal.text : pal.textMuted);
+        name->setMarginBottom(6);
+        this->addView(name);
+
+        auto* pill = new brls::Box();
+        pill->setAxis(brls::Axis::ROW);
+        pill->setCornerRadius(11);
+        pill->setPaddingLeft(11);
+        pill->setPaddingRight(11);
+        pill->setPaddingTop(2);
+        pill->setPaddingBottom(3);
+        pill->setBackgroundColor(akira::ui::withAlpha(pillColor, 0x2e));
+        auto* pillLabel = new brls::Label();
+        pillLabel->setText(pillText);
+        pillLabel->setFontSize(16);
+        pillLabel->setTextColor(pillColor);
+        pill->addView(pillLabel);
+        this->addView(pill);
+
+        if (!subText.empty())
+        {
+            auto* sub = new brls::Label();
+            sub->setText(subText);
+            sub->setFontSize(14);
+            sub->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+            sub->setTextColor(pal.textDim);
+            sub->setMarginTop(8);
+            sub->setWidth(140);
+            this->addView(sub);
+        }
+
+        this->registerClickAction([snapshot](brls::View*) {
+            if (snapshot.status.canPair && !snapshot.status.canBrowse)
+            {
+                brls::Application::pushActivity(new brls::Activity(new PairView()));
+                return true;
+            }
+
+            auto* frame = new brls::AppletFrame(new cloud::LibraryView());
+            decorateAkiraHeader(frame);
+            registerAkiraTabActions(frame);
+            brls::Application::pushActivity(new brls::Activity(frame));
+            return true;
+        });
+
+        akira::ui::motion::liftOnFocus(this, focusAnim);
+    }
+
+private:
+    brls::Animatable focusAnim{0.0f};
+};
+
 
 HostListTab::HostListTab() {
     currentInstance = this;
@@ -739,8 +880,8 @@ HostListTab::HostListTab() {
         brls::Logger::info("onHostDiscovered: isActive={}, currentInstance={}",
             HostListTab::isActive ? "true" : "false",
             HostListTab::currentInstance ? "valid" : "null");
-        if (!HostListTab::isActive) {
-            brls::Logger::info("onHostDiscovered: isActive=false, skipping {}", host->getHostName());
+        if (!HostListTab::isActive || HostListTab::connectionActive) {
+            brls::Logger::info("onHostDiscovered: suspended, skipping {}", host->getHostName());
             return;
         }
         if (!HostListTab::currentInstance) {
@@ -752,7 +893,8 @@ HostListTab::HostListTab() {
     });
 
     discovery->setOnHostsChanged([]() {
-        if (HostListTab::isActive && HostListTab::currentInstance)
+        if (HostListTab::isActive && HostListTab::currentInstance
+            && !HostListTab::connectionActive)
             HostListTab::currentInstance->syncHostList();
     });
 
@@ -768,6 +910,12 @@ HostListTab::HostListTab() {
         const auto& profiles = settings->getProfiles();
         if (profiles.empty()) {
             brls::Application::notify("akira/hosts/no_profiles_add"_i18n);
+            return true;
+        }
+
+        if (cloud::Service::instance().snapshotForActiveProfile().status.availability
+                == cloud::Availability::Checking) {
+            brls::Application::notify("akira/cloud/checking_wait"_i18n);
             return true;
         }
 
@@ -793,13 +941,18 @@ HostListTab::HostListTab() {
                 s->setActiveProfileId(ids[sel]);
                 s->writeFile();
                 TrophyManager::getInstance()->onActiveProfileChanged();
+                cloud::Service::instance().refreshActiveProfile(false,
+                    [](const cloud::Snapshot&) {
+                        if (HostListTab::currentInstance)
+                            HostListTab::currentInstance->syncHostList();
+                    });
                 brls::sync([]() {
                     if (HostListTab::currentInstance) {
                         HostListTab::currentInstance->syncHostList();
                         if (HostListTab::currentInstance->profileChip)
                             HostListTab::currentInstance->profileChip->refresh();
-                        if (HostListTab::currentInstance->recentRail)
-                            HostListTab::currentInstance->recentRail->refresh();
+                        if (HostListTab::currentInstance->shortcutsRail)
+                            HostListTab::currentInstance->shortcutsRail->refresh();
                     }
                 });
             },
@@ -808,11 +961,25 @@ HostListTab::HostListTab() {
         return true;
     });
 
-    recentRail = new RecentlyPlayedRail();
-    recentRail->setResumeHandler([](const psn::PlayedGame& game) {
-        HostListTab::resumeGame(game);
+    shortcutsRail = new CloudShortcutsRail();
+    shortcutsRail->setLaunchHandler([](const cloud::Game& game) {
+        bool skipAttr = SettingsManager::getInstance()->getCloudAttrPassed();
+        auto view = SharedViewHolder::holdNew<cloud::CloudConnectionView>(game, skipAttr);
+        HostListTab::connectionActive = true;
+        view->setupAndStart();
+        brls::Application::pushActivity(new brls::Activity(view.get()));
     });
-    railSlot->addView(recentRail);
+    shortcutsRail->setLeadingCard([]() -> brls::View* { return new CloudCard(); });
+    railSlot->addView(shortcutsRail);
+
+    cloud::Service::instance().refreshActiveProfile(false,
+        [](const cloud::Snapshot&) {
+            if (!HostListTab::currentInstance)
+                return;
+            HostListTab::currentInstance->syncHostList();
+            if (HostListTab::currentInstance->profileChip)
+                HostListTab::currentInstance->profileChip->refresh();
+        });
 
     syncHostList();
 }
@@ -850,7 +1017,7 @@ void HostListTab::connectToHost(Host* host) {
     }
 
     HostListTab::isConnecting = true;
-    HostListTab::isActive = false;
+    HostListTab::connectionActive = true;
 
     if (host->isRemote()) {
         auto connectionView = SharedViewHolder::holdNew<ConnectionView>(host);
@@ -864,66 +1031,6 @@ void HostListTab::connectToHost(Host* host) {
     }
 
     HostListTab::isConnecting = false;
-}
-
-void HostListTab::resumeGame(const psn::PlayedGame& game) {
-    if (HostListTab::isConnecting)
-        return;
-
-    bool wantPS5 = game.category.find("ps5") != std::string::npos;
-    bool wantPS4 = game.category.find("ps4") != std::string::npos;
-
-    auto* hosts = SettingsManager::getInstance()->getHostsMap();
-    Host* localReady = nullptr;
-    Host* remoteHost = nullptr;
-    Host* localStandby = nullptr;
-    Host* anyMatch = nullptr;
-
-    if (hosts) {
-        for (auto& entry : *hosts) {
-            Host* h = entry.second.get();
-            if (!h)
-                continue;
-            if (wantPS5 && !h->isPS5())
-                continue;
-            if (wantPS4 && h->isPS5())
-                continue;
-            if (!anyMatch)
-                anyMatch = h;
-            if (h->isRemote()) {
-                if (!remoteHost)
-                    remoteHost = h;
-            } else if (h->isReady()) {
-                if (!localReady)
-                    localReady = h;
-            } else if (h->isStandby()) {
-                if (!localStandby)
-                    localStandby = h;
-            }
-        }
-    }
-
-    if (localReady) {
-        connectToHost(localReady);
-        return;
-    }
-    if (remoteHost) {
-        connectToHost(remoteHost);
-        return;
-    }
-    if (localStandby) {
-        int result = localStandby->wakeup();
-        if (result == 0)
-            brls::Application::notify(brls::getStr("akira/hosts/resume_waking", localStandby->getHostName()));
-        else
-            brls::Application::notify(brls::getStr("akira/hosts/wake_failed", localStandby->getHostName()));
-        return;
-    }
-    if (anyMatch) {
-        connectToHost(anyMatch);
-        return;
-    }
-    brls::Application::notify("akira/hosts/resume_no_console"_i18n);
 }
 
 void HostListTab::initFindRemoteButton() {
@@ -994,7 +1101,15 @@ void HostListTab::willAppear(bool resetState) {
     brls::Logger::debug("HostListTab::willAppear - resuming discovery callbacks");
     findRemoteGate.start();
     if (profileChip) profileChip->refresh();
-    if (recentRail) recentRail->refresh();
+    if (shortcutsRail) shortcutsRail->refresh();
+    cloud::Service::instance().refreshActiveProfile(false,
+        [](const cloud::Snapshot&) {
+            if (!HostListTab::currentInstance)
+                return;
+            HostListTab::currentInstance->syncHostList();
+            if (HostListTab::currentInstance->profileChip)
+                HostListTab::currentInstance->profileChip->refresh();
+        });
     syncHostList();
 }
 
@@ -1009,14 +1124,39 @@ brls::View* HostListTab::create() {
     return new HostListTab();
 }
 
+void HostListTab::refreshRailsIfActive() {
+    HostListTab::connectionActive = false;
+    if (!currentInstance)
+        return;
+    brls::sync([]() {
+        if (!currentInstance)
+            return;
+        if (currentInstance->shortcutsRail)
+            currentInstance->shortcutsRail->refresh();
+
+        brls::View* f = brls::Application::getCurrentFocus();
+        bool underHome = false;
+        for (brls::View* v = f; v; v = v->getParent())
+            if (v == currentInstance) { underHome = true; break; }
+        brls::Logger::info("refreshRailsIfActive: focus={} isActive={} underHome={} stack={}",
+            f ? f->describe() : std::string("null"),
+            currentInstance->isActive ? "yes" : "no",
+            underHome ? "yes" : "no",
+            (int)brls::Application::getActivitiesStack().size());
+        if (currentInstance->isActive && !underHome)
+            brls::Application::giveFocus(currentInstance);
+    });
+}
+
 void HostListTab::notifyActiveProfileChanged() {
+    cloud::Service::instance().refreshActiveProfile(false);
     if (!currentInstance)
         return;
     currentInstance->syncHostList();
     if (currentInstance->profileChip)
         currentInstance->profileChip->refresh();
-    if (currentInstance->recentRail)
-        currentInstance->recentRail->refresh();
+    if (currentInstance->shortcutsRail)
+        currentInstance->shortcutsRail->refresh();
 }
 
 void HostListTab::syncHostList() {
@@ -1113,17 +1253,24 @@ void HostListTab::syncHostList() {
                 hostContainer->addView(row);
             }
             row->addView(new AddHostCard());
+            for (auto* child : row->getChildren())
+                child->setCustomNavigationRoute(brls::FocusDirection::DOWN, "cloud/rail/lead");
         }
     } else {
-        brls::Box* card = hasProfile ? static_cast<brls::Box*>(new AddHostCard())
-                                     : static_cast<brls::Box*>(new SetupAccountCard());
         auto* cardRow = new brls::Box();
         cardRow->setAxis(brls::Axis::ROW);
         cardRow->setWidthPercentage(100.0f);
         cardRow->setJustifyContent(brls::JustifyContent::CENTER);
         hostContainer->addView(cardRow);
-        cardRow->addView(card);
-        emptyActionCard = card;
+        if (hasProfile) {
+            auto* addHost = new AddHostCard();
+            cardRow->addView(addHost);
+            emptyActionCard = addHost;
+        } else {
+            auto* card = new SetupAccountCard();
+            cardRow->addView(card);
+            emptyActionCard = card;
+        }
     }
 
     if (emptyMessage) {

@@ -24,6 +24,8 @@ SWITCH_IP    ?=
 # builds and runs natively. Everything else in the app needs the Switch toolchain.
 TEST_BIN     := $(CURDIR)/build/tests/psn_tests
 TEST_SRC     := $(wildcard $(CURDIR)/tests/*.cpp) \
+                $(CURDIR)/source/cloud/models.cpp \
+                $(CURDIR)/source/psn/auth_bootstrap.cpp \
                 $(CURDIR)/source/psn/models.cpp \
                 $(CURDIR)/source/psn/client.cpp \
                 $(CURDIR)/source/psn/log.cpp \

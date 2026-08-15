@@ -1,4 +1,5 @@
 #include "views/profile_card_view.hpp"
+#include "cloud/service.hpp"
 #include "ui/theme.hpp"
 #include "core/trophy_manager.hpp"
 
@@ -6,6 +7,33 @@
 #include <format>
 
 using namespace brls::literals;
+
+namespace {
+
+std::string cloudSummary(const cloud::Status& status)
+{
+    switch (status.availability)
+    {
+        case cloud::Availability::Ready:
+            return "akira/cloud/chip_ready"_i18n;
+        case cloud::Availability::Warning:
+            return "akira/cloud/chip_warning"_i18n;
+        case cloud::Availability::Empty:
+            return "akira/cloud/chip_empty"_i18n;
+        case cloud::Availability::NeedsPairing:
+            return "akira/cloud/chip_pair"_i18n;
+        case cloud::Availability::Checking:
+            return "akira/cloud/chip_checking"_i18n;
+        case cloud::Availability::LaunchBlocked:
+        case cloud::Availability::Error:
+            return "akira/cloud/chip_error"_i18n;
+        case cloud::Availability::NoProfile:
+        default:
+            return "";
+    }
+}
+
+} // namespace
 
 ProfileCardView::ProfileCardView() {
     this->inflateFromXMLRes("xml/profile_card.xml");
@@ -58,9 +86,16 @@ void ProfileCardView::refresh() {
         display = p->label();
     onlineIdLabel->setText(display);
 
-    statusLabel->setText(p && p->isRemote()
+    std::string status = p && p->isRemote()
         ? "akira/settings/profile_remote"_i18n
-        : "akira/settings/profile_local"_i18n);
+        : "akira/settings/profile_local"_i18n;
+    if (p)
+    {
+        std::string cloud = cloudSummary(cloud::Service::instance().snapshotForActiveProfile().status);
+        if (!cloud.empty())
+            status += "  ·  " + cloud;
+    }
+    statusLabel->setText(status);
     plusLabel->setVisibility(brls::Visibility::GONE);
     trophyCol->setVisibility(brls::Visibility::GONE);
     levelLabel->setText("");

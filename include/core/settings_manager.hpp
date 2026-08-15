@@ -38,7 +38,8 @@ public:
     enum class StreamProfile {
         Local = 0,
         Remote = 1,
-        Vpn = 2
+        Vpn = 2,
+        Cloud = 3
     };
 
 private:
@@ -66,6 +67,17 @@ private:
     int localVideoBitrate = 10000;
     int remoteVideoBitrate = 10000;
     int vpnVideoBitrate = 5000;
+    int cloudVideoBitrate = 10000;
+    int cloudVideoResolution = 1080;
+    bool cloudFsrEnabled = false;
+    std::string cloudDatacenterPscloud;
+    std::string cloudDatacenterPsnow;
+    std::string cloudDatacentersJsonPscloud;
+    std::string cloudDatacentersJsonPsnow;
+    int cloudSortState = 0;
+    bool cloudAttrPassed = false;
+    std::string cloudFavorites;
+    std::string cloudShortcuts;
     ChiakiVideoResolutionPreset vpnVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     ChiakiVideoFPSPreset vpnVideoFPS = CHIAKI_VIDEO_FPS_PRESET_30;
     bool holepunchRetry = false;
@@ -80,6 +92,7 @@ private:
     bool unlockBitrateMax = false;
     bool autoReconnect = true;
     bool devFakeHosts = false;
+    bool hideAccountName = false;
     std::string updateChannel = "stable";
     std::string uiTheme = "playstation";
     std::string discoverySubnets;
@@ -199,6 +212,15 @@ public:
 
     void clearPsnMobileSsoData();
 
+    std::string getPsnNpsso() const;
+    void setPsnNpsso(const std::string& npsso);
+
+    int64_t getPsnNpssoLastCheckedAt() const;
+    void setPsnNpssoLastCheckedAt(int64_t checkedAt);
+
+    bool getPsnNpssoValid() const;
+    void setPsnNpssoValid(bool valid);
+
     int getPsnRequestBudget() const;
     void setPsnRequestBudget(int budget);
 
@@ -243,6 +265,24 @@ public:
     void setRemoteVideoBitrate(int value);
     int getVpnVideoBitrate() const;
     void setVpnVideoBitrate(int value);
+    int getCloudVideoBitrate() const;
+    void setCloudVideoBitrate(int value);
+    int getCloudVideoResolution() const;
+    void setCloudVideoResolution(int value);
+    bool getCloudFsrEnabled() const;
+    void setCloudFsrEnabled(bool enabled);
+    std::string getCloudDatacenter(bool pscloud) const;
+    void setCloudDatacenter(bool pscloud, const std::string& datacenter);
+    std::string getCloudDatacentersJson(bool pscloud) const;
+    void setCloudDatacentersJson(bool pscloud, const std::string& json);
+    int getCloudSortState() const;
+    void setCloudSortState(int value);
+    bool getCloudAttrPassed() const;
+    void setCloudAttrPassed(bool value);
+    std::string getCloudFavorites() const;
+    void setCloudFavorites(const std::string& json);
+    std::string getCloudShortcuts() const;
+    void setCloudShortcuts(const std::string& json);
     ChiakiVideoResolutionPreset getVpnVideoResolution() const;
     void setVpnVideoResolution(ChiakiVideoResolutionPreset value);
     ChiakiVideoFPSPreset getVpnVideoFPS() const;
@@ -294,6 +334,10 @@ public:
     void setAutoReconnect(bool enabled);
     bool getDevFakeHosts() const;
     void setDevFakeHosts(bool enabled);
+
+    bool getHideAccountName() const;
+    void setHideAccountName(bool enabled);
+    std::string maskAccountName(const std::string& name) const;
 
     std::string getUpdateChannel() const;
     void setUpdateChannel(const std::string& channel);

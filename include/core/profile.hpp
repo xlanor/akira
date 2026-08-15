@@ -18,6 +18,10 @@ struct Profile {
     std::string mobileSsoAccessToken;
     int64_t mobileSsoExpiresAt = 0;
 
+    std::string npsso;
+    int64_t npssoLastCheckedAt = 0;
+    bool npssoValid = false;
+
     std::string duid;
 
     std::string avatarUrl;
@@ -25,6 +29,8 @@ struct Profile {
     std::string region;
     int trophyLevel = 0;
     bool trophiesEnabled = true;
+
+    std::string cloudShortcuts;
 
     bool isRemote() const { return !refreshToken.empty(); }
     bool hasIdentity() const { return !accountId.empty() || !onlineId.empty(); }

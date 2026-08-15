@@ -20,6 +20,8 @@ SettingsPictureView::SettingsPictureView() {
     initVpnResolutionSelector();
     initVpnFpsSelector();
     initVpnBitrateSlider();
+    initCloudResolutionSelector();
+    initCloudBitrateSlider();
     initEnableDitheringToggle();
     initDitheringStrengthSlider();
     initRcasEnabledToggle();
@@ -397,6 +399,101 @@ void SettingsPictureView::updateVpnBitrateSlider() {
     float normalizedValue = static_cast<float>(VPN_DEFAULT_BITRATE - VPN_MIN_BITRATE) / (VPN_MAX_BITRATE - VPN_MIN_BITRATE);
     vpnBitrateSlider->slider->setProgress(normalizedValue);
     vpnBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", VPN_DEFAULT_BITRATE));
+}
+
+void SettingsPictureView::initCloudResolutionSelector() {
+    std::vector<std::string> options = {
+        "akira/settings/res_720p"_i18n,
+        "akira/settings/res_1080p"_i18n,
+        "1080p (FSR)",
+    };
+
+    int currentIndex;
+    if (settings->getCloudFsrEnabled())
+        currentIndex = 2;
+    else
+        currentIndex = settings->getCloudVideoResolution() <= 720 ? 0 : 1;
+
+    cloudResolutionSelector->init(
+        "akira/settings/cloud_resolution"_i18n,
+        options,
+        currentIndex,
+        [](int selected) {},
+        [this](int selected) {
+            int resolution;
+            bool fsr = false;
+            switch (selected) {
+                case 0: resolution = 720; break;
+                case 1: resolution = 1080; break;
+                case 2: resolution = 720; fsr = true; break;
+                default: resolution = 1080; break;
+            }
+            settings->setCloudVideoResolution(resolution);
+            settings->setCloudFsrEnabled(fsr);
+            updateCloudBitrateSlider();
+            settings->writeFile();
+            brls::Logger::info("Cloud resolution set to {}p{}", resolution, fsr ? " (FSR)" : "");
+        }
+    );
+}
+
+void SettingsPictureView::initCloudBitrateSlider() {
+    auto resolution = settings->getCloudVideoResolution() <= 720
+        ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
+        : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+    int maxBitrate = settings->getMaxBitrateForResolution(resolution);
+    int minBitrate = settings->getMinBitrateForResolution(resolution);
+    int currentBitrate = settings->getCloudVideoBitrate();
+
+    bool needsSave = false;
+    if (currentBitrate < minBitrate) { currentBitrate = minBitrate; needsSave = true; }
+    if (currentBitrate > maxBitrate) { currentBitrate = maxBitrate; needsSave = true; }
+    if (needsSave) {
+        settings->setCloudVideoBitrate(currentBitrate);
+        settings->writeFile();
+    }
+
+    float normalizedValue = static_cast<float>(currentBitrate - minBitrate) / (maxBitrate - minBitrate);
+    normalizedValue = std::max(0.0f, std::min(1.0f, normalizedValue));
+
+    cloudBitrateSlider->detail->setWidth(100);
+    cloudBitrateSlider->detail->setShrink(0);
+    cloudBitrateSlider->slider->setDiscreteStep(500.0f / static_cast<float>(maxBitrate - minBitrate));
+    cloudBitrateSlider->init(
+        "akira/settings/cloud_bitrate"_i18n,
+        normalizedValue,
+        [this](float value) {
+            auto resolution = settings->getCloudVideoResolution() <= 720
+                ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
+                : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+            int maxBitrate = settings->getMaxBitrateForResolution(resolution);
+            int minBitrate = settings->getMinBitrateForResolution(resolution);
+            int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
+            bitrate = ((bitrate + 250) / 500) * 500;
+            bitrate = std::clamp(bitrate, minBitrate, maxBitrate);
+            settings->setCloudVideoBitrate(bitrate);
+            cloudBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", bitrate));
+            settings->writeFile();
+            brls::Logger::info("Cloud bitrate set to {}", bitrate);
+        }
+    );
+
+    cloudBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", currentBitrate));
+}
+
+void SettingsPictureView::updateCloudBitrateSlider() {
+    auto resolution = settings->getCloudVideoResolution() <= 720
+        ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
+        : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+    int defaultBitrate = SettingsManager::getDefaultBitrateForResolution(resolution);
+    int maxBitrate = settings->getMaxBitrateForResolution(resolution);
+    int minBitrate = settings->getMinBitrateForResolution(resolution);
+
+    settings->setCloudVideoBitrate(defaultBitrate);
+
+    float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
+    cloudBitrateSlider->slider->setProgress(normalizedValue);
+    cloudBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", defaultBitrate));
 }
 
 void SettingsPictureView::initEnableDitheringToggle() {

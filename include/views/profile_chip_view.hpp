@@ -16,8 +16,12 @@ public:
 private:
     BRLS_BIND(brls::Image, avatar, "chip/avatar");
     BRLS_BIND(brls::Label, nameLabel, "chip/name");
-    BRLS_BIND(brls::Label, subLabel, "chip/sub");
+    BRLS_BIND(brls::Box, plusBadge, "chip/plusBadge");
     BRLS_BIND(brls::Label, plusLabel, "chip/plus");
+    BRLS_BIND(brls::Box, tagBox, "chip/tag");
+    BRLS_BIND(brls::Label, tagLabel, "chip/tagLabel");
+    BRLS_BIND(brls::Box, dot, "chip/dot");
+    BRLS_BIND(brls::Label, cloudLabel, "chip/cloud");
 
     SettingsManager* settings = nullptr;
     std::shared_ptr<bool> alive = std::make_shared<bool>(true);

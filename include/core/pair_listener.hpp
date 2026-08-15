@@ -28,6 +28,7 @@ struct PairedCredentials {
     int expiresIn = 0;
     int64_t expiresAt = 0;
     bool isExpired = false;
+    std::string npsso;
     bool hasMobile = false;
     std::string mobileAccessToken;
     std::string mobileRefreshToken;

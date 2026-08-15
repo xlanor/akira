@@ -12,6 +12,7 @@ type Payload struct {
 	OnlineID     string `json:"online_id"`
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	NPSSO        string `json:"npsso,omitempty"`
 	ExpiresIn    int    `json:"expires_in"`
 	ExpiresAt    int64  `json:"expires_at"`
 	IsExpired    bool   `json:"is_expired"`
@@ -32,6 +33,7 @@ func BuildPayload(s *state.AppState) ([]byte, error) {
 	ti := s.GetTokenInfo()
 	p.AccessToken = ti.AccessToken
 	p.RefreshToken = ti.RefreshToken
+	p.NPSSO = s.GetNpsso()
 	p.ExpiresIn = ti.ExpiresIn
 	p.ExpiresAt = ti.ExpiresAt
 	p.IsExpired = ti.IsExpired

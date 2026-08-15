@@ -112,3 +112,9 @@ void StreamMenu::setStatsEnabled(bool enabled)
         this->statsButton->setText(enabled ? "akira/stream_menu/hide_stats"_i18n : "akira/stream_menu/show_stats"_i18n);
     }
 }
+
+void StreamMenu::setSleepAvailable(bool available)
+{
+    if (this->sleepButton)
+        this->sleepButton->setVisibility(available ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+}

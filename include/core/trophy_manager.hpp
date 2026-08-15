@@ -35,7 +35,6 @@ public:
 
     void fetchSummary(bool forceRefresh, Callback<psn::TrophySummary> onSuccess, ErrorCallback onError);
     void fetchProfile(bool forceRefresh, Callback<psn::PsnProfile> onSuccess, ErrorCallback onError);
-    void fetchPlayedGames(bool forceRefresh, Callback<std::vector<psn::PlayedGame>> onSuccess, ErrorCallback onError);
     void fetchLibrary(bool forceRefresh, Callback<std::vector<psn::TrophyTitle>> onSuccess, ErrorCallback onError);
 
     void fetchTitleDetail(const psn::TrophyTitle& title, bool forceRefresh,
@@ -47,6 +46,7 @@ public:
     void clearCache();
 
     void onActiveProfileChanged();
+    void flushCache();
 
     void startAutoRefresh();
 
@@ -84,7 +84,6 @@ private:
     static constexpr int ICON_PREFETCH_CAP = 120;
     static constexpr int SUMMARY_TTL_MINUTES = 360;
     static constexpr int PROFILE_TTL_MINUTES = 720;
-    static constexpr int PLAYED_TTL_MINUTES = 60;
     static constexpr int DETAIL_TTL_MINUTES = 360;
     static constexpr int LIBRARY_TTL_MINUTES = 360;
     static constexpr long ICON_TIMEOUT_S = 20;
@@ -166,9 +165,6 @@ private:
     bool hasCachedProfile = false;
     int64_t profileSavedAt = 0;
 
-    std::vector<psn::PlayedGame> cachedPlayedGames;
-    bool hasCachedPlayedGames = false;
-    int64_t playedGamesSavedAt = 0;
 
     std::unordered_map<std::string, int64_t> forcedAt;
     bool forceStateLoaded = false;

@@ -16,6 +16,7 @@ public:
     void setOnButtonMapping(std::function<void()> callback);
 
     void setStatsEnabled(bool enabled);
+    void setSleepAvailable(bool available);
 
     bool isTranslucent() override { return true; }
 

@@ -65,10 +65,12 @@ public:
     bool needsProactiveRefresh(int64_t windowSeconds) const;
     int64_t secondsUntilExpiry() const;
     std::string accessToken() const;
+    bool shouldValidateNpsso(int64_t intervalSeconds, bool force) const;
 
     SessionState state() const;
 
     Error ensureSession(HttpSession& session, bool forceRefresh = false);
+    AuthResult validateNpssoBlocking(HttpSession& session);
 
     void setStateObserver(StateObserver observer);
 
@@ -85,11 +87,18 @@ private:
     std::string storedAccessToken() const;
     std::string storedRefreshToken() const;
     int64_t storedExpiresAt() const;
+    std::string storedNpsso() const;
+    int64_t storedNpssoLastCheckedAt() const;
+    bool storedNpssoValid() const;
+    bool hasUsableNpsso() const;
+    void storeNpssoValidation(bool valid, int64_t checkedAt);
     void storeTokens(const std::string& access, const std::string& refresh, int expiresIn);
     void clearStoredTokens();
     const char* label() const;
 
     AuthResult performRefresh(HttpSession& session);
+    AuthResult performNpssoValidation(HttpSession& session);
+    AuthResult performNpssoBootstrap(HttpSession& session);
 
     static constexpr int COOLDOWN_S = 60;
     static constexpr int FAILED_COOLDOWN_S = 5;

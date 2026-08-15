@@ -15,6 +15,8 @@
 #include <unordered_set>
 
 #include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
 #include <switch.h>
 
 #include <json-c/json.h>
@@ -80,6 +82,36 @@ std::string TrophyManager::titleMapPath() const { return accountCacheDir() + "/t
 std::string TrophyManager::forceStatePath() const { return accountCacheDir() + "/refresh_state.json"; }
 std::string TrophyManager::rateLimitPath() const { return accountCacheDir() + "/ratelimit.json"; }
 
+static void removeCacheTree(const std::string& path)
+{
+    DIR* dir = opendir(path.c_str());
+    if (!dir)
+    {
+        remove(path.c_str());
+        return;
+    }
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr)
+    {
+        std::string name = entry->d_name;
+        if (name == "." || name == "..")
+            continue;
+        removeCacheTree(path + "/" + name);
+    }
+    closedir(dir);
+    rmdir(path.c_str());
+}
+
+void TrophyManager::flushCache()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        removeCacheTree(TROPHY_CACHE_DIR);
+    }
+    onActiveProfileChanged();
+    brls::Logger::info("Trophy: cache flushed");
+}
+
 void TrophyManager::onActiveProfileChanged()
 {
     {
@@ -98,9 +130,6 @@ void TrophyManager::onActiveProfileChanged()
         hasCachedProfile = false;
         profileSavedAt = 0;
         cachedProfile = psn::PsnProfile{};
-        hasCachedPlayedGames = false;
-        playedGamesSavedAt = 0;
-        cachedPlayedGames.clear();
     }
     ensureCacheDirs();
     limiter.reconfigure(settings->getPsnRequestBudget(), settings->getPsnRequestWindowSeconds());
@@ -540,8 +569,8 @@ void TrophyManager::resolveGameProgress(const std::vector<psn::TrophyTitle>& tit
                 entry.valid = true;
 
                 gameProgress[pair.second] = std::move(entry);
-                wanted.erase(pair.second);
-                resolved++;
+                if (wanted.erase(pair.second) > 0)
+                    resolved++;
             }
 
             batch.clear();
@@ -1088,50 +1117,6 @@ void TrophyManager::fetchProfile(bool forceRefresh, Callback<psn::PsnProfile> on
         }
 
         brls::Logger::error("PSN profile fetch failed: {} ({})",
-            psn::statusName(error.status), error.message);
-        brls::sync([onError, error]() { if (onError) onError(error.status, error.message); });
-    });
-}
-
-void TrophyManager::fetchPlayedGames(bool forceRefresh, Callback<std::vector<psn::PlayedGame>> onSuccess, ErrorCallback onError)
-{
-    HttpPool::instance().submit([this, forceRefresh, onSuccess, onError](HttpSession& session) {
-        if (!forceRefresh)
-        {
-            std::vector<psn::PlayedGame> cached;
-            bool haveCached = false;
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                if (hasCachedPlayedGames && cacheEntryFresh(playedGamesSavedAt, PLAYED_TTL_MINUTES))
-                {
-                    cached = cachedPlayedGames;
-                    haveCached = true;
-                }
-            }
-            if (haveCached)
-            {
-                brls::sync([onSuccess, cached]() { if (onSuccess) onSuccess(cached); });
-                return;
-            }
-        }
-
-        std::vector<psn::PlayedGame> games;
-        psn::Error error = clientFor(session).fetchPlayedGames(games);
-
-        if (error.ok())
-        {
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                cachedPlayedGames = games;
-                hasCachedPlayedGames = true;
-                playedGamesSavedAt = static_cast<int64_t>(std::time(nullptr));
-            }
-            brls::Logger::info("PSN played games: {} title(s)", games.size());
-            brls::sync([onSuccess, games]() { if (onSuccess) onSuccess(games); });
-            return;
-        }
-
-        brls::Logger::error("PSN played games fetch failed: {} ({})",
             psn::statusName(error.status), error.message);
         brls::sync([onError, error]() { if (onError) onError(error.status, error.message); });
     });

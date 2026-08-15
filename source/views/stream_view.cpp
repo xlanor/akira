@@ -18,8 +18,9 @@
 #include <borealis/core/i18n.hpp>
 using namespace brls::literals;
 
-StreamView::StreamView(Host* host)
+StreamView::StreamView(Host* host, std::shared_ptr<Host> hostOwner)
     : host(host)
+    , hostOwner(std::move(hostOwner))
 {
     this->session = Session::GetInstance();
     this->settings = SettingsManager::getInstance();
@@ -73,7 +74,7 @@ void StreamView::setupCallbacks()
 
     exitSubscription = brls::Application::getExitEvent()->subscribe([weak]() {
         if (auto self = weak.lock()) {
-            if (self->sessionStarted && self->settings->getSleepOnExit()) {
+            if (self->sessionStarted && self->settings->getSleepOnExit() && !self->host->isCloud()) {
                 self->host->gotoBed();
             }
         }
@@ -86,7 +87,7 @@ void StreamView::setupCallbacks()
     });
 
     // Subscribe to logs for display while waiting for first frame
-    logSubscription = brls::Logger::getLogEvent()->subscribe(
+    logSubscription = brls::Logger::subscribeToLog(
         [weak](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
             if (auto self = weak.lock()) {
                 std::lock_guard<std::mutex> lock(self->logMutex);
@@ -104,7 +105,7 @@ StreamView::~StreamView()
 {
     brls::Application::getExitEvent()->unsubscribe(exitSubscription);
     brls::Application::getWindowFocusChangedEvent()->unsubscribe(focusSubscription);
-    brls::Logger::getLogEvent()->unsubscribe(logSubscription);
+    brls::Logger::unsubscribeFromLog(logSubscription);
 
     stopStream();
 
@@ -141,7 +142,9 @@ void StreamView::startStream()
     try
     {
         auto profile = SettingsManager::StreamProfile::Local;
-        if (host->isRemote())
+        if (host->isCloud())
+            profile = SettingsManager::StreamProfile::Cloud;
+        else if (host->isRemote())
             profile = SettingsManager::StreamProfile::Remote;
         else if (WireGuardManager::instance().isConnected())
             profile = SettingsManager::StreamProfile::Vpn;
@@ -473,7 +476,8 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             return;
         }
 
-        if ((reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED ||
+        if (!self->host->isCloud() &&
+            (reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED ||
              reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN) &&
             self->wakeRetryCount < MAX_WAKE_RETRIES) {
             brls::Logger::info("Connection failed (reason={}) - attempting wake and retry ({}/{})",
@@ -525,6 +529,11 @@ void StreamView::onRumble(uint8_t left, uint8_t right)
 void StreamView::onLoginPinRequest(bool pinIncorrect)
 {
     brls::Logger::info("Login PIN request (incorrect: {})", pinIncorrect);
+
+    if (host->isCloud()) {
+        brls::Logger::warning("Ignoring login PIN request for a cloud session");
+        return;
+    }
 
     if (!pinIncorrect) {
         std::string savedPin = settings->getConsolePIN(host);
@@ -607,6 +616,7 @@ void StreamView::showDisconnectMenu()
     brls::Application::forceUnblockInputs();
 
     auto* menu = new StreamMenu();
+    menu->setSleepAvailable(!host->isCloud());
 
     menu->setStatsEnabled(session->getShowStatsOverlay());
 
@@ -667,7 +677,7 @@ void StreamView::disconnectWithSleep(bool sleep)
     menuOpen = false;
     brls::Application::blockInputs(true);
 
-    if (sleep) {
+    if (sleep && !host->isCloud()) {
         host->gotoBed();
     }
 
@@ -771,7 +781,7 @@ void StreamView::onFocusChanged(bool focused)
     if (!focused)
         return;
 
-    if (intentionalDisconnect || !settings->getAutoReconnect() || !sessionStarted)
+    if (intentionalDisconnect || !settings->getAutoReconnect() || !sessionStarted || host->isCloud())
         return;
 
     bool socketHealthy = host->isSessionSocketHealthy();

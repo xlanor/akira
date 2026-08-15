@@ -1,5 +1,9 @@
 #include "psn/token_refresher.hpp"
 
+#include "cloud/service.hpp"
+#include "views/connection_view.hpp"
+#include "views/stream_view.hpp"
+
 #include <chrono>
 #include <ctime>
 
@@ -12,6 +16,8 @@
 
 namespace psn {
 
+static constexpr int64_t NPSSO_RECHECK_SECONDS = 6 * 60 * 60;
+
 static bool hasConnectivity()
 {
     NifmInternetConnectionType type = NifmInternetConnectionType_WiFi;
@@ -23,6 +29,23 @@ static bool hasConnectivity()
         return false;
 
     return status == NifmInternetConnectionStatus_Connected;
+}
+
+static bool shouldRefreshCloudInBackground()
+{
+    if (SettingsManager::getInstance()->isStreamingActive())
+        return false;
+
+    auto activities = brls::Application::getActivitiesStack();
+    if (activities.empty())
+        return true;
+
+    brls::View* top = activities.back()->getContentView();
+    if (!top)
+        return true;
+
+    return dynamic_cast<ConnectionView*>(top) == nullptr
+        && dynamic_cast<StreamView*>(top) == nullptr;
 }
 
 TokenRefresher& TokenRefresher::instance()
@@ -128,6 +151,19 @@ void TokenRefresher::tick(HttpSession& session, bool force)
         return;
     }
 
+    Auth& remoteAuth = Auth::instance();
+    if (remoteAuth.shouldValidateNpsso(NPSSO_RECHECK_SECONDS, force))
+    {
+        brls::Logger::info("PSN refresher: validating stored NPSSO (force={})", force);
+        AuthResult result = remoteAuth.validateNpssoBlocking(session);
+        if (result.success)
+            brls::Logger::info("PSN refresher: stored NPSSO is still valid");
+        else if (result.error == AuthError::Invalid)
+            brls::Logger::warning("PSN refresher: stored NPSSO is no longer valid: {}", result.message);
+        else
+            brls::Logger::warning("PSN refresher: NPSSO validation failed transiently: {}", result.message);
+    }
+
     struct Target {
         Auth& auth;
         const char* name;
@@ -159,6 +195,15 @@ void TokenRefresher::tick(HttpSession& session, bool force)
             brls::Logger::info("PSN refresher: {} refreshed", target.name);
         else
             brls::Logger::warning("PSN refresher: {} refresh failed: {}", target.name, err.message);
+    }
+
+    if (shouldRefreshCloudInBackground())
+    {
+        cloud::Service::instance().refreshActiveProfile(force);
+    }
+    else
+    {
+        brls::Logger::debug("PSN refresher: skipping cloud catalog refresh while connection/stream UI is active");
     }
 }
 

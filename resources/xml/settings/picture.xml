@@ -126,6 +126,34 @@
             </brls:Box>
 
             <brls:Header
+                title="@i18n/akira/settings/cloud"
+                marginBottom="10"/>
+
+            <brls:Box
+                width="auto"
+                height="auto"
+                axis="column"
+                grow="1.0"
+                backgroundColor="@theme/color/card"
+                cornerRadius="14"
+                marginBottom="30">
+
+                <brls:SelectorCell
+                    id="settings/cloudResolution"
+                    title="@i18n/akira/settings/resolution"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SliderCell
+                    id="settings/cloudBitrate"
+                    title="@i18n/akira/settings/bitrate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+
+            </brls:Box>
+
+            <brls:Header
                 title="@i18n/akira/settings/picture_adjustments"
                 marginBottom="10"/>
 

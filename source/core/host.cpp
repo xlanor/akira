@@ -457,10 +457,20 @@ int Host::initSession(Session* streamSession)
 
 int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSession holepunch)
 {
-    auto resolution = settings->getVideoResolution(this);
-    auto fps = settings->getVideoFPS(this);
+    bool cloud = isCloud();
+    ChiakiVideoResolutionPreset resolution;
+    ChiakiVideoFPSPreset fps;
+    if (cloud) {
+        resolution = settings->getCloudVideoResolution() <= 720
+            ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
+            : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+        fps = CHIAKI_VIDEO_FPS_PRESET_60;
+    } else {
+        resolution = settings->getVideoResolution(this);
+        fps = settings->getVideoFPS(this);
+    }
     chiaki_connect_video_profile_preset(&videoProfile, resolution, fps);
-    videoProfile.bitrate = settings->getVideoBitrate(this);
+    videoProfile.bitrate = cloud ? settings->getCloudVideoBitrate() : settings->getVideoBitrate(this);
 
     chiaki_opus_decoder_init(&opusDecoder, log);
 
@@ -470,10 +480,10 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
     hapticsSink.frame_cb = HapticsFrameCallback;
 
     ChiakiConnectInfo connectInfo = {};
-    std::string effectiveHost = hostAddr;
+    std::string effectiveHost = cloud && cloudSession ? cloudSession->host : hostAddr;
 
     auto& wg = WireGuardManager::instance();
-    if (wg.isConnected()) {
+    if (!cloud && wg.isConnected()) {
         resolution = settings->getVpnVideoResolution();
         fps = settings->getVpnVideoFPS();
         chiaki_connect_video_profile_preset(&videoProfile, resolution, fps);
@@ -505,6 +515,7 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
         static_cast<int>(resolution), videoProfile.width, videoProfile.height, videoProfile.bitrate);
 
     connectInfo.host = effectiveHost.c_str();
+    connectInfo.service_type = CHIAKI_SERVICE_TYPE_REMOTE_PLAY;
     connectInfo.video_profile = videoProfile;
     connectInfo.video_profile_auto_downgrade = true;
     connectInfo.enable_idr_on_fec_failure = settings->getRequestIdrOnFecFailure();
@@ -587,13 +598,28 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
         throw Exception("Failed to initiate video");
     }
 
-    const Registration* reg = activeRegistration();
-    if (!reg)
+    if (cloud && cloudSession)
     {
-        throw Exception("No registration for the active profile");
+        connectInfo.service_type = cloudSession->serviceType;
+        connectInfo.cloud_launch_spec = cloudSession->launchSpec.c_str();
+        connectInfo.cloud_handshake_key = cloudSession->handshakeKey.c_str();
+        connectInfo.cloud_session_id = cloudSession->sessionId.c_str();
+        connectInfo.cloud_port = cloudSession->port;
+        connectInfo.cloud_psn_wrapper_type = cloudSession->psnWrapperType;
+        connectInfo.cloud_mtu_in = cloudSession->mtuIn;
+        connectInfo.cloud_mtu_out = cloudSession->mtuOut;
+        connectInfo.cloud_rtt_us = cloudSession->rttUs;
     }
-    memcpy(connectInfo.regist_key, reg->rpRegistKey, sizeof(connectInfo.regist_key));
-    memcpy(connectInfo.morning, reg->rpKey, sizeof(connectInfo.morning));
+    else
+    {
+        const Registration* reg = activeRegistration();
+        if (!reg)
+        {
+            throw Exception("No registration for the active profile");
+        }
+        memcpy(connectInfo.regist_key, reg->rpRegistKey, sizeof(connectInfo.regist_key));
+        memcpy(connectInfo.morning, reg->rpKey, sizeof(connectInfo.morning));
+    }
 
     ChiakiErrorCode err = chiaki_session_init(&session, &connectInfo, log);
     if (err != CHIAKI_ERR_SUCCESS)

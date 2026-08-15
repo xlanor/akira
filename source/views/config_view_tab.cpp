@@ -7,7 +7,7 @@
 using namespace brls::literals;
 
 static const std::vector<std::string> sensitiveKeys = {
-    "account_id", "access_token", "refresh_token", "duid",
+    "account_id", "access_token", "refresh_token", "npsso", "duid",
     "rp_key", "rp_regist_key"
 };
 

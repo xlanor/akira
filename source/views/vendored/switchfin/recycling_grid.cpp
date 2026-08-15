@@ -253,7 +253,7 @@ void RecyclingGrid::draw(
         color.a *= this->getAlpha();
         nvgFillColor(vg, color);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
-        nvgTextBox(vg, x + width / 2.0f, y + (height - textHeight) / 2.0f, wrapWidth, msg.c_str(), nullptr);
+        nvgTextBox(vg, x + (width - wrapWidth) / 2.0f, y + (height - textHeight) / 2.0f, wrapWidth, msg.c_str(), nullptr);
         nvgRestore(vg);
     }
 }

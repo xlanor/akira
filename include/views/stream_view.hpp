@@ -14,7 +14,7 @@
 
 class StreamView : public brls::Box, public std::enable_shared_from_this<StreamView> {
 public:
-    explicit StreamView(Host* host);
+    explicit StreamView(Host* host, std::shared_ptr<Host> hostOwner = {});
     ~StreamView() override;
 
     // Must be called after make_shared to enable weak_from_this()
@@ -33,6 +33,7 @@ public:
 
 private:
     Host* host = nullptr;
+    std::shared_ptr<Host> hostOwner;
     Session* session = nullptr;
     SettingsManager* settings = nullptr;
     bool streamActive = false;

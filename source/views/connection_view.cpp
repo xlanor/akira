@@ -53,7 +53,7 @@ void ConnectionView::setupAndStart()
         return true;
     });
 
-    logSubscription = brls::Logger::getLogEvent()->subscribe(
+    logSubscription = brls::Logger::subscribeToLog(
         [weak](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
             if (auto self = weak.lock()) {
                 self->addLogLine(msg, level);
@@ -74,7 +74,7 @@ void ConnectionView::setupAndStart()
 
 ConnectionView::~ConnectionView()
 {
-    brls::Logger::getLogEvent()->unsubscribe(logSubscription);
+    brls::Logger::unsubscribeFromLog(logSubscription);
     if (connectionRunning) {
         host->cancelHolepunch();
     }

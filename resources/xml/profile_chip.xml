@@ -2,40 +2,100 @@
     width="auto"
     height="auto"
     axis="row"
+    alignItems="center"
     cornerRadius="24"
     paddingTop="6"
     paddingBottom="6"
     paddingLeft="6"
-    paddingRight="14"
+    paddingRight="16"
     focusable="true">
 
     <brls:Image
         id="chip/avatar"
-        width="36"
-        height="36"
-        marginRight="10"/>
+        width="40"
+        height="40"
+        marginRight="12"/>
 
     <brls:Box
         width="auto"
         height="auto"
-        axis="column"
-        marginRight="10">
+        axis="column">
 
-        <brls:Label
-            id="chip/name"
-            text="—"
-            fontSize="18"/>
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            alignItems="center">
 
-        <brls:Label
-            id="chip/sub"
-            text=""
-            fontSize="14"/>
+            <brls:Label
+                id="chip/name"
+                text="—"
+                fontSize="18"
+                marginRight="8"/>
+
+            <brls:Box
+                id="chip/plusBadge"
+                width="auto"
+                height="auto"
+                axis="row"
+                alignItems="center"
+                cornerRadius="9"
+                paddingLeft="7"
+                paddingRight="7"
+                paddingTop="1"
+                paddingBottom="2">
+
+                <brls:Label
+                    id="chip/plus"
+                    text="PS+"
+                    fontSize="12"/>
+
+            </brls:Box>
+
+        </brls:Box>
+
+        <brls:Box
+            width="auto"
+            height="auto"
+            axis="row"
+            alignItems="center"
+            marginTop="6">
+
+            <brls:Box
+                id="chip/tag"
+                width="auto"
+                height="auto"
+                axis="row"
+                alignItems="center"
+                cornerRadius="9"
+                borderThickness="1"
+                paddingLeft="8"
+                paddingRight="8"
+                paddingTop="1"
+                paddingBottom="2"
+                marginRight="10">
+
+                <brls:Label
+                    id="chip/tagLabel"
+                    text=""
+                    fontSize="11"/>
+
+            </brls:Box>
+
+            <brls:Box
+                id="chip/dot"
+                width="7"
+                height="7"
+                cornerRadius="4"
+                marginRight="6"/>
+
+            <brls:Label
+                id="chip/cloud"
+                text=""
+                fontSize="13"/>
+
+        </brls:Box>
 
     </brls:Box>
-
-    <brls:Label
-        id="chip/plus"
-        text="PS Plus"
-        fontSize="14"/>
 
 </brls:Box>

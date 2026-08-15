@@ -82,6 +82,7 @@ bool parsePayload(const std::vector<uint8_t>& plaintext, PairedCredentials& out)
     out.expiresIn = static_cast<int>(jsonInt(root, "expires_in"));
     out.expiresAt = jsonInt(root, "expires_at");
     out.isExpired = jsonBool(root, "is_expired");
+    out.npsso = jsonStr(root, "npsso");
 
     out.mobileAccessToken = jsonStr(root, "psn_mobile_sso_access_token");
     out.mobileRefreshToken = jsonStr(root, "psn_mobile_sso_refresh_token");

@@ -172,7 +172,8 @@ void SettingsAccountView::initAuthSection() {
         }
 
         std::string refreshToken = settings->getPsnRefreshToken();
-        if (refreshToken.empty()) {
+        std::string npsso = settings->getPsnNpsso();
+        if (refreshToken.empty() && npsso.empty()) {
             brls::Application::notify("akira/settings/no_refresh_token"_i18n);
             return true;
         }
