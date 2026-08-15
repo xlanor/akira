@@ -93,6 +93,7 @@ And some horribly compressed encodes to fit < 10mb:
 This software was built with reference/code from:
 
 - [Streetpea](https://github.com/streetpea/chiaki-ng) the original chiaki-ng code
+- [Pylux](github.com/ForWard-Technologies-LLC/Pylux) for the PS Cloud Streaming implementation
 - [moonlight-switch](https://github.com/XITRIX/Moonlight-Switch) XITRIX's deko3d renderer for moonlight for the deko3d bits
 - [switchfin](https://github.com/dragonflylee/switchfin/blob/bbcf9037fc3b11a78f5e0b7489d9e776fff2d99c/scripts/switch/mpv/deko3d.patch#L371) The patches used by dragonflylee in switchfin
 - [wiliwili](github.com/xfangfang/wiliwili) WiliWili for how to get started with this new borealis api.
