@@ -15,4 +15,6 @@ export function OpenPsnLogin():Promise<void>;
 
 export function PushToSwitch(arg1:string,arg2:number,arg3:string):Promise<backend.PushOutcome>;
 
+export function RegenerateDUID():Promise<backend.Status>;
+
 export function Status():Promise<backend.Status>;

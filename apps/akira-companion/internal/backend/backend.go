@@ -40,6 +40,21 @@ func (b *Backend) Status() Status {
 	return st
 }
 
+func (b *Backend) RegenerateDUID() (Status, error) {
+	duid := psn.GenerateRandomDUID()
+	if err := psn.ValidateDUID(duid); err != nil {
+		return b.Status(), err
+	}
+
+	b.state.SetDUID(duid)
+	b.state.ClearSession()
+	if err := b.state.Save(); err != nil {
+		return b.Status(), err
+	}
+
+	return b.Status(), nil
+}
+
 func (b *Backend) PsnLoginURL() string {
 	return "https://www.playstation.com/"
 }

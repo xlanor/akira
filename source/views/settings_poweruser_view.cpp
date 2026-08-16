@@ -1,5 +1,6 @@
 #include "views/settings_poweruser_view.hpp"
 #include "views/benchmark_view.hpp"
+#include "views/host_list_tab.hpp"
 #include "core/trophy_manager.hpp"
 
 #include <borealis/core/i18n.hpp>
@@ -67,6 +68,7 @@ void SettingsPowerUserView::initHideAccountNameToggle() {
         [this](bool isOn) {
             settings->setHideAccountName(isOn);
             settings->writeFile();
+            HostListTab::notifyAccountNameDisplayChanged();
         }
     );
 }

@@ -160,7 +160,9 @@ brls::Box* ProfileSwitcherView::makeProfileRow(const Profile& profile, bool isAc
 
     int64_t id = profile.id;
     std::string label = profile.label();
-    std::string display = label.empty() ? "akira/settings/unnamed_profile"_i18n : label;
+    std::string display = label.empty()
+        ? "akira/settings/unnamed_profile"_i18n
+        : settings->maskAccountName(label);
 
     auto* row = new brls::Box(brls::Axis::ROW);
     row->setHeight(ROW_H);

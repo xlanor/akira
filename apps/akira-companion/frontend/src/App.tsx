@@ -4,6 +4,7 @@ import akiraIcon from './assets/images/akira-icon.jpg';
 import {
   Status,
   Login,
+  RegenerateDUID,
   PushToSwitch,
   OpenPsnLogin,
   OpenNpssoPage,
@@ -69,6 +70,8 @@ export default function App() {
       {screen === 'loading' && <div className="center muted">Loading…</div>}
       {screen === 'login' && (
         <LoginScreen
+          duid={status?.duid || ''}
+          onStatus={(s) => setStatus(s)}
           onDone={(s) => {
             setStatus(s);
             setScreen('send');
@@ -80,10 +83,40 @@ export default function App() {
   );
 }
 
-function LoginScreen({ onDone }: { onDone: (s: AppStatus) => void }) {
+function LoginScreen({
+  duid,
+  onStatus,
+  onDone,
+}: {
+  duid: string;
+  onStatus: (s: AppStatus) => void;
+  onDone: (s: AppStatus) => void;
+}) {
   const [npsso, setNpsso] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [confirmRegen, setConfirmRegen] = useState(false);
+  const [regenBusy, setRegenBusy] = useState(false);
+  const [regenDone, setRegenDone] = useState(false);
+
+  const regenerate = async () => {
+    if (!confirmRegen) {
+      setConfirmRegen(true);
+      return;
+    }
+    setRegenBusy(true);
+    setErr('');
+    try {
+      const s = (await RegenerateDUID()) as AppStatus;
+      onStatus(s);
+      setRegenDone(true);
+    } catch (e) {
+      setErr(errText(e, 'Could not generate a new device ID.'));
+    } finally {
+      setRegenBusy(false);
+      setConfirmRegen(false);
+    }
+  };
 
   const submit = async () => {
     if (!npsso.trim()) {
@@ -108,6 +141,28 @@ function LoginScreen({ onDone }: { onDone: (s: AppStatus) => void }) {
       <p className="muted">
         Log in on Sony's site, copy your npsso token, and paste it below. Your password never touches this app.
       </p>
+
+      <details className="advanced">
+        <summary>Device ID (optional)</summary>
+        <div className="hint">
+          PlayStation sees this app as a device with the ID below. It is created once and kept — you normally never
+          change it. Generate a new one if you want this app to look like a brand new device, for example after
+          PlayStation stopped accepting it. Doing so signs you out here and you'll need to sign in again and resend
+          credentials to your Switch.
+        </div>
+        <div className="duid mono">{duid || 'not set'}</div>
+        <div className="advanced-actions">
+          <button className="ghost" onClick={regenerate} disabled={regenBusy}>
+            {regenBusy ? 'Generating…' : confirmRegen ? 'Confirm — generate new device ID' : 'Generate new device ID'}
+          </button>
+          {confirmRegen && !regenBusy && (
+            <button className="linklike" onClick={() => setConfirmRegen(false)}>
+              cancel
+            </button>
+          )}
+        </div>
+        {regenDone && <div className="hint ok-text">New device ID generated. Sign in below.</div>}
+      </details>
 
       <ol className="steps">
         <li>

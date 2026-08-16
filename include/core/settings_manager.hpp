@@ -221,6 +221,9 @@ public:
     bool getPsnNpssoValid() const;
     void setPsnNpssoValid(bool valid);
 
+    void clearPsnNpssoData();
+    void clearAllPsnData();
+
     int getPsnRequestBudget() const;
     void setPsnRequestBudget(int budget);
 

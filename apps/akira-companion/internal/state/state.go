@@ -108,6 +108,17 @@ func (s *AppState) Clear() {
 	s.Seed = ""
 	s.Npsso = ""
 	s.Tokens = nil
+	s.MobileTokens = nil
+	s.Account = nil
+}
+
+func (s *AppState) ClearSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.Npsso = ""
+	s.Tokens = nil
+	s.MobileTokens = nil
 	s.Account = nil
 }
 

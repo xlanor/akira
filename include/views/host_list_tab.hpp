@@ -32,6 +32,7 @@ public:
     void syncHostList();
 
     static void notifyActiveProfileChanged();
+    static void notifyAccountNameDisplayChanged();
 
     static void refreshRailsIfActive();
 

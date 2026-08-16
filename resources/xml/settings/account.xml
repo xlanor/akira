@@ -103,6 +103,12 @@
                     marginRight="15"/>
 
                 <brls:DetailCell
+                    id="settings/credNpsso"
+                    focusable="false"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:DetailCell
                     id="settings/credSsoAccessToken"
                     focusable="false"
                     marginLeft="15"

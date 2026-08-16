@@ -926,6 +926,8 @@ HostListTab::HostListTab() {
             std::string lbl = profiles[i].label();
             if (lbl.empty())
                 lbl = "akira/settings/unnamed_profile"_i18n;
+            else
+                lbl = settings->maskAccountName(lbl);
             names.push_back(lbl);
             ids.push_back(profiles[i].id);
             if (profiles[i].id == settings->getActiveProfileId())
@@ -1157,6 +1159,12 @@ void HostListTab::notifyActiveProfileChanged() {
         currentInstance->profileChip->refresh();
     if (currentInstance->shortcutsRail)
         currentInstance->shortcutsRail->refresh();
+}
+
+void HostListTab::notifyAccountNameDisplayChanged() {
+    if (!currentInstance || !currentInstance->profileChip)
+        return;
+    currentInstance->profileChip->refresh();
 }
 
 void HostListTab::syncHostList() {

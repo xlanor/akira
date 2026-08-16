@@ -83,7 +83,7 @@ void ProfileCardView::refresh() {
     else if (p->label().empty())
         display = "akira/settings/unnamed_profile"_i18n;
     else
-        display = p->label();
+        display = settings->maskAccountName(p->label());
     onlineIdLabel->setText(display);
 
     std::string status = p && p->isRemote()
@@ -115,7 +115,7 @@ void ProfileCardView::refresh() {
             if (!*guard)
                 return;
             if (!prof.onlineId.empty())
-                onlineIdLabel->setText(prof.onlineId);
+                onlineIdLabel->setText(settings->maskAccountName(prof.onlineId));
             plusLabel->setVisibility(prof.isPlus ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
 
             std::string url = prof.avatarUrl();

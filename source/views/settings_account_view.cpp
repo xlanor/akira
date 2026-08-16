@@ -101,7 +101,8 @@ void SettingsAccountView::initAuthSection() {
         "akira/settings/psn_account_id"_i18n,
         currentAccountId,
         [this](std::string text) {
-            if (text == settings->getPsnAccountId(nullptr))
+            std::string current = settings->getPsnAccountId(nullptr);
+            if (text == current || text == settings->maskAccountName(current))
                 return;
             settings->setPsnAccountId(nullptr, text);
             settings->writeFile();
@@ -118,7 +119,8 @@ void SettingsAccountView::initAuthSection() {
         "akira/settings/online_id"_i18n,
         currentOnlineId,
         [this](std::string text) {
-            if (text == settings->getPsnOnlineId(nullptr))
+            std::string current = settings->getPsnOnlineId(nullptr);
+            if (text == current || text == settings->maskAccountName(current))
                 return;
             settings->setPsnOnlineId(nullptr, text);
             settings->writeFile();
@@ -204,7 +206,7 @@ void SettingsAccountView::initAuthSection() {
 
         dialog->addButton("akira/settings/clear_all"_i18n, [this, dialog]() {
             dialog->close();
-            settings->clearPsnTokenData();
+            settings->clearAllPsnData();
             settings->writeFile();
             updateCredentialsDisplay();
             brls::Application::notify("akira/settings/psn_data_cleared"_i18n);
@@ -222,8 +224,11 @@ std::string SettingsAccountView::censorString(const std::string& str) {
 }
 
 void SettingsAccountView::updateCredentialsDisplay() {
-    psnAccountIdInput->setValue(settings->getPsnAccountId(nullptr));
-    psnOnlineIdInput->setValue(settings->getPsnOnlineId(nullptr));
+    bool maskNames = settings->getHideAccountName() && !credentialsRevealed;
+    std::string accountId = settings->getPsnAccountId(nullptr);
+    std::string onlineId = settings->getPsnOnlineId(nullptr);
+    psnAccountIdInput->setValue(maskNames ? settings->maskAccountName(accountId) : accountId);
+    psnOnlineIdInput->setValue(maskNames ? settings->maskAccountName(onlineId) : onlineId);
 
     credAccessTokenCell->setText("akira/settings/access_token"_i18n);
     std::string accessToken = settings->getPsnAccessToken();
@@ -267,6 +272,16 @@ void SettingsAccountView::updateCredentialsDisplay() {
         }
     } else {
         credTokenExpiryCell->setDetailText("akira/common/not_set"_i18n);
+    }
+
+    credNpssoCell->setText("akira/settings/npsso"_i18n);
+    std::string npsso = settings->getPsnNpsso();
+    if (credentialsRevealed) {
+        credNpssoCell->setDetailText(npsso.empty()
+            ? "akira/common/not_set"_i18n
+            : (npsso.length() > 40 ? npsso.substr(0, 36) + "..." : npsso));
+    } else {
+        credNpssoCell->setDetailText(censorString(npsso));
     }
 
     credSsoAccessTokenCell->setText("akira/settings/sso_access_token"_i18n);

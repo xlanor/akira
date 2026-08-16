@@ -26,6 +26,10 @@ export function PushToSwitch(arg1, arg2, arg3) {
   return window['go']['main']['App']['PushToSwitch'](arg1, arg2, arg3);
 }
 
+export function RegenerateDUID() {
+  return window['go']['main']['App']['RegenerateDUID']();
+}
+
 export function Status() {
   return window['go']['main']['App']['Status']();
 }

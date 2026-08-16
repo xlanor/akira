@@ -273,6 +273,53 @@ button.ghost:hover {
   border-color: var(--accent);
 }
 
+.advanced {
+  margin-top: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.advanced summary {
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+}
+.advanced summary::-webkit-details-marker {
+  display: none;
+}
+.advanced summary::before {
+  content: "▸ ";
+  color: var(--text-muted);
+}
+.advanced[open] summary::before {
+  content: "▾ ";
+}
+.advanced summary + .hint {
+  margin-top: 10px;
+}
+.advanced-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.duid {
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-bottom: 12px;
+  word-break: break-all;
+  user-select: text;
+}
+.ok-text {
+  color: #7fd8b0;
+  margin: 10px 0 0;
+}
+
 .banner {
   margin-top: 20px;
   padding: 12px 15px;

@@ -42,6 +42,10 @@ func (a *App) Login(npsso string) (backend.Status, error) {
 	return a.backend.Login(npsso)
 }
 
+func (a *App) RegenerateDUID() (backend.Status, error) {
+	return a.backend.RegenerateDUID()
+}
+
 func (a *App) PushToSwitch(host string, port int, code string) (backend.PushOutcome, error) {
 	return a.backend.PushToSwitch(host, port, code)
 }

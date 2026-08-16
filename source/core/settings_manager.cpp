@@ -1497,6 +1497,21 @@ void SettingsManager::clearPsnTokenData() {
     brls::Logger::info("PSN token data cleared");
 }
 
+void SettingsManager::clearPsnNpssoData() {
+    if (Profile* p = getActiveProfile()) {
+        p->npsso.clear();
+        p->npssoLastCheckedAt = 0;
+        p->npssoValid = false;
+    }
+    brls::Logger::info("PSN NPSSO data cleared");
+}
+
+void SettingsManager::clearAllPsnData() {
+    clearPsnTokenData();
+    clearPsnMobileSsoData();
+    clearPsnNpssoData();
+}
+
 std::string SettingsManager::getGlobalDuid() const {
     const Profile* p = getActiveProfile();
     return p ? p->duid : "";

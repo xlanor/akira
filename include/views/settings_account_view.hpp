@@ -35,6 +35,7 @@ private:
     BRLS_BIND(brls::DetailCell, credAccessTokenCell, "settings/credAccessToken");
     BRLS_BIND(brls::DetailCell, credRefreshTokenCell, "settings/credRefreshToken");
     BRLS_BIND(brls::DetailCell, credTokenExpiryCell, "settings/credTokenExpiry");
+    BRLS_BIND(brls::DetailCell, credNpssoCell, "settings/credNpsso");
     BRLS_BIND(brls::DetailCell, credSsoAccessTokenCell, "settings/credSsoAccessToken");
     BRLS_BIND(brls::DetailCell, credSsoRefreshTokenCell, "settings/credSsoRefreshToken");
     BRLS_BIND(brls::DetailCell, credSsoExpiryCell, "settings/credSsoExpiry");

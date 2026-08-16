@@ -69,8 +69,8 @@ void ProfileChipView::refresh() {
     else if (p->label().empty())
         name = "akira/settings/unnamed_profile"_i18n;
     else
-        name = p->label();
-    nameLabel->setText(settings->maskAccountName(name));
+        name = settings->maskAccountName(p->label());
+    nameLabel->setText(name);
 
     tagLabel->setText(p && p->isRemote()
         ? "akira/settings/profile_remote"_i18n
