@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <borealis.hpp>
+
 #include <chiaki/discoveryservice.h>
 #include <chiaki/log.h>
 #include <chiaki/thread.h>
@@ -48,6 +50,11 @@ private:
     struct sockaddr* hostAddr = nullptr;
     size_t hostAddrLen = 0;
     bool serviceEnabled = false;
+
+    brls::Event<bool>::Subscription focusSubscription;
+    bool focusSubscribed = false;
+
+    void ensureFocusSubscription();
 
     HostDiscoveredCallback onHostDiscovered;
 

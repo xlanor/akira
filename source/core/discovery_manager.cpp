@@ -110,6 +110,12 @@ DiscoveryManager::DiscoveryManager()
 
 DiscoveryManager::~DiscoveryManager()
 {
+    if (focusSubscribed)
+    {
+        brls::Application::getWindowFocusChangedEvent()->unsubscribe(focusSubscription);
+        focusSubscribed = false;
+    }
+
     if (serviceEnabled)
     {
         setServiceEnabled(false);
@@ -120,6 +126,22 @@ DiscoveryManager::~DiscoveryManager()
         free(hostAddr);
         hostAddr = nullptr;
     }
+}
+
+void DiscoveryManager::ensureFocusSubscription()
+{
+    if (focusSubscribed)
+        return;
+
+    focusSubscription = brls::Application::getWindowFocusChangedEvent()->subscribe([this](bool focused) {
+        if (!focused || !serviceEnabled)
+            return;
+
+        brls::Logger::info("Discovery: applet back in focus, restarting service on fresh sockets");
+        setServiceEnabled(false);
+        setServiceEnabled(true);
+    });
+    focusSubscribed = true;
 }
 
 void DiscoveryManager::setServiceEnabled(bool enable)
@@ -245,6 +267,8 @@ void DiscoveryManager::setServiceEnabled(bool enable)
             return;
         }
         brls::Logger::info("Discovery service started successfully!");
+
+        ensureFocusSubscription();
 
         bool haveSweep = false;
         {
