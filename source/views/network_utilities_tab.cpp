@@ -17,6 +17,10 @@ NetworkUtilitiesTab::NetworkUtilitiesTab() {
     initWireGuardUI();
 }
 
+NetworkUtilitiesTab::~NetworkUtilitiesTab() {
+    *alive = false;
+}
+
 void NetworkUtilitiesTab::initWireGuardUI() {
     auto& wg = WireGuardManager::instance();
 
@@ -128,9 +132,12 @@ void NetworkUtilitiesTab::onWgConnectClicked() {
     isWgConnecting = true;
     updateWireGuardStatus();
 
-    brls::async([this]() {
+    auto guard = alive;
+    brls::async([this, guard]() {
         bool success = WireGuardManager::instance().connect();
-        brls::sync([this, success]() {
+        brls::sync([this, guard, success]() {
+            if (!*guard)
+                return;
             isWgConnecting = false;
             updateWireGuardStatus();
         });

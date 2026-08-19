@@ -24,6 +24,10 @@ SettingsUpdatesView::SettingsUpdatesView() {
     initCheckNow();
 }
 
+SettingsUpdatesView::~SettingsUpdatesView() {
+    *alive = false;
+}
+
 void SettingsUpdatesView::initChannelSelector() {
     bool powerUser = settings->getPowerUserMenuUnlocked();
 
@@ -83,10 +87,13 @@ void SettingsUpdatesView::runCheck() {
 
     std::string channel = settings->getUpdateChannel();
 
-    HttpPool::instance().submit([this, channel](HttpSession&) {
+    auto guard = alive;
+    HttpPool::instance().submit([this, guard, channel](HttpSession&) {
         akira::UpdateInfo info = akira::UpdateManager::getInstance().checkForUpdate(channel);
 
-        brls::sync([this, info]() {
+        brls::sync([this, guard, info]() {
+            if (!*guard)
+                return;
             checking = false;
 
             if (!info.error.empty()) {
