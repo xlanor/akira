@@ -586,6 +586,8 @@
         "trophies_enabled": "Show trophy page",
         "menu_developer": "Developer",
         "dev_fake_hosts": "Fake hosts (20 PS5s)",
+        "dev_force_ws_node": "Force PSN push node",
+        "dev_force_ws_node_off": "Off (assigned by PSN)",
         "menu_updates": "Updates",
         "simulate_update": "Simulate update available",
         "dev_update_server_hint": "Dev update server (host:port)",

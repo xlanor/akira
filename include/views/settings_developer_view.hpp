@@ -4,6 +4,7 @@
 #include <borealis.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/cells/cell_detail.hpp>
+#include <borealis/views/cells/cell_selector.hpp>
 
 #include "core/settings_manager.hpp"
 
@@ -13,6 +14,7 @@ public:
 
 private:
     BRLS_BIND(brls::BooleanCell, fakeHostsToggle, "settings/devFakeHosts");
+    BRLS_BIND(brls::SelectorCell, forceWsNodeSelector, "settings/devForceWsNode");
     BRLS_BIND(brls::DetailCell, simulateUpdateCell, "settings/simulateUpdate");
 
     SettingsManager* settings = nullptr;

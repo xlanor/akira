@@ -100,6 +100,7 @@ private:
     int64_t lastUpdateCheck = 0;
     std::string updateInstallPath;
     std::string devUpdateServer;
+    std::string devForceWsFqdn;
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
@@ -358,6 +359,8 @@ public:
     void setUpdateInstallPath(const std::string& path);
     std::string getDevUpdateServer() const;
     void setDevUpdateServer(const std::string& server);
+    std::string getDevForceWsFqdn() const;
+    void setDevForceWsFqdn(const std::string& fqdn);
     int getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const;
 
 

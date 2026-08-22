@@ -880,6 +880,13 @@ ChiakiErrorCode Host::initHolepunchSession()
         brls::Logger::info("Port guessing enabled: {} guesses, {} sockets", settings->getPortGuessingCount(), settings->getPortGuessingSocks());
     }
 
+    const std::string forcedWsFqdn = settings->getDevForceWsFqdn();
+    if (!forcedWsFqdn.empty())
+    {
+        chiaki_holepunch_session_set_ws_fqdn_override(holepunchSession, forcedWsFqdn.c_str());
+        brls::Logger::warning("Forcing push notification node to {}", forcedWsFqdn);
+    }
+
     brls::Logger::info("Holepunch session initialized for {}", hostName);
     return CHIAKI_ERR_SUCCESS;
 }

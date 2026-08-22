@@ -342,6 +342,8 @@ void SettingsManager::parseTomlFile() {
             updateInstallPath = *val;
         if (auto val = config["dev_update_server"].value<std::string>())
             devUpdateServer = *val;
+        if (auto val = config["dev_force_ws_fqdn"].value<std::string>())
+            devForceWsFqdn = *val;
         if (auto val = config["sleep_on_exit"].value<bool>())
             sleepOnExit = *val;
         if (auto val = config["request_idr_on_fec_failure"].value<bool>())
@@ -799,6 +801,8 @@ int SettingsManager::writeFile() {
         config.insert("update_install_path", updateInstallPath);
     if (!devUpdateServer.empty())
         config.insert("dev_update_server", devUpdateServer);
+    if (!devForceWsFqdn.empty())
+        config.insert("dev_force_ws_fqdn", devForceWsFqdn);
     if (sleepOnExit)
         config.insert("sleep_on_exit", sleepOnExit);
     config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
@@ -1752,6 +1756,14 @@ std::string SettingsManager::getDevUpdateServer() const {
 
 void SettingsManager::setDevUpdateServer(const std::string& server) {
     devUpdateServer = server;
+}
+
+std::string SettingsManager::getDevForceWsFqdn() const {
+    return devForceWsFqdn;
+}
+
+void SettingsManager::setDevForceWsFqdn(const std::string& fqdn) {
+    devForceWsFqdn = fqdn;
 }
 
 int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const {

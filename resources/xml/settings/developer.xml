@@ -32,6 +32,12 @@
                     marginLeft="15"
                     marginRight="15"/>
 
+                <brls:SelectorCell
+                    id="settings/devForceWsNode"
+                    title="@i18n/akira/settings/dev_force_ws_node"
+                    marginLeft="15"
+                    marginRight="15"/>
+
                 <brls:DetailCell
                     id="settings/simulateUpdate"
                     title="@i18n/akira/settings/simulate_update"
