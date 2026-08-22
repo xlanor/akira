@@ -27,7 +27,7 @@ struct HttpRequest {
     bool post = false;
     long timeoutSec = 15;
     long connectTimeoutSec = 0;
-    bool verifyPeer = false;
+    bool verifyPeer = true;
     bool followLocation = true;
     bool freshConnect = false;
 
