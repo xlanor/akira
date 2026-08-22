@@ -252,6 +252,7 @@ void* ConnectionView::connectionThreadFunc(void* user)
 
         ChiakiErrorCode err = host->connectHolepunch();
         if (err != CHIAKI_ERR_SUCCESS) {
+            host->cleanupHolepunch();
             if (auto view = weak.lock()) {
                 view->connectionError = brls::getStr("akira/connection/holepunch_failed", chiaki_error_string(err));
                 brls::Logger::error("{}", view->connectionError);

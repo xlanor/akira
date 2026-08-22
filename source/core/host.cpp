@@ -886,6 +886,12 @@ ChiakiErrorCode Host::initHolepunchSession()
 
 ChiakiErrorCode Host::connectHolepunch()
 {
+    if (holepunchSession)
+    {
+        brls::Logger::warning("Discarding stale holepunch session before new attempt");
+        cleanupHolepunch();
+    }
+
     bool retryEnabled = SettingsManager::getInstance()->getHolepunchRetry();
     const int maxRetries = retryEnabled ? 4 : 1;
     ChiakiErrorCode err = CHIAKI_ERR_UNKNOWN;
