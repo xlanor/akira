@@ -4,6 +4,7 @@
 #include "ui/akira_header.hpp"
 #include "cloud/service.hpp"
 #include "ui/theme.hpp"
+#include "ui/log_pane.hpp"
 #include "ui/motion.hpp"
 #include "views/stream_view.hpp"
 #include "views/connection_view.hpp"
@@ -65,6 +66,37 @@ bool HostListTab::connectionActive = false;
 static brls::Activity* s_autoRegProgress = nullptr;
 static brls::Label* s_autoRegStageLabel = nullptr;
 static std::atomic<bool> s_autoRegCanceled{false};
+
+class AutoRegProgressBox : public brls::Box {
+public:
+    explicit AutoRegProgressBox(bool showStages) : showStages(showStages) {
+        if (!showStages)
+            logPane.subscribe();
+    }
+
+    ~AutoRegProgressBox() override {
+        logPane.unsubscribe();
+    }
+
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override {
+        Box::draw(vg, x, y, width, height, style, ctx);
+
+        if (showStages)
+            return;
+
+        auto* logArea = this->getView("autoreg/logArea");
+        if (!logArea)
+            return;
+
+        logPane.render(vg, logArea->getX(), logArea->getY(),
+                       logArea->getWidth(), logArea->getHeight());
+    }
+
+private:
+    bool showStages;
+    akira::ui::LogPane logPane;
+};
 
 static void setAutoRegStage(int index, int total) {
     if (!s_autoRegStageLabel)
@@ -409,25 +441,41 @@ private:
     }
 
     static void showAutoRegProgress(Host* host) {
-        auto* box = new brls::Box();
+        bool showStages = SettingsManager::getInstance()->getConnectionShowStages();
+
+        auto* box = new AutoRegProgressBox(showStages);
         box->setAxis(brls::Axis::COLUMN);
-        box->setJustifyContent(brls::JustifyContent::CENTER);
+        box->setJustifyContent(showStages ? brls::JustifyContent::CENTER
+                                          : brls::JustifyContent::FLEX_START);
         box->setAlignItems(brls::AlignItems::CENTER);
         box->setWidthPercentage(100.0f);
         box->setHeightPercentage(100.0f);
         box->setBackgroundColor(nvgRGB(0, 0, 0));
 
-        auto* spinner = new brls::ProgressSpinner();
-        spinner->setWidth(64);
-        spinner->setHeight(64);
-        box->addView(spinner);
+        if (showStages) {
+            auto* spinner = new brls::ProgressSpinner();
+            spinner->setWidth(64);
+            spinner->setHeight(64);
+            box->addView(spinner);
+        } else {
+            box->setPadding(20, 40, 20, 40);
+        }
 
         auto* label = new brls::Label();
         label->setText("akira/hosts/registering_psn"_i18n);
-        label->setFontSize(22);
-        label->setMarginTop(24);
+        label->setFontSize(showStages ? 22 : 24);
+        if (showStages)
+            label->setMarginTop(24);
         box->addView(label);
         s_autoRegStageLabel = label;
+
+        if (!showStages) {
+            auto* logArea = new brls::Box();
+            logArea->setId("autoreg/logArea");
+            logArea->setWidthPercentage(100.0f);
+            logArea->setGrow(1.0f);
+            box->addView(logArea);
+        }
 
         auto* hint = new brls::Label();
         hint->setText("akira/hosts/register_cancel_hint"_i18n);
