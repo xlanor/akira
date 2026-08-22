@@ -69,6 +69,8 @@ static std::atomic<bool> s_autoRegCanceled{false};
 static void setAutoRegStage(int index, int total) {
     if (!s_autoRegStageLabel)
         return;
+    if (!SettingsManager::getInstance()->getConnectionShowStages())
+        return;
     std::string name;
     switch (index) {
         case 1: name = "akira/hosts/register_stage_account"_i18n; break;
