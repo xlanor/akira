@@ -152,6 +152,8 @@ HttpResponse httpPerform(const HttpRequest& request)
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
     curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, curlCollectHeader);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &response.headers);
+    if (request.certInfo)
+        curl_easy_setopt(curl, CURLOPT_CERTINFO, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, request.verifyPeer ? 1L : 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, request.verifyPeer ? 2L : 0L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, request.timeoutSec);

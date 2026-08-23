@@ -10,8 +10,8 @@ build_curl() {
 
     make distclean 2>/dev/null || true
 
-    echo "Running buildconf..."
-    ./buildconf
+    echo "Running autoreconf..."
+    autoreconf -fi
 
     LDFLAGS="-specs=${DEVKITPRO}/libnx/switch.specs ${LDFLAGS}" \
     ./configure \

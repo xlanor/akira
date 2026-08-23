@@ -16,6 +16,7 @@ private:
     BRLS_BIND(brls::BooleanCell, fakeHostsToggle, "settings/devFakeHosts");
     BRLS_BIND(brls::SelectorCell, forceWsNodeSelector, "settings/devForceWsNode");
     BRLS_BIND(brls::DetailCell, simulateUpdateCell, "settings/simulateUpdate");
+    BRLS_BIND(brls::DetailCell, tlsVerifyProbeCell, "settings/tlsVerifyProbe");
 
     SettingsManager* settings = nullptr;
 };

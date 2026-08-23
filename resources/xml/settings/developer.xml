@@ -44,6 +44,12 @@
                     marginLeft="15"
                     marginRight="15"/>
 
+                <brls:DetailCell
+                    id="settings/tlsVerifyProbe"
+                    title="@i18n/akira/settings/dev_tls_verify_probe"
+                    marginLeft="15"
+                    marginRight="15"/>
+
             </brls:Box>
 
         </brls:Box>

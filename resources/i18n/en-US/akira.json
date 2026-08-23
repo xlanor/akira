@@ -595,7 +595,8 @@
         "discovery_log_viewer": "View Discovery Log",
         "discovery_log_clear": "Clear",
         "discovery_log_empty": "No discovery activity captured yet. Enable 'Discovery log' above, then open the console list.",
-        "discovery_log_off": "Discovery log is off"
+        "discovery_log_off": "Discovery log is off",
+        "dev_tls_verify_probe": "Run TLS verification probe"
     },
     "update": {
         "channel": "Update channel",
