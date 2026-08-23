@@ -733,12 +733,32 @@ void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, Ch
     if (!remotePlayEnabled)
     {
         brls::Logger::info("Skipping device '{}' - remote play not enabled", deviceName);
+        brls::sync([this, deviceName, deviceUid]() {
+            auto* hostsMap = settings->getHostsMap();
+            if (!hostsMap)
+                return;
+            for (auto& entry : *hostsMap)
+            {
+                Host* h = entry.second.get();
+                if (!h)
+                    continue;
+                if (h->getHostName() == deviceName || h->getRemoteDuid() == deviceUid)
+                    h->setPsnRemotePlayDisabled(true);
+            }
+        });
         return;
     }
 
     brls::sync([this, deviceName, deviceUid, consoleType]() {
         auto* hostsMap = settings->getHostsMap();
         Host* localHost = nullptr;
+
+        for (auto& entry : *hostsMap)
+        {
+            Host* h = entry.second.get();
+            if (h && (h->getHostName() == deviceName || h->getRemoteDuid() == deviceUid))
+                h->setPsnRemotePlayDisabled(false);
+        }
 
         auto it = hostsMap->find(deviceName);
         if (it != hostsMap->end() && it->second->hasRpKey() && !it->second->isRemote())
@@ -959,11 +979,7 @@ void DiscoveryManager::reconcileDiscoveredHosts(const std::vector<std::string>& 
         for (auto& entry : *hostsMap)
         {
             Host* host = entry.second.get();
-            if (!host)
-                continue;
-            if (host->hasRpKey() || host->isManual() || host->isRemote())
-                continue;
-            if (!host->isDiscovered())
+            if (!host || host->hostId.empty())
                 continue;
 
             bool present = false;
@@ -975,6 +991,17 @@ void DiscoveryManager::reconcileDiscoveredHosts(const std::vector<std::string>& 
                     break;
                 }
             }
+
+            if (!present && host->state != CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN)
+            {
+                host->state = CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN;
+                changed = true;
+            }
+
+            if (host->hasRpKey() || host->isManual() || host->isRemote())
+                continue;
+            if (!host->isDiscovered())
+                continue;
 
             if (!present)
             {

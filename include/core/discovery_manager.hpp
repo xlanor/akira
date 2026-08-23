@@ -124,6 +124,12 @@ public:
     void setServiceEnabled(bool enable);
     bool isServiceEnabled() const { return serviceEnabled; }
 
+    ChiakiDiscovery* getLiveDiscovery(bool ipv6) {
+        if (!serviceEnabled || ipv6)
+            return nullptr;
+        return &service.discovery;
+    }
+
     int sendDiscovery();
     int sendDiscovery(const char* ipAddress);
     int sendDiscovery(struct sockaddr* addr, size_t addrLen);
