@@ -319,6 +319,7 @@
         "fail_in_use": "Someone's already streaming on it",
         "fail_unreachable": "Couldn't reach your console",
         "fail_version": "Your console needs a system update",
+        "fail_rp_disabled": "Remote Play is turned off on the console for this account — enable it in the console's Settings › System › Remote Play",
         "fail_regist": "Registration failed — pair the console again",
         "fail_crash": "Remote Play crashed on the console"
     },

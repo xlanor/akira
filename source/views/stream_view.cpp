@@ -476,7 +476,10 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
             return;
         }
 
-        if (!self->host->isCloud() &&
+        bool rejectedWhileAwake = self->host->isAwake() &&
+            reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN;
+
+        if (!self->host->isCloud() && !rejectedWhileAwake &&
             (reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_CONNECTION_REFUSED ||
              reason == CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN) &&
             self->wakeRetryCount < MAX_WAKE_RETRIES) {
@@ -506,7 +509,9 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
         } else {
             std::string body = duringConnect
                 ? brls::getStr("akira/connection/connect_failed_title",
-                    brls::getStr(connectionFailureKeyForReason(reason)))
+                    brls::getStr(rejectedWhileAwake
+                        ? "akira/connection/fail_rp_disabled"
+                        : connectionFailureKeyForReason(reason)))
                 : brls::getStr("akira/stream/session_ended", reasonStr);
             auto* dialog = new brls::Dialog(body);
             dialog->setCloseCallback([]() {

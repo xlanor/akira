@@ -319,6 +319,7 @@
         "fail_in_use": "有人正在串流该主机",
         "fail_unreachable": "无法连接到主机",
         "fail_version": "主机需要系统更新",
+        "fail_rp_disabled": "主机上此账号的串流功能已关闭——请在主机的「设置 › 系统 › 远程游玩」中开启",
         "fail_regist": "配对失败——请重新配对主机",
         "fail_crash": "主机上的 Remote Play 已崩溃"
     },
