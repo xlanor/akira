@@ -39,11 +39,11 @@ const config = {
           routeBasePath: '/',
           sidebarPath: './sidebars.js',
           editUrl: 'https://github.com/xlanor/akira/tree/next/website/',
-          lastVersion: '0.5.3',
+          lastVersion: '0.6.0',
           versions: {
             current: {
-              label: '0.6.0',
-              path: '0.6.0',
+              label: '0.7.0',
+              path: '0.7.0',
               banner: 'unreleased',
             },
           },
@@ -92,7 +92,7 @@ const config = {
           {
             title: 'Docs',
             items: [
-              {label: 'Setup', to: '/setup/registering-and-connecting'},
+              {label: 'Setup', to: '/setup/registering'},
               {label: 'Features', to: '/features'},
               {label: 'Developing', to: '/developing'},
             ],
