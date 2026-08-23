@@ -17,6 +17,7 @@ private:
     bool credentialsRevealed = false;
 
     void loadConfigFromFile();
+    void addTomlLine(const std::string& line);
     void addLine(const std::string& text, bool isHeader = false);
     std::string censorValue(const std::string& value);
     std::string processLine(const std::string& line);

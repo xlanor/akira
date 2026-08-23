@@ -3,6 +3,9 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
+
+#include "cloud/models.hpp"
 
 struct Profile {
     int64_t id = 0;
@@ -30,7 +33,7 @@ struct Profile {
     int trophyLevel = 0;
     bool trophiesEnabled = true;
 
-    std::string cloudShortcuts;
+    std::vector<cloud::Game> cloudShortcuts;
 
     bool isRemote() const { return !refreshToken.empty(); }
     bool hasIdentity() const { return !accountId.empty() || !onlineId.empty(); }

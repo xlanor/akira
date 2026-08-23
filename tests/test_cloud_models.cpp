@@ -81,3 +81,48 @@ TEST(catalog_warning_and_launch_errors_are_classified)
         == LaunchFailureKind::DatacenterUnavailable);
     CHECK(classifyLaunchFailure("odd failure") == LaunchFailureKind::Other);
 }
+
+TEST(datacenters_round_trip_through_json)
+{
+    std::vector<Datacenter> dcs = parseDatacenters(R"([
+        {"dataCenter":"mila","rtt":7,"rtts":[7,9],"mtu_in":1454,"mtu_out":1254,
+         "port":40101,"publicIp":"senkusha.mila.prod.playstation-cloud.com",
+         "maxBandwidth":25000,"measured":false},
+        {"dataCenter":"lonb","rtt":1,"rtts":[1],"mtu_in":1454,"mtu_out":1454,
+         "port":40101,"publicIp":"senkusha.lonb.prod.playstation-cloud.com",
+         "maxBandwidth":25000,"measured":true},
+        {"rtt":3}
+    ])");
+
+    CHECK_EQ(dcs.size(), size_t(2));
+    CHECK_EQ(dcs[0].name, std::string("lonb"));
+    CHECK_EQ(dcs[0].rttMs, 1);
+    CHECK_EQ(dcs[1].name, std::string("mila"));
+    CHECK_EQ(dcs[1].rttSamples.size(), size_t(2));
+    CHECK_EQ(dcs[1].rttSamples[1], 9);
+    CHECK_EQ(dcs[1].mtuOut, 1254);
+    CHECK_EQ(dcs[1].port, 40101);
+    CHECK_EQ(dcs[1].publicIp, std::string("senkusha.mila.prod.playstation-cloud.com"));
+    CHECK_EQ(dcs[1].maxBandwidth, 25000);
+    CHECK_EQ(dcs[1].measured, false);
+    CHECK_EQ(dcs[0].measured, true);
+
+    std::vector<Datacenter> again = parseDatacenters(serializeDatacenters(dcs));
+    CHECK_EQ(again.size(), dcs.size());
+    for (size_t i = 0; i < again.size(); i++)
+    {
+        CHECK_EQ(again[i].name, dcs[i].name);
+        CHECK_EQ(again[i].rttMs, dcs[i].rttMs);
+        CHECK_EQ(again[i].rttSamples.size(), dcs[i].rttSamples.size());
+        for (size_t j = 0; j < again[i].rttSamples.size() && j < dcs[i].rttSamples.size(); j++)
+            CHECK_EQ(again[i].rttSamples[j], dcs[i].rttSamples[j]);
+        CHECK_EQ(again[i].mtuIn, dcs[i].mtuIn);
+        CHECK_EQ(again[i].mtuOut, dcs[i].mtuOut);
+        CHECK_EQ(again[i].port, dcs[i].port);
+        CHECK_EQ(again[i].publicIp, dcs[i].publicIp);
+        CHECK_EQ(again[i].maxBandwidth, dcs[i].maxBandwidth);
+        CHECK_EQ(again[i].measured, dcs[i].measured);
+    }
+
+    CHECK_EQ(serializeDatacenters({}), std::string(""));
+}

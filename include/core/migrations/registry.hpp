@@ -6,6 +6,8 @@
 #include "m001_unify_psn_auth.hpp"
 #include "m002_multi_profile.hpp"
 #include "m003_drop_hardened_nat.hpp"
+#include "m004_cloud_datacenter_tables.hpp"
+#include "m005_group_settings_tables.hpp"
 
 namespace chiaki_migrations {
 
@@ -19,6 +21,8 @@ inline tomlmigrate::Migrator buildSettingsMigrator() {
     register_m001_unify_psn_auth(m);
     register_m002_multi_profile(m);
     register_m003_drop_hardened_nat(m);
+    register_m004_cloud_datacenter_tables(m);
+    register_m005_group_settings_tables(m);
     return m;
 }
 

@@ -70,6 +70,26 @@ std::vector<Datacenter> parseDatacenters(const std::string& json)
         Datacenter dc;
         dc.name = psn::jsonString(item, "dataCenter");
         dc.rttMs = psn::jsonInt(item, "rtt");
+        dc.mtuIn = psn::jsonInt(item, "mtu_in");
+        dc.mtuOut = psn::jsonInt(item, "mtu_out");
+        dc.port = psn::jsonInt(item, "port");
+        dc.publicIp = psn::jsonString(item, "publicIp");
+        dc.maxBandwidth = psn::jsonInt(item, "maxBandwidth");
+        dc.measured = psn::jsonBool(item, "measured");
+
+        json_object* rtts = nullptr;
+        if (psn::jsonField(item, "rtts", &rtts) && json_object_is_type(rtts, json_type_array))
+        {
+            size_t rttCount = json_object_array_length(rtts);
+            dc.rttSamples.reserve(rttCount);
+            for (size_t j = 0; j < rttCount; j++)
+            {
+                json_object* rtt = json_object_array_get_idx(rtts, j);
+                if (rtt)
+                    dc.rttSamples.push_back(json_object_get_int(rtt));
+            }
+        }
+
         if (!dc.name.empty())
             out.push_back(std::move(dc));
     }
@@ -80,52 +100,27 @@ std::vector<Datacenter> parseDatacenters(const std::string& json)
     return out;
 }
 
-std::vector<Game> parseShortcuts(const std::string& json)
+std::string serializeDatacenters(const std::vector<Datacenter>& datacenters)
 {
-    std::vector<Game> out;
-    if (json.empty())
-        return out;
+    if (datacenters.empty())
+        return "";
 
-    psn::Json doc(json);
-    json_object* root = doc.get();
-    if (!root || !json_object_is_type(root, json_type_array))
-        return out;
-
-    size_t count = json_object_array_length(root);
-    out.reserve(count);
-    for (size_t i = 0; i < count; i++)
-    {
-        json_object* item = json_object_array_get_idx(root, i);
-        if (!item || !json_object_is_type(item, json_type_object))
-            continue;
-        Game g;
-        if (parseGame(item, g))
-            out.push_back(std::move(g));
-    }
-    return out;
-}
-
-std::string serializeShortcuts(const std::vector<Game>& games)
-{
     json_object* arr = json_object_new_array();
-    for (const Game& g : games)
+    for (const Datacenter& dc : datacenters)
     {
         json_object* o = json_object_new_object();
-        json_object_object_add(o, "productId", json_object_new_string(g.productId.c_str()));
-        json_object_object_add(o, "name", json_object_new_string(g.name.c_str()));
-        json_object_object_add(o, "imageUrl", json_object_new_string(g.imageUrl.c_str()));
-        json_object_object_add(o, "landscapeImageUrl", json_object_new_string(g.landscapeImageUrl.c_str()));
-        json_object_object_add(o, "conceptId", json_object_new_string(g.conceptId.c_str()));
-        json_object_object_add(o, "category", json_object_new_string(g.category.c_str()));
-        json_object_object_add(o, "serviceType", json_object_new_string(g.serviceType.c_str()));
-        json_object_object_add(o, "platform", json_object_new_string(g.platform.c_str()));
-        json_object_object_add(o, "isOwned", json_object_new_boolean(g.isOwned));
-        json_object_object_add(o, "streamServiceType", json_object_new_string(g.streamServiceType.c_str()));
-        json_object_object_add(o, "streamIdentifier", json_object_new_string(g.streamIdentifier.c_str()));
-        json_object_object_add(o, "entitlementId", json_object_new_string(g.entitlementId.c_str()));
-        json_object_object_add(o, "storeProductId", json_object_new_string(g.storeProductId.c_str()));
-        json_object_object_add(o, "conceptUrl", json_object_new_string(g.conceptUrl.c_str()));
-        json_object_object_add(o, "plusCatalog", json_object_new_boolean(g.plusCatalog));
+        json_object_object_add(o, "dataCenter", json_object_new_string(dc.name.c_str()));
+        json_object_object_add(o, "rtt", json_object_new_int(dc.rttMs));
+        json_object* rtts = json_object_new_array();
+        for (int sample : dc.rttSamples)
+            json_object_array_add(rtts, json_object_new_int(sample));
+        json_object_object_add(o, "rtts", rtts);
+        json_object_object_add(o, "mtu_in", json_object_new_int(dc.mtuIn));
+        json_object_object_add(o, "mtu_out", json_object_new_int(dc.mtuOut));
+        json_object_object_add(o, "port", json_object_new_int(dc.port));
+        json_object_object_add(o, "publicIp", json_object_new_string(dc.publicIp.c_str()));
+        json_object_object_add(o, "maxBandwidth", json_object_new_int(dc.maxBandwidth));
+        json_object_object_add(o, "measured", json_object_new_boolean(dc.measured));
         json_object_array_add(arr, o);
     }
     const char* s = json_object_to_json_string(arr);

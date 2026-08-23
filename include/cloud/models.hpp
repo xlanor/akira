@@ -62,12 +62,17 @@ enum class LaunchFailureKind {
 struct Datacenter {
     std::string name;
     int rttMs = 0;
+    std::vector<int> rttSamples;
+    int mtuIn = 0;
+    int mtuOut = 0;
+    int port = 0;
+    std::string publicIp;
+    int maxBandwidth = 0;
+    bool measured = false;
 };
 
 std::vector<Datacenter> parseDatacenters(const std::string& json);
-
-std::vector<Game> parseShortcuts(const std::string& json);
-std::string serializeShortcuts(const std::vector<Game>& games);
+std::string serializeDatacenters(const std::vector<Datacenter>& datacenters);
 
 bool parseCatalog(const std::string& json, Catalog& out);
 WarningKind classifyWarning(const std::string& warning);

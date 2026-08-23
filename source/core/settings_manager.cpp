@@ -145,6 +145,130 @@ uint32_t configKeyToChiakiButton(const std::string& key) {
     return 0;
 }
 
+std::vector<std::string> readStringArray(const toml::array* arr) {
+    std::vector<std::string> out;
+    if (!arr)
+        return out;
+
+    for (const auto& node : *arr) {
+        if (auto val = node.value<std::string>(); val && !val->empty())
+            out.push_back(*val);
+    }
+    return out;
+}
+
+std::vector<cloud::Game> readShortcuts(const toml::array* arr) {
+    std::vector<cloud::Game> out;
+    if (!arr)
+        return out;
+
+    for (const auto& node : *arr) {
+        const auto* t = node.as_table();
+        if (!t) continue;
+
+        cloud::Game g;
+        g.productId = (*t)["product_id"].value<std::string>().value_or("");
+        g.name = (*t)["name"].value<std::string>().value_or("");
+        if (g.productId.empty() || g.name.empty()) continue;
+
+        g.imageUrl = (*t)["image_url"].value<std::string>().value_or("");
+        g.landscapeImageUrl = (*t)["landscape_image_url"].value<std::string>().value_or("");
+        g.conceptId = (*t)["concept_id"].value<std::string>().value_or("");
+        g.category = (*t)["category"].value<std::string>().value_or("");
+        g.serviceType = (*t)["service_type"].value<std::string>().value_or("");
+        g.platform = (*t)["platform"].value<std::string>().value_or("");
+        g.isOwned = (*t)["is_owned"].value<bool>().value_or(false);
+        g.streamServiceType = (*t)["stream_service_type"].value<std::string>().value_or("");
+        g.streamIdentifier = (*t)["stream_identifier"].value<std::string>().value_or("");
+        g.entitlementId = (*t)["entitlement_id"].value<std::string>().value_or("");
+        g.storeProductId = (*t)["store_product_id"].value<std::string>().value_or("");
+        g.conceptUrl = (*t)["concept_url"].value<std::string>().value_or("");
+        g.plusCatalog = (*t)["plus_catalog"].value<bool>().value_or(false);
+        out.push_back(std::move(g));
+    }
+    return out;
+}
+
+toml::array shortcutsToToml(const std::vector<cloud::Game>& shortcuts) {
+    toml::array arr;
+    for (const cloud::Game& g : shortcuts) {
+        toml::table t;
+        t.insert("product_id", g.productId);
+        t.insert("name", g.name);
+        if (!g.imageUrl.empty()) t.insert("image_url", g.imageUrl);
+        if (!g.landscapeImageUrl.empty()) t.insert("landscape_image_url", g.landscapeImageUrl);
+        if (!g.conceptId.empty()) t.insert("concept_id", g.conceptId);
+        if (!g.category.empty()) t.insert("category", g.category);
+        if (!g.serviceType.empty()) t.insert("service_type", g.serviceType);
+        if (!g.platform.empty()) t.insert("platform", g.platform);
+        if (g.isOwned) t.insert("is_owned", true);
+        if (!g.streamServiceType.empty()) t.insert("stream_service_type", g.streamServiceType);
+        if (!g.streamIdentifier.empty()) t.insert("stream_identifier", g.streamIdentifier);
+        if (!g.entitlementId.empty()) t.insert("entitlement_id", g.entitlementId);
+        if (!g.storeProductId.empty()) t.insert("store_product_id", g.storeProductId);
+        if (!g.conceptUrl.empty()) t.insert("concept_url", g.conceptUrl);
+        if (g.plusCatalog) t.insert("plus_catalog", true);
+        arr.push_back(std::move(t));
+    }
+    return arr;
+}
+
+std::vector<cloud::Datacenter> readDatacenters(const toml::array* arr) {
+    std::vector<cloud::Datacenter> out;
+    if (!arr)
+        return out;
+
+    for (const auto& node : *arr) {
+        const auto* t = node.as_table();
+        if (!t) continue;
+
+        cloud::Datacenter dc;
+        dc.name = (*t)["name"].value<std::string>().value_or("");
+        if (dc.name.empty()) continue;
+
+        dc.rttMs = static_cast<int>((*t)["rtt"].value<int64_t>().value_or(0));
+        dc.mtuIn = static_cast<int>((*t)["mtu_in"].value<int64_t>().value_or(0));
+        dc.mtuOut = static_cast<int>((*t)["mtu_out"].value<int64_t>().value_or(0));
+        dc.port = static_cast<int>((*t)["port"].value<int64_t>().value_or(0));
+        dc.publicIp = (*t)["public_ip"].value<std::string>().value_or("");
+        dc.maxBandwidth = static_cast<int>((*t)["max_bandwidth"].value<int64_t>().value_or(0));
+        dc.measured = (*t)["measured"].value<bool>().value_or(false);
+
+        if (const auto* rtts = t->get_as<toml::array>("rtts")) {
+            for (const auto& rtt : *rtts) {
+                if (auto val = rtt.value<int64_t>())
+                    dc.rttSamples.push_back(static_cast<int>(*val));
+            }
+        }
+
+        out.push_back(std::move(dc));
+    }
+    return out;
+}
+
+toml::array datacentersToToml(const std::vector<cloud::Datacenter>& datacenters) {
+    toml::array arr;
+    for (const cloud::Datacenter& dc : datacenters) {
+        toml::table t;
+        t.insert("name", dc.name);
+        t.insert("rtt", dc.rttMs);
+
+        toml::array rtts;
+        for (int sample : dc.rttSamples)
+            rtts.push_back(sample);
+        t.insert("rtts", rtts);
+
+        t.insert("mtu_in", dc.mtuIn);
+        t.insert("mtu_out", dc.mtuOut);
+        t.insert("port", dc.port);
+        t.insert("public_ip", dc.publicIp);
+        t.insert("max_bandwidth", dc.maxBandwidth);
+        t.insert("measured", dc.measured);
+        arr.push_back(std::move(t));
+    }
+    return arr;
+}
+
 } // anonymous namespace
 
 
@@ -276,21 +400,59 @@ void SettingsManager::parseTomlFile() {
                 "Config migration skipped, loading fields as-is: {}", err.what());
         }
 
-        if (auto val = config["local_video_resolution"].value<std::string>())
+        if (auto val = config["video"]["local"]["resolution"].value<std::string>())
             localVideoResolution = stringToResolution(*val);
-
-        if (auto val = config["remote_video_resolution"].value<std::string>())
+        if (auto val = config["video"]["remote"]["resolution"].value<std::string>())
             remoteVideoResolution = stringToResolution(*val);
+        if (auto val = config["video"]["vpn"]["resolution"].value<std::string>())
+            vpnVideoResolution = stringToResolution(*val);
+        cloudVideoResolution = config["video"]["cloud"]["resolution"].value<int64_t>().value_or(1080);
 
-        if (auto val = config["local_video_fps"].value<int64_t>())
+        if (auto val = config["video"]["local"]["fps"].value<int64_t>())
             localVideoFPS = stringToFps(std::to_string(*val));
-
-        if (auto val = config["remote_video_fps"].value<int64_t>())
+        if (auto val = config["video"]["remote"]["fps"].value<int64_t>())
             remoteVideoFPS = stringToFps(std::to_string(*val));
-        if (auto val = config["haptic"].value<int64_t>())
-            globalHaptic = static_cast<HapticPreset>(*val);
+        if (auto val = config["video"]["vpn"]["fps"].value<int64_t>())
+            vpnVideoFPS = (*val == 30) ? CHIAKI_VIDEO_FPS_PRESET_30 : CHIAKI_VIDEO_FPS_PRESET_60;
 
-        if (auto rumbleTable = config["rumble"].as_table()) {
+        if (auto val = config["video"]["local"]["bitrate"].value<int64_t>())
+            localVideoBitrate = static_cast<int>(*val);
+        else
+            localVideoBitrate = getDefaultBitrateForResolution(localVideoResolution);
+
+        if (auto val = config["video"]["remote"]["bitrate"].value<int64_t>())
+            remoteVideoBitrate = static_cast<int>(*val);
+        else
+            remoteVideoBitrate = getDefaultBitrateForResolution(remoteVideoResolution);
+
+        if (auto val = config["video"]["vpn"]["bitrate"].value<int64_t>())
+            vpnVideoBitrate = static_cast<int>(*val);
+        cloudVideoBitrate = config["video"]["cloud"]["bitrate"].value<int64_t>().value_or(10000);
+
+        if (auto val = config["video"]["local"]["fsr_enabled"].value<bool>())
+            localFsrEnabled = *val;
+        if (auto val = config["video"]["remote"]["fsr_enabled"].value<bool>())
+            remoteFsrEnabled = *val;
+        if (auto val = config["video"]["vpn"]["fsr_enabled"].value<bool>())
+            vpnFsrEnabled = *val;
+        if (auto val = config["video"]["cloud"]["fsr_enabled"].value<bool>())
+            cloudFsrEnabled = *val;
+
+        if (auto val = config["picture"]["dithering_enabled"].value<bool>())
+            enableDithering = *val;
+        if (auto val = config["picture"]["dithering_strength"].value<double>())
+            ditheringStrength = std::max(1.0f, std::min(10.0f, static_cast<float>(*val)));
+        if (auto val = config["picture"]["rcas_enabled"].value<bool>())
+            rcasEnabled = *val;
+        if (auto val = config["picture"]["rcas_sharpness"].value<double>())
+            rcasSharpness = static_cast<float>(*val);
+
+        if (auto val = config["input"]["haptic"].value<int64_t>())
+            globalHaptic = static_cast<HapticPreset>(*val);
+        if (auto val = config["input"]["gyro_source"].value<int64_t>())
+            globalGyroSource = static_cast<GyroSource>(*val);
+
+        if (auto rumbleTable = config["input"]["rumble"].as_table()) {
             if (auto val = (*rumbleTable)["freq_low"].value<double>())
                 rumbleFreqLow = std::max(40.0f, std::min(320.0f, static_cast<float>(*val)));
             if (auto val = (*rumbleTable)["freq_high"].value<double>())
@@ -300,127 +462,90 @@ void SettingsManager::parseTomlFile() {
             if (auto val = (*rumbleTable)["envelope_attack"].value<double>())
                 rumbleEnvelopeAttack = std::max(0.20f, std::min(1.00f, static_cast<float>(*val)));
         }
-        if (auto val = config["holepunch_retry"].value<bool>())
+
+        cloudDatacenterPscloud = config["cloud"]["datacenter_pscloud"].value<std::string>().value_or("");
+        cloudDatacenterPsnow = config["cloud"]["datacenter_psnow"].value<std::string>().value_or("");
+        cloudDatacentersPscloud = readDatacenters(config["cloud"]["datacenters"]["pscloud"].as_array());
+        cloudDatacentersPsnow = readDatacenters(config["cloud"]["datacenters"]["psnow"].as_array());
+        cloudSortState = static_cast<int>(config["cloud"]["sort_state"].value<int64_t>().value_or(0));
+        cloudAttrPassed = config["cloud"]["attr_passed"].value<bool>().value_or(false);
+        cloudFavorites = readStringArray(config["cloud"]["favorites"].as_array());
+
+        if (auto val = config["network"]["holepunch_retry"].value<bool>())
             holepunchRetry = *val;
-        if (auto val = config["connection_show_stages"].value<bool>())
-            connectionShowStages = *val;
-        if (auto val = config["port_guessing"].value<bool>())
+        if (auto val = config["network"]["port_guessing"].value<bool>())
             portGuessing = *val;
-        if (auto val = config["port_guessing_count"].value<int64_t>())
+        if (auto val = config["network"]["port_guessing_count"].value<int64_t>())
             portGuessingCount = static_cast<int>(*val);
-        if (auto val = config["port_guessing_socks"].value<int64_t>())
+        if (auto val = config["network"]["port_guessing_socks"].value<int64_t>())
             portGuessingSocks = static_cast<int>(*val);
-        if (auto val = config["psn_request_budget"].value<int64_t>())
-            psnRequestBudget = std::clamp(static_cast<int>(*val), 1, 100000);
-        if (auto val = config["psn_request_window_seconds"].value<int64_t>())
-            psnRequestWindowSeconds = std::clamp(static_cast<int>(*val), 60, 86400);
-        if (auto val = config["power_user_menu_unlocked"].value<bool>())
-            powerUserMenuUnlocked = *val;
-        if (auto val = config["ipc_stats_enabled"].value<bool>())
-            ipcStatsEnabled = *val;
-        if (auto val = config["unlock_bitrate_max"].value<bool>())
-            unlockBitrateMax = *val;
-        if (auto val = config["auto_reconnect"].value<bool>())
-            autoReconnect = *val;
-
-        if (auto val = config["dev_fake_hosts"].value<bool>())
-            devFakeHosts = *val;
-
-        if (auto val = config["hide_account_name"].value<bool>())
-            hideAccountName = *val;
-        if (auto val = config["update_channel"].value<std::string>())
-            updateChannel = *val;
-        if (auto val = config["ui_theme"].value<std::string>())
-            uiTheme = *val;
-        if (auto val = config["discovery_subnets"].value<std::string>())
+        if (auto val = config["network"]["discovery_subnets"].value<std::string>())
             discoverySubnets = *val;
-        if (auto val = config["auto_check_updates"].value<bool>())
-            autoCheckUpdates = *val;
-        if (auto val = config["last_update_check"].value<int64_t>())
-            lastUpdateCheck = *val;
-        if (auto val = config["update_install_path"].value<std::string>())
-            updateInstallPath = *val;
-        if (auto val = config["dev_update_server"].value<std::string>())
-            devUpdateServer = *val;
-        if (auto val = config["dev_force_ws_fqdn"].value<std::string>())
-            devForceWsFqdn = *val;
-        if (auto val = config["sleep_on_exit"].value<bool>())
-            sleepOnExit = *val;
-        if (auto val = config["request_idr_on_fec_failure"].value<bool>())
-            requestIdrOnFecFailure = *val;
-        if (auto val = config["packet_loss_max"].value<double>())
-            packetLossMax = static_cast<float>(*val);
-        if (auto val = config["enable_file_logging"].value<bool>())
-            enableFileLogging = *val;
-        if (auto val = config["enable_thread_affinity"].value<bool>())
-            enableThreadAffinity = *val;
-        if (auto val = config["debug_locale"].value<std::string>())
-            debugLocale = *val;
-        if (auto val = config["local_fsr_enabled"].value<bool>())
-            localFsrEnabled = *val;
-        if (auto val = config["remote_fsr_enabled"].value<bool>())
-            remoteFsrEnabled = *val;
-        if (auto val = config["vpn_fsr_enabled"].value<bool>())
-            vpnFsrEnabled = *val;
-        if (auto val = config["rcas_enabled"].value<bool>())
-            rcasEnabled = *val;
-        if (auto val = config["rcas_sharpness"].value<double>())
-            rcasSharpness = static_cast<float>(*val);
-        if (auto val = config["debug_lwip_log"].value<bool>())
-            debugLwipLog = *val;
-        if (auto val = config["debug_wireguard_log"].value<bool>())
-            debugWireguardLog = *val;
-        if (auto val = config["debug_render_log"].value<bool>())
-            debugRenderLog = *val;
-        if (auto val = config["debug_chiaki_log"].value<bool>())
-            debugChiakiLog = *val;
-        if (auto val = config["debug_discovery_log"].value<bool>())
-            debugDiscoveryLog = *val;
-        if (auto val = config["debug_ffmpeg_log"].value<bool>())
-            debugFfmpegLog = *val;
-        if (auto pictureTable = config["picture_adjustments"].as_table()) {
-            if (auto val = (*pictureTable)["enable_dithering"].value<bool>())
-                enableDithering = *val;
-            if (auto val = (*pictureTable)["dithering_strength"].value<double>())
-                ditheringStrength = std::max(1.0f, std::min(10.0f, static_cast<float>(*val)));
-        }
-        if (auto val = config["gyro_source"].value<int64_t>())
-            globalGyroSource = static_cast<GyroSource>(*val);
-        if (auto val = config["companion_port"].value<int64_t>())
+        if (auto val = config["network"]["companion_port"].value<int64_t>())
             companionPort = static_cast<int>(*val);
-        if (auto val = config["local_video_bitrate"].value<int64_t>())
-            localVideoBitrate = static_cast<int>(*val);
-        else
-            localVideoBitrate = getDefaultBitrateForResolution(localVideoResolution);
 
-        if (auto val = config["remote_video_bitrate"].value<int64_t>())
-            remoteVideoBitrate = static_cast<int>(*val);
-        else
-            remoteVideoBitrate = getDefaultBitrateForResolution(remoteVideoResolution);
+        if (auto val = config["stream"]["auto_reconnect"].value<bool>())
+            autoReconnect = *val;
+        if (auto val = config["stream"]["sleep_on_exit"].value<bool>())
+            sleepOnExit = *val;
+        if (auto val = config["stream"]["request_idr_on_fec_failure"].value<bool>())
+            requestIdrOnFecFailure = *val;
+        if (auto val = config["stream"]["packet_loss_max"].value<double>())
+            packetLossMax = static_cast<float>(*val);
 
-        cloudVideoBitrate = config["cloud_video_bitrate"].value<int64_t>().value_or(10000);
-        cloudVideoResolution = config["cloud_video_resolution"].value<int64_t>().value_or(1080);
-        if (auto val = config["cloud_fsr_enabled"].value<bool>())
-            cloudFsrEnabled = *val;
-        cloudDatacenterPscloud = config["cloud_datacenter_pscloud"].value<std::string>().value_or("");
-        cloudDatacenterPsnow = config["cloud_datacenter_psnow"].value<std::string>().value_or("");
-        cloudDatacentersJsonPscloud = config["cloud_datacenters_pscloud"].value<std::string>().value_or("");
-        cloudDatacentersJsonPsnow = config["cloud_datacenters_psnow"].value<std::string>().value_or("");
-        cloudSortState = static_cast<int>(config["cloud_sort_state"].value<int64_t>().value_or(0));
-        cloudAttrPassed = config["cloud_attr_passed"].value<bool>().value_or(false);
-        cloudFavorites = config["cloud_favorites"].value<std::string>().value_or("");
-        cloudShortcuts = config["cloud_shortcuts"].value<std::string>().value_or("");
+        if (auto val = config["ui"]["theme"].value<std::string>())
+            uiTheme = *val;
+        if (auto val = config["ui"]["hide_account_name"].value<bool>())
+            hideAccountName = *val;
+        if (auto val = config["ui"]["connection_show_stages"].value<bool>())
+            connectionShowStages = *val;
 
-        if (auto val = config["vpn_video_bitrate"].value<int64_t>())
-            vpnVideoBitrate = static_cast<int>(*val);
+        if (auto val = config["psn"]["request_budget"].value<int64_t>())
+            psnRequestBudget = std::clamp(static_cast<int>(*val), 1, 100000);
+        if (auto val = config["psn"]["request_window_seconds"].value<int64_t>())
+            psnRequestWindowSeconds = std::clamp(static_cast<int>(*val), 60, 86400);
 
-        if (auto val = config["vpn_video_resolution"].value<std::string>())
-            vpnVideoResolution = stringToResolution(*val);
+        if (auto val = config["updates"]["channel"].value<std::string>())
+            updateChannel = *val;
+        if (auto val = config["updates"]["auto_check"].value<bool>())
+            autoCheckUpdates = *val;
+        if (auto val = config["updates"]["last_check"].value<int64_t>())
+            lastUpdateCheck = *val;
+        if (auto val = config["updates"]["install_path"].value<std::string>())
+            updateInstallPath = *val;
 
-        if (auto val = config["vpn_video_fps"].value<int64_t>())
-            vpnVideoFPS = (*val == 30) ? CHIAKI_VIDEO_FPS_PRESET_30 : CHIAKI_VIDEO_FPS_PRESET_60;
+        if (auto val = config["debug"]["locale"].value<std::string>())
+            debugLocale = *val;
+        if (auto val = config["debug"]["file_logging"].value<bool>())
+            enableFileLogging = *val;
+        if (auto val = config["debug"]["thread_affinity"].value<bool>())
+            enableThreadAffinity = *val;
+        if (auto val = config["debug"]["lwip_log"].value<bool>())
+            debugLwipLog = *val;
+        if (auto val = config["debug"]["wireguard_log"].value<bool>())
+            debugWireguardLog = *val;
+        if (auto val = config["debug"]["render_log"].value<bool>())
+            debugRenderLog = *val;
+        if (auto val = config["debug"]["chiaki_log"].value<bool>())
+            debugChiakiLog = *val;
+        if (auto val = config["debug"]["discovery_log"].value<bool>())
+            debugDiscoveryLog = *val;
+        if (auto val = config["debug"]["ffmpeg_log"].value<bool>())
+            debugFfmpegLog = *val;
+        if (auto val = config["debug"]["ipc_stats"].value<bool>())
+            ipcStatsEnabled = *val;
+        if (auto val = config["debug"]["fake_hosts"].value<bool>())
+            devFakeHosts = *val;
+        if (auto val = config["debug"]["power_user_menu_unlocked"].value<bool>())
+            powerUserMenuUnlocked = *val;
+        if (auto val = config["debug"]["unlock_bitrate_max"].value<bool>())
+            unlockBitrateMax = *val;
+        if (auto val = config["debug"]["update_server"].value<std::string>())
+            devUpdateServer = *val;
+        if (auto val = config["debug"]["force_ws_fqdn"].value<std::string>())
+            devForceWsFqdn = *val;
 
-        if (auto mappingTable = config["button_mapping"].as_table()) {
+        if (auto mappingTable = config["input"]["button_mapping"].as_table()) {
             for (auto& [key, value] : *mappingTable) {
                 std::string keyStr(key.str());
                 uint32_t chiakiBtn = configKeyToChiakiButton(keyStr);
@@ -475,7 +600,7 @@ void SettingsManager::parseTomlFile() {
                 profile.npssoValid = (*pt)["npsso_valid"].value<bool>().value_or(false);
                 profile.duid = (*pt)["duid"].value<std::string>().value_or("");
                 profile.trophiesEnabled = (*pt)["trophies_enabled"].value<bool>().value_or(true);
-                profile.cloudShortcuts = (*pt)["cloud_shortcuts"].value<std::string>().value_or("");
+                profile.cloudShortcuts = readShortcuts((*pt)["cloud_shortcuts"].as_array());
 
                 profiles.push_back(profile);
                 if (profile.id >= nextProfileId)
@@ -485,17 +610,6 @@ void SettingsManager::parseTomlFile() {
 
         if (auto val = config["active_profile_id"].value<int64_t>())
             activeProfileId = *val;
-
-        if (!cloudShortcuts.empty()) {
-            for (Profile& p : profiles) {
-                if (p.id == activeProfileId) {
-                    if (p.cloudShortcuts.empty())
-                        p.cloudShortcuts = cloudShortcuts;
-                    break;
-                }
-            }
-            cloudShortcuts.clear();
-        }
 
         if (auto* consolesArr = config["consoles"].as_array()) {
             for (auto& elem : *consolesArr) {
@@ -754,115 +868,146 @@ int SettingsManager::writeFile() {
     toml::table config;
 
     config.insert("version", chiaki_migrations::buildSettingsMigrator().latest_version());
-    config.insert("local_video_resolution", resolutionToString(localVideoResolution));
-    config.insert("remote_video_resolution", resolutionToString(remoteVideoResolution));
-    config.insert("local_video_fps", fpsToInt(localVideoFPS));
-    config.insert("remote_video_fps", fpsToInt(remoteVideoFPS));
-    config.insert("local_video_bitrate", localVideoBitrate);
-    config.insert("remote_video_bitrate", remoteVideoBitrate);
-    config.insert("vpn_video_bitrate", vpnVideoBitrate);
-    config.insert("cloud_video_bitrate", cloudVideoBitrate);
-    config.insert("cloud_video_resolution", cloudVideoResolution);
-    config.insert("cloud_fsr_enabled", cloudFsrEnabled);
-    if (!cloudDatacenterPscloud.empty()) config.insert("cloud_datacenter_pscloud", cloudDatacenterPscloud);
-    if (!cloudDatacenterPsnow.empty()) config.insert("cloud_datacenter_psnow", cloudDatacenterPsnow);
-    if (!cloudDatacentersJsonPscloud.empty()) config.insert("cloud_datacenters_pscloud", cloudDatacentersJsonPscloud);
-    if (!cloudDatacentersJsonPsnow.empty()) config.insert("cloud_datacenters_psnow", cloudDatacentersJsonPsnow);
-    if (cloudSortState != 0) config.insert("cloud_sort_state", cloudSortState);
-    if (cloudAttrPassed) config.insert("cloud_attr_passed", true);
-    if (!cloudFavorites.empty()) config.insert("cloud_favorites", cloudFavorites);
-    config.insert("vpn_video_resolution", resolutionToString(vpnVideoResolution));
-    config.insert("vpn_video_fps", fpsToInt(vpnVideoFPS));
-    config.insert("haptic", std::to_underlying(globalHaptic));
-    config.insert("companion_port", companionPort);
-    if (holepunchRetry)
-        config.insert("holepunch_retry", holepunchRetry);
-    config.insert("connection_show_stages", connectionShowStages);
-    config.insert("port_guessing", portGuessing);
-    config.insert("port_guessing_count", portGuessingCount);
-    config.insert("port_guessing_socks", portGuessingSocks);
-    config.insert("psn_request_budget", psnRequestBudget);
-    config.insert("psn_request_window_seconds", psnRequestWindowSeconds);
-    if (powerUserMenuUnlocked)
-        config.insert("power_user_menu_unlocked", powerUserMenuUnlocked);
-    if (ipcStatsEnabled)
-        config.insert("ipc_stats_enabled", ipcStatsEnabled);
-    if (unlockBitrateMax)
-        config.insert("unlock_bitrate_max", unlockBitrateMax);
-    if (!autoReconnect)
-        config.insert("auto_reconnect", autoReconnect);
-    if (devFakeHosts)
-        config.insert("dev_fake_hosts", devFakeHosts);
-    if (hideAccountName)
-        config.insert("hide_account_name", hideAccountName);
-    config.insert("update_channel", updateChannel);
-    config.insert("ui_theme", uiTheme);
-    if (!discoverySubnets.empty())
-        config.insert("discovery_subnets", discoverySubnets);
-    config.insert("auto_check_updates", autoCheckUpdates);
-    if (lastUpdateCheck != 0)
-        config.insert("last_update_check", lastUpdateCheck);
-    if (!updateInstallPath.empty())
-        config.insert("update_install_path", updateInstallPath);
-    if (!devUpdateServer.empty())
-        config.insert("dev_update_server", devUpdateServer);
-    if (!devForceWsFqdn.empty())
-        config.insert("dev_force_ws_fqdn", devForceWsFqdn);
-    if (sleepOnExit)
-        config.insert("sleep_on_exit", sleepOnExit);
-    config.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
-    config.insert("packet_loss_max", static_cast<double>(packetLossMax));
-    config.insert("enable_file_logging", enableFileLogging);
-    if (localFsrEnabled)
-        config.insert("local_fsr_enabled", localFsrEnabled);
-    if (remoteFsrEnabled)
-        config.insert("remote_fsr_enabled", remoteFsrEnabled);
-    if (vpnFsrEnabled)
-        config.insert("vpn_fsr_enabled", vpnFsrEnabled);
-    if (rcasEnabled)
-        config.insert("rcas_enabled", rcasEnabled);
-    if (rcasSharpness != 0.2f)
-        config.insert("rcas_sharpness", static_cast<double>(rcasSharpness));
-    if (enableThreadAffinity)
-        config.insert("enable_thread_affinity", enableThreadAffinity);
-    if (!debugLocale.empty())
-        config.insert("debug_locale", debugLocale);
-    if (debugLwipLog)
-        config.insert("debug_lwip_log", debugLwipLog);
-    if (debugWireguardLog)
-        config.insert("debug_wireguard_log", debugWireguardLog);
-    if (debugRenderLog)
-        config.insert("debug_render_log", debugRenderLog);
-    if (debugChiakiLog)
-        config.insert("debug_chiaki_log", debugChiakiLog);
-    if (debugDiscoveryLog)
-        config.insert("debug_discovery_log", debugDiscoveryLog);
-    if (debugFfmpegLog)
-        config.insert("debug_ffmpeg_log", debugFfmpegLog);
-    config.insert("gyro_source", std::to_underlying(globalGyroSource));
 
     {
-        toml::table rumbleTable;
-        rumbleTable.insert("freq_low", static_cast<double>(rumbleFreqLow));
-        rumbleTable.insert("freq_high", static_cast<double>(rumbleFreqHigh));
-        rumbleTable.insert("envelope_decay", static_cast<double>(rumbleEnvelopeDecay));
-        rumbleTable.insert("envelope_attack", static_cast<double>(rumbleEnvelopeAttack));
-        config.insert("rumble", rumbleTable);
+        auto videoProfile = [](const std::string& resolution, int fps, int bitrate, bool fsr) {
+            toml::table t;
+            t.insert("resolution", resolution);
+            t.insert("fps", fps);
+            t.insert("bitrate", bitrate);
+            t.insert("fsr_enabled", fsr);
+            return t;
+        };
+
+        toml::table cloudVideo;
+        cloudVideo.insert("resolution", cloudVideoResolution);
+        cloudVideo.insert("bitrate", cloudVideoBitrate);
+        cloudVideo.insert("fsr_enabled", cloudFsrEnabled);
+
+        toml::table video;
+        video.insert("local", videoProfile(resolutionToString(localVideoResolution),
+            fpsToInt(localVideoFPS), localVideoBitrate, localFsrEnabled));
+        video.insert("remote", videoProfile(resolutionToString(remoteVideoResolution),
+            fpsToInt(remoteVideoFPS), remoteVideoBitrate, remoteFsrEnabled));
+        video.insert("vpn", videoProfile(resolutionToString(vpnVideoResolution),
+            fpsToInt(vpnVideoFPS), vpnVideoBitrate, vpnFsrEnabled));
+        video.insert("cloud", std::move(cloudVideo));
+        config.insert("video", std::move(video));
     }
 
     {
-        toml::table pictureTable;
-        pictureTable.insert("enable_dithering", enableDithering);
-        pictureTable.insert("dithering_strength", static_cast<double>(ditheringStrength));
-        config.insert("picture_adjustments", pictureTable);
+        toml::table picture;
+        picture.insert("dithering_enabled", enableDithering);
+        picture.insert("dithering_strength", static_cast<double>(ditheringStrength));
+        picture.insert("rcas_enabled", rcasEnabled);
+        picture.insert("rcas_sharpness", static_cast<double>(rcasSharpness));
+        config.insert("picture", std::move(picture));
     }
 
     {
-        toml::table mappingTable;
+        toml::table cloud;
+        if (!cloudDatacenterPscloud.empty()) cloud.insert("datacenter_pscloud", cloudDatacenterPscloud);
+        if (!cloudDatacenterPsnow.empty()) cloud.insert("datacenter_psnow", cloudDatacenterPsnow);
+        if (cloudSortState != 0) cloud.insert("sort_state", cloudSortState);
+        if (cloudAttrPassed) cloud.insert("attr_passed", true);
+        if (!cloudFavorites.empty()) {
+            toml::array favorites;
+            for (const std::string& id : cloudFavorites)
+                favorites.push_back(id);
+            cloud.insert("favorites", std::move(favorites));
+        }
 
-        ButtonMapping defaults = getDefaultButtonMapping();
-        bool hasCustomMappings = (buttonMapping != defaults);
-        if (hasCustomMappings) {
+        toml::table datacenters;
+        if (!cloudDatacentersPscloud.empty())
+            datacenters.insert("pscloud", datacentersToToml(cloudDatacentersPscloud));
+        if (!cloudDatacentersPsnow.empty())
+            datacenters.insert("psnow", datacentersToToml(cloudDatacentersPsnow));
+        if (!datacenters.empty())
+            cloud.insert("datacenters", std::move(datacenters));
+
+        if (!cloud.empty())
+            config.insert("cloud", std::move(cloud));
+    }
+
+    {
+        toml::table network;
+        if (holepunchRetry) network.insert("holepunch_retry", true);
+        network.insert("port_guessing", portGuessing);
+        network.insert("port_guessing_count", portGuessingCount);
+        network.insert("port_guessing_socks", portGuessingSocks);
+        if (!discoverySubnets.empty()) network.insert("discovery_subnets", discoverySubnets);
+        network.insert("companion_port", companionPort);
+        config.insert("network", std::move(network));
+    }
+
+    {
+        toml::table stream;
+        if (!autoReconnect) stream.insert("auto_reconnect", false);
+        if (sleepOnExit) stream.insert("sleep_on_exit", true);
+        stream.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
+        stream.insert("packet_loss_max", static_cast<double>(packetLossMax));
+        config.insert("stream", std::move(stream));
+    }
+
+    {
+        toml::table ui;
+        ui.insert("theme", uiTheme);
+        if (hideAccountName) ui.insert("hide_account_name", true);
+        ui.insert("connection_show_stages", connectionShowStages);
+        config.insert("ui", std::move(ui));
+    }
+
+    {
+        toml::table psn;
+        psn.insert("request_budget", psnRequestBudget);
+        psn.insert("request_window_seconds", psnRequestWindowSeconds);
+        config.insert("psn", std::move(psn));
+    }
+
+    {
+        toml::table updates;
+        updates.insert("channel", updateChannel);
+        updates.insert("auto_check", autoCheckUpdates);
+        if (lastUpdateCheck != 0) updates.insert("last_check", lastUpdateCheck);
+        if (!updateInstallPath.empty()) updates.insert("install_path", updateInstallPath);
+        config.insert("updates", std::move(updates));
+    }
+
+    {
+        toml::table debug;
+        if (!debugLocale.empty()) debug.insert("locale", debugLocale);
+        if (enableFileLogging) debug.insert("file_logging", true);
+        if (enableThreadAffinity) debug.insert("thread_affinity", true);
+        if (debugLwipLog) debug.insert("lwip_log", true);
+        if (debugWireguardLog) debug.insert("wireguard_log", true);
+        if (debugRenderLog) debug.insert("render_log", true);
+        if (debugChiakiLog) debug.insert("chiaki_log", true);
+        if (debugDiscoveryLog) debug.insert("discovery_log", true);
+        if (debugFfmpegLog) debug.insert("ffmpeg_log", true);
+        if (ipcStatsEnabled) debug.insert("ipc_stats", true);
+        if (devFakeHosts) debug.insert("fake_hosts", true);
+        if (powerUserMenuUnlocked) debug.insert("power_user_menu_unlocked", true);
+        if (unlockBitrateMax) debug.insert("unlock_bitrate_max", true);
+        if (!devUpdateServer.empty()) debug.insert("update_server", devUpdateServer);
+        if (!devForceWsFqdn.empty()) debug.insert("force_ws_fqdn", devForceWsFqdn);
+        if (!debug.empty())
+            config.insert("debug", std::move(debug));
+    }
+
+    {
+        toml::table input;
+        input.insert("haptic", std::to_underlying(globalHaptic));
+        input.insert("gyro_source", std::to_underlying(globalGyroSource));
+
+        toml::table rumble;
+        rumble.insert("freq_low", static_cast<double>(rumbleFreqLow));
+        rumble.insert("freq_high", static_cast<double>(rumbleFreqHigh));
+        rumble.insert("envelope_decay", static_cast<double>(rumbleEnvelopeDecay));
+        rumble.insert("envelope_attack", static_cast<double>(rumbleEnvelopeAttack));
+        input.insert("rumble", std::move(rumble));
+
+        toml::table mapping;
+        if (buttonMapping != getDefaultButtonMapping()) {
             for (const auto& [chiakiBtn, combo] : buttonMapping) {
                 std::string key = chiakiButtonToConfigKey(chiakiBtn);
                 if (key.empty()) continue;
@@ -870,21 +1015,21 @@ int SettingsManager::writeFile() {
                 toml::array arr;
                 for (uint64_t hidBtn : combo) {
                     std::string btnName = hidButtonToConfigString(hidBtn);
-                    if (!btnName.empty()) {
+                    if (!btnName.empty())
                         arr.push_back(btnName);
-                    }
                 }
-                mappingTable.insert(key, arr);
+                mapping.insert(key, arr);
             }
         }
 
-        mappingTable.insert("touchpad_enabled", touchpadEnabled);
-        mappingTable.insert("swipe_up_enabled", swipeUpEnabled);
-        mappingTable.insert("swipe_down_enabled", swipeDownEnabled);
-        mappingTable.insert("swipe_left_enabled", swipeLeftEnabled);
-        mappingTable.insert("swipe_right_enabled", swipeRightEnabled);
+        mapping.insert("touchpad_enabled", touchpadEnabled);
+        mapping.insert("swipe_up_enabled", swipeUpEnabled);
+        mapping.insert("swipe_down_enabled", swipeDownEnabled);
+        mapping.insert("swipe_left_enabled", swipeLeftEnabled);
+        mapping.insert("swipe_right_enabled", swipeRightEnabled);
+        input.insert("button_mapping", std::move(mapping));
 
-        config.insert("button_mapping", mappingTable);
+        config.insert("input", std::move(input));
     }
 
     {
@@ -905,7 +1050,7 @@ int SettingsManager::writeFile() {
             if (p.npssoLastCheckedAt > 0) pt.insert("npsso_valid", p.npssoValid);
             if (!p.duid.empty()) pt.insert("duid", p.duid);
             if (!p.trophiesEnabled) pt.insert("trophies_enabled", false);
-            if (!p.cloudShortcuts.empty()) pt.insert("cloud_shortcuts", p.cloudShortcuts);
+            if (!p.cloudShortcuts.empty()) pt.insert("cloud_shortcuts", shortcutsToToml(p.cloudShortcuts));
             profilesArr.push_back(pt);
         }
         if (!profilesArr.empty())
@@ -1285,15 +1430,15 @@ void SettingsManager::setCloudDatacenter(bool pscloud, const std::string& datace
         cloudDatacenterPsnow = datacenter;
 }
 
-std::string SettingsManager::getCloudDatacentersJson(bool pscloud) const {
-    return pscloud ? cloudDatacentersJsonPscloud : cloudDatacentersJsonPsnow;
+const std::vector<cloud::Datacenter>& SettingsManager::getCloudDatacenters(bool pscloud) const {
+    return pscloud ? cloudDatacentersPscloud : cloudDatacentersPsnow;
 }
 
-void SettingsManager::setCloudDatacentersJson(bool pscloud, const std::string& json) {
+void SettingsManager::setCloudDatacenters(bool pscloud, std::vector<cloud::Datacenter> datacenters) {
     if (pscloud)
-        cloudDatacentersJsonPscloud = json;
+        cloudDatacentersPscloud = std::move(datacenters);
     else
-        cloudDatacentersJsonPsnow = json;
+        cloudDatacentersPsnow = std::move(datacenters);
 }
 
 int SettingsManager::getCloudSortState() const {
@@ -1312,21 +1457,22 @@ void SettingsManager::setCloudAttrPassed(bool value) {
     cloudAttrPassed = value;
 }
 
-std::string SettingsManager::getCloudFavorites() const {
+const std::vector<std::string>& SettingsManager::getCloudFavorites() const {
     return cloudFavorites;
 }
 
-std::string SettingsManager::getCloudShortcuts() const {
+const std::vector<cloud::Game>& SettingsManager::getCloudShortcuts() const {
+    static const std::vector<cloud::Game> none;
     const Profile* p = getActiveProfile();
-    return p ? p->cloudShortcuts : "";
+    return p ? p->cloudShortcuts : none;
 }
 
-void SettingsManager::setCloudShortcuts(const std::string& json) {
-    ensureActiveProfile()->cloudShortcuts = json;
+void SettingsManager::setCloudShortcuts(std::vector<cloud::Game> shortcuts) {
+    ensureActiveProfile()->cloudShortcuts = std::move(shortcuts);
 }
 
-void SettingsManager::setCloudFavorites(const std::string& json) {
-    cloudFavorites = json;
+void SettingsManager::setCloudFavorites(std::vector<std::string> favorites) {
+    cloudFavorites = std::move(favorites);
 }
 
 ChiakiVideoResolutionPreset SettingsManager::getVpnVideoResolution() const {

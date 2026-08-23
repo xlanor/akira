@@ -13,6 +13,7 @@
 #include <chiaki/session.h>
 #include <chiaki/log.h>
 
+#include "cloud/models.hpp"
 #include "profile.hpp"
 
 // Forward declaration
@@ -74,12 +75,11 @@ private:
     bool cloudFsrEnabled = false;
     std::string cloudDatacenterPscloud;
     std::string cloudDatacenterPsnow;
-    std::string cloudDatacentersJsonPscloud;
-    std::string cloudDatacentersJsonPsnow;
+    std::vector<cloud::Datacenter> cloudDatacentersPscloud;
+    std::vector<cloud::Datacenter> cloudDatacentersPsnow;
     int cloudSortState = 0;
     bool cloudAttrPassed = false;
-    std::string cloudFavorites;
-    std::string cloudShortcuts;
+    std::vector<std::string> cloudFavorites;
     ChiakiVideoResolutionPreset vpnVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     ChiakiVideoFPSPreset vpnVideoFPS = CHIAKI_VIDEO_FPS_PRESET_30;
     bool holepunchRetry = false;
@@ -281,16 +281,16 @@ public:
     void setCloudFsrEnabled(bool enabled);
     std::string getCloudDatacenter(bool pscloud) const;
     void setCloudDatacenter(bool pscloud, const std::string& datacenter);
-    std::string getCloudDatacentersJson(bool pscloud) const;
-    void setCloudDatacentersJson(bool pscloud, const std::string& json);
+    const std::vector<cloud::Datacenter>& getCloudDatacenters(bool pscloud) const;
+    void setCloudDatacenters(bool pscloud, std::vector<cloud::Datacenter> datacenters);
     int getCloudSortState() const;
     void setCloudSortState(int value);
     bool getCloudAttrPassed() const;
     void setCloudAttrPassed(bool value);
-    std::string getCloudFavorites() const;
-    void setCloudFavorites(const std::string& json);
-    std::string getCloudShortcuts() const;
-    void setCloudShortcuts(const std::string& json);
+    const std::vector<std::string>& getCloudFavorites() const;
+    void setCloudFavorites(std::vector<std::string> favorites);
+    const std::vector<cloud::Game>& getCloudShortcuts() const;
+    void setCloudShortcuts(std::vector<cloud::Game> shortcuts);
     ChiakiVideoResolutionPreset getVpnVideoResolution() const;
     void setVpnVideoResolution(ChiakiVideoResolutionPreset value);
     ChiakiVideoFPSPreset getVpnVideoFPS() const;

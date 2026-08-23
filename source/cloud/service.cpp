@@ -455,7 +455,7 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
         ProvisionBridge bridge{onProgress};
         const bool pscloud = game.streamServiceType == "pscloud";
         const std::string forcedDatacenter = settings->getCloudDatacenter(pscloud);
-        const std::string priorDatacenters = settings->getCloudDatacentersJson(pscloud);
+        const std::string priorDatacenters = serializeDatacenters(settings->getCloudDatacenters(pscloud));
 
         ChiakiCloudProvisionConfig cfg = {};
         cfg.service_type = game.streamServiceType.c_str();
@@ -490,9 +490,9 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
 
         if (result.datacenter_pings)
         {
-            std::string pings = result.datacenter_pings;
+            std::vector<Datacenter> pings = parseDatacenters(result.datacenter_pings);
             brls::sync([this, pscloud, pings]() {
-                settings->setCloudDatacentersJson(pscloud, pings);
+                settings->setCloudDatacenters(pscloud, pings);
                 settings->writeFile();
             });
         }

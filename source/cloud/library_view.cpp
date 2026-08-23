@@ -705,9 +705,9 @@ void LibraryView::updateServerButton()
 
     if (dcPscloud.empty() && dcPsnow.empty())
     {
-        std::vector<Datacenter> dcs = parseDatacenters(s->getCloudDatacentersJson(true));
+        std::vector<Datacenter> dcs = s->getCloudDatacenters(true);
         if (dcs.empty())
-            dcs = parseDatacenters(s->getCloudDatacentersJson(false));
+            dcs = s->getCloudDatacenters(false);
         label = "akira/cloud/server_auto"_i18n;
         if (!dcs.empty())
             label += " (" + std::to_string(dcs.front().rttMs) + "ms)";
@@ -717,7 +717,7 @@ void LibraryView::updateServerButton()
         bool pscloud = !dcPscloud.empty();
         std::string dc = pscloud ? dcPscloud : dcPsnow;
         int rtt = -1;
-        for (const Datacenter& d : parseDatacenters(s->getCloudDatacentersJson(pscloud)))
+        for (const Datacenter& d : s->getCloudDatacenters(pscloud))
             if (d.name == dc) { rtt = d.rttMs; break; }
         label = dc + (rtt >= 0 ? " (" + std::to_string(rtt) + "ms)" : "");
     }
@@ -806,8 +806,8 @@ void LibraryView::openOverflowMenu()
 void LibraryView::openServerPicker()
 {
     auto* settings = SettingsManager::getInstance();
-    std::vector<Datacenter> psnow = parseDatacenters(settings->getCloudDatacentersJson(false));
-    std::vector<Datacenter> pscloud = parseDatacenters(settings->getCloudDatacentersJson(true));
+    const std::vector<Datacenter>& psnow = settings->getCloudDatacenters(false);
+    const std::vector<Datacenter>& pscloud = settings->getCloudDatacenters(true);
     if (psnow.empty() && pscloud.empty())
     {
         auto* dialog = new brls::Dialog("akira/cloud/server_none"_i18n);
@@ -892,7 +892,7 @@ void LibraryView::toggleShortcut(const Game& game)
     if (!game.launchable())
         return;
     auto* settings = SettingsManager::getInstance();
-    std::vector<Game> shortcuts = parseShortcuts(settings->getCloudShortcuts());
+    std::vector<Game> shortcuts = settings->getCloudShortcuts();
     auto it = std::find_if(shortcuts.begin(), shortcuts.end(),
         [&](const Game& g) { return g.productId == game.productId; });
 
@@ -907,7 +907,7 @@ void LibraryView::toggleShortcut(const Game& game)
         shortcuts.push_back(game);
         added = true;
     }
-    settings->setCloudShortcuts(serializeShortcuts(shortcuts));
+    settings->setCloudShortcuts(shortcuts);
     settings->writeFile();
     brls::Application::notify(added ? "akira/cloud/shortcut_added"_i18n
                                     : "akira/cloud/shortcut_removed"_i18n);
@@ -916,30 +916,14 @@ void LibraryView::toggleShortcut(const Game& game)
 void LibraryView::loadFavorites()
 {
     favoriteIds.clear();
-    std::string raw = SettingsManager::getInstance()->getCloudFavorites();
-    size_t start = 0;
-    while (start < raw.size())
-    {
-        size_t nl = raw.find('\n', start);
-        std::string id = raw.substr(start, nl == std::string::npos ? std::string::npos : nl - start);
-        if (!id.empty())
-            favoriteIds.insert(id);
-        if (nl == std::string::npos)
-            break;
-        start = nl + 1;
-    }
+    for (const std::string& id : SettingsManager::getInstance()->getCloudFavorites())
+        favoriteIds.insert(id);
 }
 
 void LibraryView::saveFavorites()
 {
-    std::string joined;
-    for (const std::string& id : favoriteIds)
-    {
-        if (!joined.empty())
-            joined += "\n";
-        joined += id;
-    }
-    SettingsManager::getInstance()->setCloudFavorites(joined);
+    SettingsManager::getInstance()->setCloudFavorites(
+        std::vector<std::string>(favoriteIds.begin(), favoriteIds.end()));
     SettingsManager::getInstance()->writeFile();
 }
 
