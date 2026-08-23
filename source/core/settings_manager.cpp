@@ -741,7 +741,12 @@ void SettingsManager::parseLegacyFile() {
     brls::Logger::info("Loaded {} host(s) from legacy config", hosts.size());
 }
 
+std::mutex SettingsManager::writeMutex;
+std::atomic<uint64_t> SettingsManager::writeSeq{0};
+
 int SettingsManager::writeFile() {
+    std::lock_guard<std::mutex> writeLock(writeMutex);
+
     brls::Logger::info("Writing config file: {}", TOML_CONFIG_FILE);
 
     ensureConfigDir();
@@ -957,7 +962,7 @@ int SettingsManager::writeFile() {
             config.insert("registrations", registrationsArr);
     }
 
-    std::string tmpPath = std::string(TOML_CONFIG_FILE) + ".tmp";
+    std::string tmpPath = std::format("{}.{}.tmp", TOML_CONFIG_FILE, writeSeq++);
     {
         std::ofstream configFile(tmpPath, std::ios::out | std::ios::trunc);
         if (!configFile.is_open()) {
@@ -967,11 +972,17 @@ int SettingsManager::writeFile() {
         configFile << config;
         configFile.flush();
         configFile.close();
+        if (configFile.fail()) {
+            brls::Logger::error("Failed to flush config to {}", tmpPath);
+            std::remove(tmpPath.c_str());
+            return -1;
+        }
     }
 
     std::remove(TOML_CONFIG_FILE);
     if (std::rename(tmpPath.c_str(), TOML_CONFIG_FILE) != 0) {
         brls::Logger::error("Failed to move config into place");
+        std::remove(tmpPath.c_str());
         return -1;
     }
     return 0;

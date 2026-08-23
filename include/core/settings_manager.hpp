@@ -1,8 +1,10 @@
 #ifndef AKIRA_SETTINGS_MANAGER_HPP
 #define AKIRA_SETTINGS_MANAGER_HPP
 
+#include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
 #include <vector>
@@ -157,6 +159,8 @@ public:
 
     void parseFile();
     int writeFile();
+    static std::mutex writeMutex;
+    static std::atomic<uint64_t> writeSeq;
     void ensureConfigDir();
 
     std::map<std::string, std::unique_ptr<Host>>* getHostsMap();
