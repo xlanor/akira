@@ -3,6 +3,7 @@
 #include "core/exception.hpp"
 #include "core/settings_manager.hpp"
 #include "core/wireguard_manager.hpp"
+#include "core/discovery_manager.hpp"
 
 #include <borealis.hpp>
 #include <cstring>
@@ -211,7 +212,9 @@ int Host::wakeup()
         return result >= 0 ? 0 : 1;
     }
 
-    ChiakiErrorCode ret = chiaki_discovery_wakeup(log, NULL, hostAddr.c_str(), credential, isPS5());
+    ChiakiDiscovery* live = DiscoveryManager::getInstance()->getLiveDiscovery(
+        hostAddr.find(':') != std::string::npos);
+    ChiakiErrorCode ret = chiaki_discovery_wakeup(log, live, hostAddr.c_str(), credential, isPS5());
     return ret;
 }
 
@@ -311,6 +314,7 @@ int Host::registerHost(int pin)
             hostName, hostAddr, onlineId, pin);
     }
 
+    registInit = true;
     chiaki_regist_start(&regist, log, &registInfo, RegistEventCallback, this);
     return HOST_REGISTER_OK;
 }
@@ -446,6 +450,7 @@ int Host::registerHostAuto()
 
     if (onRegistStage)
         onRegistStage(4, 4);
+    registInit = true;
     chiaki_regist_start(&regist, log, &registInfo, RegistEventCallback, this);
     return HOST_REGISTER_OK;
 }
@@ -667,6 +672,28 @@ int Host::finiSession()
     return 0;
 }
 
+int Host::finiRegist()
+{
+    if (registInit)
+    {
+        registInit = false;
+        chiaki_regist_stop(&regist);
+        chiaki_regist_fini(&regist);
+    }
+
+    if (autoRegistActive)
+    {
+        autoRegistActive = false;
+        if (autoRegistRudp)
+        {
+            chiaki_rudp_fini(autoRegistRudp);
+            autoRegistRudp = nullptr;
+        }
+        cleanupHolepunch();
+    }
+    return 0;
+}
+
 void Host::stopSession()
 {
     chiaki_session_stop(&session);
@@ -835,19 +862,6 @@ void Host::registCallback(ChiakiRegistEvent* event)
         }
     }
 
-    chiaki_regist_stop(&regist);
-    chiaki_regist_fini(&regist);
-
-    if (autoRegistActive)
-    {
-        autoRegistActive = false;
-        if (autoRegistRudp)
-        {
-            chiaki_rudp_fini(autoRegistRudp);
-            autoRegistRudp = nullptr;
-        }
-        cleanupHolepunch();
-    }
 }
 
 ChiakiErrorCode Host::initHolepunchSession()

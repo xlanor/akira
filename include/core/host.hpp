@@ -81,6 +81,8 @@ private:
 
     bool discovered = false;
     bool sessionInit = false;
+    bool registInit = false;
+    bool psnRemotePlayDisabled = false;
     bool needsLinking = false;
     bool inConfig = false;
     HostType hostType = HostType::Discovered;
@@ -156,6 +158,8 @@ public:
     bool hasRpKey() const { return activeRegistration() != nullptr; }
     bool isReady() const { return state == CHIAKI_DISCOVERY_HOST_STATE_READY; }
     bool isPS5() const;
+    bool isPsnRemotePlayDisabled() const { return psnRemotePlayDisabled; }
+    void setPsnRemotePlayDisabled(bool v) { psnRemotePlayDisabled = v; }
     bool isCloud() const { return cloudSession.has_value(); }
     bool isRemote() const { return hostType == HostType::Remote; }
     bool isManual() const { return hostType == HostType::Manual; }
@@ -204,6 +208,7 @@ public:
     bool isSessionSocketHealthy() const;
     void gotoBed();
     int finiSession();
+    int finiRegist();
     void sendFeedbackState();
 
     // Holepunch connection for remote play

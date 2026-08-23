@@ -376,6 +376,7 @@ private:
 
         host->setOnRegistSuccess([hostPtr]() {
             brls::sync([hostPtr]() {
+                hostPtr->finiRegist();
                 HostListTab::isRegistering = false;
                 brls::Application::notify("akira/hosts/registration_success"_i18n);
                 SettingsManager::getInstance()->writeFile();
@@ -385,15 +386,17 @@ private:
             });
         });
 
-        host->setOnRegistFailed([]() {
-            brls::sync([]() {
+        host->setOnRegistFailed([hostPtr]() {
+            brls::sync([hostPtr]() {
+                hostPtr->finiRegist();
                 HostListTab::isRegistering = false;
                 brls::Application::notify("akira/hosts/registration_failed"_i18n);
             });
         });
 
-        host->setOnRegistCanceled([]() {
-            brls::sync([]() {
+        host->setOnRegistCanceled([hostPtr]() {
+            brls::sync([hostPtr]() {
+                hostPtr->finiRegist();
                 HostListTab::isRegistering = false;
                 brls::Application::notify("akira/hosts/registration_canceled"_i18n);
             });
@@ -511,6 +514,7 @@ private:
 
         host->setOnRegistSuccess([hostPtr]() {
             brls::sync([hostPtr]() {
+                hostPtr->finiRegist();
                 HostListTab::isRegistering = false;
                 dismissAutoRegProgress();
                 brls::Application::notify("akira/hosts/registration_success"_i18n);
@@ -523,6 +527,7 @@ private:
 
         host->setOnRegistFailed([hostPtr]() {
             brls::sync([hostPtr]() {
+                hostPtr->finiRegist();
                 HostListTab::isRegistering = false;
                 dismissAutoRegProgress();
                 if (s_autoRegCanceled) {
@@ -533,8 +538,9 @@ private:
             });
         });
 
-        host->setOnRegistCanceled([]() {
-            brls::sync([]() {
+        host->setOnRegistCanceled([hostPtr]() {
+            brls::sync([hostPtr]() {
+                hostPtr->finiRegist();
                 HostListTab::isRegistering = false;
                 dismissAutoRegProgress();
             });
@@ -1053,6 +1059,12 @@ void HostListTab::connectToHost(Host* host) {
     bool needsAccountId = isPS5 || host->getChiakiTarget() >= CHIAKI_TARGET_PS4_9;
     std::string accountId = settings->getPsnAccountId(host);
     std::string onlineId = settings->getPsnOnlineId(host);
+
+    if (host->isPsnRemotePlayDisabled()) {
+        brls::Logger::warning("Connect {}: PSN reports remote play disabled for this account",
+            host->getHostName());
+        brls::Application::notify("akira/connection/fail_rp_disabled"_i18n);
+    }
 
     if (needsAccountId && accountId.empty()) {
         auto* dialog = new brls::Dialog("akira/hosts/psn_account_id_required"_i18n);
