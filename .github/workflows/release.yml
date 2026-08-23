@@ -215,11 +215,8 @@ jobs:
               echo "- **Testers may wish to back up their configs before applying this release.**"
               echo ""
             fi
-            echo "Please read the [README](https://github.com/${{ github.repository }}#readme) before getting started."
+            echo "Please read the [README](https://github.com/${{ github.repository }}#readme) and the [documentation](https://xlanor.github.io/akira) before getting started."
             echo ""
-            echo "- [Features](https://github.com/${{ github.repository }}/wiki/Additional-changes)"
-            echo ""
-            echo "**For setup and connection, please read the [Registering and Connecting (Unified)](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Unified)) guide carefully.**"
           } > RELEASE_BODY.md
 
       - name: Create Release

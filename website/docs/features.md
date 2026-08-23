@@ -11,7 +11,7 @@ Many of these features are now present in other NX homebrew apps but were pionee
 
 ### Major features
 - **Basic remote play over an external network.** Same caveats as chiaki-ng, PSPlay, PSPortal, and the rest: you have to punch through to PSN for initiation. 
-- **PSCloud Streaming**
+- **Cloud Streaming**
 - **Multiple PSN profiles**
 - **Select bitrate.**
 - **Hidden menu** (think unlocking developer settings on Android) to raise the bitrate cap to 30k. You *request* a bitrate. The PS5 may or may not give it to you. It's not constant-bitrate encoding.
