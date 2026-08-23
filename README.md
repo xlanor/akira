@@ -2,9 +2,7 @@
 
 ![HOS-Supported](https://img.shields.io/badge/HOS_Version-22.5.0-green) ![Atmosphere](https://img.shields.io/badge/Atmosphere-1.11.2-cyan) ![libnx](https://img.shields.io/badge/libnx-4.12.0-magenta)
 
-
 Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises a forked variant of [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
-
 
 ## Maintainers
 xlanor, kkwong
@@ -12,8 +10,9 @@ xlanor, kkwong
 ## Disclaimer
 This project is not endorsed or certified by Sony Interactive Entertainment LLC. This project is free and open-source, and licensed under the same license as the core library it uses, chiaki-ng.
 
-## Read the Wiki
-Please, [read the wiki](https://github.com/xlanor/akira/wiki).
+## Read the documentation
+
+Please read the docs at [xlanor.github.io/akira](https://xlanor.github.io/akira)
 
 ## Issues
 
@@ -21,82 +20,89 @@ Akira is a personal project developed for myself primarily as the main user. Ple
 
 I am present on chiaki-ng discord's switch-support channel, where StreetPea has graciously allowed me to seed akira amongst existing chiaki-ng users. 
 
-I will not respond to direct pings, please try to use the search button and/or [read the wiki](https://github.com/xlanor/akira/wiki) first and then post a message with details of what you've tried. 
+I will not respond to direct pings, please try to use the search button and/or [read the docs](https://xlanor.github.io/akira) first and then post a message with details of what you've tried. 
 
 I'd also love to hear if you're using this application and it works well for you.
 
 If you find a bug or have a feature request, please help out and open a PR with the fix/implemented feature. 
 
 ## Features
-[Read this](https://github.com/xlanor/akira/wiki/Additional-changes)
 
-The biggest feature change is the addition of PSN remote play. Thanks to the hard work by Streetpea on chiaki-ng and grill2010 for reverse engineering the PSN api, I just call whatever he has built. You should see two screens come up if this is successful.
-
-The first screen is going to be for the CTRL holepunching, and the second screen for DATA holepunching after the session has been initalised. Rather than show an empty screen I decided to just stream the logs.
-
-Other features that are listed there but I'll reproduce here include
-
-- Remappable input buttons/touchscreen
-- Initial wireguard support
-- deko3d zero-copy decoding and rendering pipeline
-- Selectable gyro source. This allows you to select left/right joycon as the actual gyro source when playing in detached.
-- Gryo reset.
-- A whole lot of configurable settings.
-
-At this point, I think I've tackled most of the major feature asks that I've seen across gbatemp/github and it's time to enjoy playing my backlog of multiple AC games + Ghost of Tsushima that I picked up specifically to celebrate this.
+- **Basic remote play over an external network.** Same caveats as chiaki-ng, PSPlay, PSPortal, and the rest: you have to punch through to PSN for initiation. 
+- **PSCloud Streaming**
+- **Multiple PSN profiles**
+- **Select bitrate.**
+- **Hidden menu** (think unlocking developer settings on Android) to raise the bitrate cap to 30k. You *request* a bitrate. The PS5 may or may not give it to you. It's not constant-bitrate encoding.
+- Gyro support and reset including the ability to pick which controller drives gyro (default left)
+- After many nights debugging with kkwong, input latency is comparable with running android on your switch.
+- Switch away from mbedTLS to libnx crypto
+- Stream debug menu with stats
+- Stream disconnection ability
+- **Fully supported in-app wireguard.** (No tailscale support will be forthcoming, stop asking)
+- **Fully Remappble input bindings**
+- Ability to sleep the console on exit
+- **FSR 1.0** with configurable filters
+- Trophy page support
+- Auto-registration over PSN, requires holepunching.
+- Cross-subnet discovery (swept by unicast)
+- AIA chain repair (when encountering a PSN node with only leaf TLS certs)
 
 ## How to get started
-[Read this for local](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Local-Network))
+Please read the docs at [xlanor.github.io/akira](https://xlanor.github.io/akira)
 
-[Read this for remote](https://github.com/xlanor/akira/wiki/Registering-and-Connecting-(Remote-Network))
-
-Actually, just read the whole wiki.
+## Screenshots
 
 <p align="center" width="100%">
-  <img src="readme/akira_hosts_020.jpg"
+  <img src="readme/hosts.jpg" width="49%" alt="Akira home screen: a manually added PS5 in standby, a PSN Remote Play console marked ready, an Add Console tile, a Cloud section below, and the signed-in PSN profile in the corner">
+  <img src="readme/add_host_manual.jpg" width="49%" alt="Add Host screen with console name, IP address and console type fields, for adding a console by hand">
 </p>
-<p align="center">
-  <img src="readme/akira_remote_conn_holepunch.jpg">
+
+<p align="center" width="100%">
+  <img src="readme/ps_cloud_offering.jpg" width="49%" alt="PlayStation Cloud catalog grid with search, streamable filter, sort and region controls, each title tagged by platform and catalog">
+  <img src="readme/psn_cloud_streaming.jpg" width="49%" alt="Connecting to a cloud title, showing a progress ring at ten of ten steps while allocating a streaming slot">
+</p>
+
+<p align="center" width="100%">
+  <img src="readme/trophy.jpg" width="49%" alt="Trophy overview with account trophy level, platinum, gold, silver and bronze totals, and per-game cards showing playtime and completion">
+  <img src="readme/detailed_trophy.jpg" width="49%" alt="Per-game trophy list with earned versus available counts, completion percentage, and each trophy's grade and rarity">
+</p>
+
+<p align="center" width="100%">
+  <img src="readme/new_settings.jpg" width="49%" alt="Tabbed settings screen on the Account tab, showing the linked PSN profile with trophy counts, a show trophy page toggle, the companion port and a pair with companion app button">
+  <img src="readme/pairing_screen.jpg" width="49%" alt="Pair with Companion screen showing a four digit code, the console IP and port, and a refresh countdown while it waits for the computer">
 </p>
 <p align="center" width="100%">
-  <img src="readme/akira_settings_1.jpg">
-  <img src="readme/akira_settings_2.jpg">
-  <img src="readme/akira_settings_3.jpg">
-  <img src="readme/akira_settings_4.jpg">
-  <img src="readme/akira_settings_5.jpg">
-  <img src="readme/akira_settings_6.jpg">
-  <img src="readme/akira_wireguard.jpg">
-  <img src="readme/akira_stream_menu.jpg">
-  <img src="readme/akira_stream_menu_remap.jpg">
+  <img src="readme/remappable.jpg" width="70%" alt="Button mapping screen with a DualSense diagram beside every PlayStation button and its assigned Switch button">
 </p>
-<p align="center">
-  <img src="readme/akira_ingame_spiderman_1.jpg" >
-  <img src="readme/akira_ingame_jedi_1.jpg" >
-  <img src="readme/akira_ingame_ac_1.jpg" >
+
+<p align="center" width="100%">
+  <img src="readme/akira_ingame_debug.jpg" width="49%" alt="Debug overlay during a stream showing requested versus rendered 1080p60 HEVC, dropped and faked frames, and live packet loss">
+  <img src="readme/akira_ingame_debug_2.jpg" width="49%" alt="Debug overlay showing 1080p60 HEVC at 20000 kbps with zero dropped frames">
+</p>
+
+<p align="center" width="100%">
+  <img src="readme/akira_ingame_spiderman_1.jpg" width="32%" alt="Marvel's Spider-Man 2 streaming over Downtown Queens">
+  <img src="readme/akira_ingame_jedi_1.jpg" width="32%" alt="Star Wars Jedi: Survivor at sunset">
+  <img src="readme/akira_ingame_ac_1.jpg" width="32%" alt="Assassin's Creed Syndicate above the London rooftops">
 </p>
 
 <p align="center">
 And some horribly compressed encodes to fit < 10mb:
-</p>
-<p align="center" width="100%">
-<video src="https://github.com/user-attachments/assets/1ae8a3e3-9123-43cf-ae2e-f038383ef87d" width="80%" controls></video>
 </p>
 
 <p align="center" width="100%">
 <video src="https://github.com/user-attachments/assets/13bff761-42a8-43d6-901c-4aca7dbc26f0" width="80%" controls></video>
 </p>
 
-
-
 ---
 
 This software was built with reference/code from:
 
 - [Streetpea](https://github.com/streetpea/chiaki-ng) the original chiaki-ng code
-- [Pylux](github.com/ForWard-Technologies-LLC/Pylux) for the PS Cloud Streaming implementation
+- [Pylux](https://github.com/ForWard-Technologies-LLC/Pylux) for the PS Cloud Streaming implementation
 - [moonlight-switch](https://github.com/XITRIX/Moonlight-Switch) XITRIX's deko3d renderer for moonlight for the deko3d bits
 - [switchfin](https://github.com/dragonflylee/switchfin/blob/bbcf9037fc3b11a78f5e0b7489d9e776fff2d99c/scripts/switch/mpv/deko3d.patch#L371) The patches used by dragonflylee in switchfin
-- [wiliwili](github.com/xfangfang/wiliwili) WiliWili for how to get started with this new borealis api.
+- [wiliwili](https://github.com/xfangfang/wiliwili) WiliWili for how to get started with this new borealis api.
 - [duckstation](https://github.com/RSDuck/duckstation) Duckstation's uam fork for runtime shader compilation
 
 ## Credits
@@ -113,7 +119,4 @@ This software was built with reference/code from:
 - H0neyBadger for the initial switch port, as well as all switch/chiaki contributors especially Egoistically and kkwong
 - [micro-ecc](https://github.com/kmackay/micro-ecc) for the ECDH implementation that was vendored in.
 - [vecteezy](https://www.vecteezy.com/vector-art/67445984-adorable-capybara-illustration-enjoying-a-drink) for the capybara logo.
-
-
-
 
