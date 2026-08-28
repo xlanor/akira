@@ -27,6 +27,10 @@ struct Profile {
 
     std::string duid;
 
+    std::string cloudStoreLocale;
+    std::string cloudResolvedStoreCountry;
+    std::string cloudResolvedStoreLang;
+
     std::string avatarUrl;
     bool isPlus = false;
     std::string region;

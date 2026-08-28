@@ -54,6 +54,7 @@ public:
     Snapshot snapshotForActiveProfile() const;
 
     void markActiveProfileDirty();
+    void clearCacheForActiveProfile();
     void refreshActiveProfile(bool force, SnapshotCallback onDone = {});
     void launchGame(const Game& game, HostCallback onSuccess, ErrorCallback onError,
         ProgressCallback onProgress = {}, bool forceSkipAttrCheck = false);

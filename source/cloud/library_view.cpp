@@ -822,6 +822,8 @@ void LibraryView::openOverflowMenu()
     std::vector<int> ops;
     names.push_back(checkingState ? "akira/cloud/refresh_busy"_i18n : "akira/cloud/refresh"_i18n);
     ops.push_back(0);
+    names.push_back("akira/cloud/clear_cache"_i18n);
+    ops.push_back(2);
     if (canPairState)
     {
         names.push_back("akira/cloud/pair"_i18n);
@@ -834,10 +836,22 @@ void LibraryView::openOverflowMenu()
         [this, guard, ops](int sel) {
             if (!*guard || sel < 0 || sel >= static_cast<int>(ops.size()))
                 return;
-            if (ops[static_cast<size_t>(sel)] == 0)
+            int op = ops[static_cast<size_t>(sel)];
+            if (op == 0)
+            {
                 refresh(true);
+            }
+            else if (op == 2)
+            {
+                Service::instance().clearCacheForActiveProfile();
+                allGames.clear();
+                grid->clearData();
+                refresh(true);
+            }
             else
+            {
                 openPairing();
+            }
         },
         0);
     brls::Application::pushActivity(new brls::Activity(dropdown));
