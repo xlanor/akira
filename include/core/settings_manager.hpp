@@ -226,6 +226,10 @@ public:
     bool getPsnNpssoValid() const;
     void setPsnNpssoValid(bool valid);
 
+    bool noteCloudStoreResolution(int64_t profileId, const std::string& settledLocale,
+        const std::string& storeCountry, const std::string& storeLang);
+    void clearCloudStoreResolution(int64_t profileId);
+
     void clearPsnNpssoData();
     void clearAllPsnData();
 

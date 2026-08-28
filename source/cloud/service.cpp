@@ -6,9 +6,9 @@
 #include <chiaki/cloudcatalog.h>
 #include <chiaki/cloudsession.h>
 
-#include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <sys/stat.h>
 
 #include "core/host.hpp"
@@ -210,19 +210,10 @@ CatalogFetchResult fetchCatalogBlocking(SettingsManager* settings, const Profile
         result.snapshot.hasCatalog = catalog.nativeMode || !catalog.games.empty();
         if (!catalog.nativeMode && !expired && !catalog.games.empty())
         {
-            std::string region = catalog.fallbackRegion;
-            bool countryCode = region.size() == 2
-                && std::isalpha(static_cast<unsigned char>(region[0]))
-                && std::isalpha(static_cast<unsigned char>(region[1]));
-            for (char& c : region)
-                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-
             result.snapshot.status = Status{};
             result.snapshot.status.availability = Availability::Warning;
             result.snapshot.status.title = "akira/cloud/status_foreign_title"_i18n;
-            result.snapshot.status.detail = countryCode
-                ? brls::getStr("akira/cloud/status_foreign_detail_region", region)
-                : "akira/cloud/status_foreign_detail"_i18n;
+            result.snapshot.status.detail = "akira/cloud/status_foreign_detail"_i18n;
             result.snapshot.status.canBrowse = true;
             result.snapshot.status.degraded = true;
             result.snapshot.status.gameCount = catalog.launchableCount();
@@ -319,6 +310,12 @@ std::string Service::selectedLocale() const
 {
     std::string locale = settings->getDebugLocale();
     if (locale.empty())
+    {
+        const Profile* profile = settings->getActiveProfile();
+        if (profile)
+            locale = profile->cloudStoreLocale;
+    }
+    if (locale.empty())
         locale = brls::Application::getLocale();
     if (locale.empty())
         locale = "en-US";
@@ -341,6 +338,41 @@ void Service::ensureCacheDirsForProfile(int64_t profileId) const
     mkdir(cacheRoot().c_str(), 0755);
     std::string profileDir = cacheDirForProfile(profileId);
     mkdir(profileDir.c_str(), 0755);
+}
+
+void Service::clearCacheForActiveProfile()
+{
+    const Profile* profile = settings->getActiveProfile();
+    if (!profile)
+        return;
+
+    const int64_t profileId = profile->id;
+    const std::string dir = cacheDirForProfile(profileId);
+
+    int removed = 0;
+    if (DIR* handle = opendir(dir.c_str()))
+    {
+        while (struct dirent* entry = readdir(handle))
+        {
+            if (entry->d_name[0] == '.')
+                continue;
+            std::string path = dir + "/" + entry->d_name;
+            if (std::remove(path.c_str()) == 0)
+                removed++;
+        }
+        closedir(handle);
+    }
+
+    settings->clearCloudStoreResolution(profileId);
+    settings->writeFile();
+
+    brls::Logger::info("CloudService: cleared {} cache file(s) and store resolution for profile {}",
+        removed, profileId);
+
+    std::lock_guard<std::mutex> lock(mutex);
+    Entry& entry = entries[profileId];
+    entry.snapshot = defaultSnapshotForProfile(true, !profile->npsso.empty());
+    entry.generation++;
 }
 
 void Service::storeSnapshot(int64_t profileId, const Snapshot& snapshot)
@@ -422,6 +454,22 @@ void Service::refreshActiveProfile(bool force, SnapshotCallback onDone)
             callbacks.swap(entry.pending);
         }
 
+        if (fetched.ok)
+        {
+            const Catalog& catalog = fetched.snapshot.catalog;
+            std::string settled = catalog.settledLocale;
+            std::string country = catalog.fallbackRegion;
+            std::string lang = catalog.resolvedStoreLang;
+            brls::sync([this, profileId, settled, country, lang]() {
+                if (settings->noteCloudStoreResolution(profileId, settled, country, lang))
+                {
+                    brls::Logger::info("CloudService: store resolution stored (locale='{}' country='{}' lang='{}')",
+                        settled, country, lang);
+                    settings->writeFile();
+                }
+            });
+        }
+
         Snapshot snapshot = fetched.snapshot;
         brls::sync([callbacks, snapshot]() {
             for (const SnapshotCallback& cb : callbacks)
@@ -447,8 +495,11 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
     const std::string npsso = profile->npsso;
     const std::string locale = selectedLocale();
     const std::string cacheDir = cacheDirForProfile(profileId);
+    const std::string storedStoreCountry = profile->cloudResolvedStoreCountry;
+    const std::string storedStoreLang = profile->cloudResolvedStoreLang;
 
-    brls::async([this, game, profileId, npsso, locale, cacheDir, skipAttrCheck, onSuccess, onError, onProgress]() {
+    brls::async([this, game, profileId, npsso, locale, cacheDir, storedStoreCountry, storedStoreLang,
+                    skipAttrCheck, onSuccess, onError, onProgress]() {
         Profile profileCopy;
         profileCopy.id = profileId;
         profileCopy.npsso = npsso;
@@ -474,8 +525,20 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
         cfg.game_identifier = game.streamIdentifier.c_str();
         cfg.game_name = game.name.c_str();
         cfg.npsso = npsso.c_str();
-        cfg.store_country = catalogResult.snapshot.catalog.fallbackRegion.c_str();
-        cfg.store_lang = catalogResult.snapshot.catalog.resolvedStoreLang.c_str();
+        const std::string storeCountry = storedStoreCountry.empty()
+            ? catalogResult.snapshot.catalog.fallbackRegion
+            : storedStoreCountry;
+        const std::string storeLang = storedStoreLang.empty()
+            ? catalogResult.snapshot.catalog.resolvedStoreLang
+            : storedStoreLang;
+
+        brls::Logger::info("CloudLaunch: resolving in store {}/{} (catalog native={})",
+            storeCountry.empty() ? "US" : storeCountry.c_str(),
+            storeLang.empty() ? "en" : storeLang.c_str(),
+            catalogResult.snapshot.catalog.nativeMode);
+
+        cfg.store_country = storeCountry.c_str();
+        cfg.store_lang = storeLang.c_str();
         cfg.owned_entitlement_id = game.entitlementId.c_str();
         cfg.owned_platform = game.platform.c_str();
         cfg.catalog_is_foreign = catalogResult.snapshot.catalog.foreignAccountCatalog();
