@@ -6,6 +6,7 @@
 #include <chiaki/cloudcatalog.h>
 #include <chiaki/cloudsession.h>
 
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <sys/stat.h>
@@ -206,14 +207,25 @@ CatalogFetchResult fetchCatalogBlocking(SettingsManager* settings, const Profile
         result.ok = true;
 
         bool expired = classifyWarning(catalog.warning) == WarningKind::SessionExpired;
-        result.snapshot.hasCatalog = catalog.nativeMode;
+        result.snapshot.hasCatalog = catalog.nativeMode || !catalog.games.empty();
         if (!catalog.nativeMode && !expired && !catalog.games.empty())
         {
+            std::string region = catalog.fallbackRegion;
+            bool countryCode = region.size() == 2
+                && std::isalpha(static_cast<unsigned char>(region[0]))
+                && std::isalpha(static_cast<unsigned char>(region[1]));
+            for (char& c : region)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
             result.snapshot.status = Status{};
-            result.snapshot.status.availability = Availability::Empty;
-            result.snapshot.status.title = "akira/cloud/status_empty_title"_i18n;
-            result.snapshot.status.detail = "akira/cloud/status_empty_detail"_i18n;
+            result.snapshot.status.availability = Availability::Warning;
+            result.snapshot.status.title = "akira/cloud/status_foreign_title"_i18n;
+            result.snapshot.status.detail = countryCode
+                ? brls::getStr("akira/cloud/status_foreign_detail_region", region)
+                : "akira/cloud/status_foreign_detail"_i18n;
             result.snapshot.status.canBrowse = true;
+            result.snapshot.status.degraded = true;
+            result.snapshot.status.gameCount = catalog.launchableCount();
         }
     }
     else
