@@ -56,6 +56,8 @@ private:
 
     brls::Box* statusChip = nullptr;
     brls::Label* statusChipLabel = nullptr;
+    brls::Box* noticeBox = nullptr;
+    brls::Label* noticeLabel = nullptr;
     bool canPairState = false;
     bool checkingState = false;
     RecyclingGrid* grid = nullptr;

@@ -377,6 +377,24 @@ LibraryView::LibraryView()
     });
     actions->addView(overflowButton);
 
+    noticeBox = new brls::Box();
+    noticeBox->setAxis(brls::Axis::ROW);
+    noticeBox->setAlignItems(brls::AlignItems::CENTER);
+    noticeBox->setJustifyContent(brls::JustifyContent::CENTER);
+    noticeBox->setWidthPercentage(100.0f);
+    noticeBox->setCornerRadius(10);
+    noticeBox->setPadding(9, 14, 9, 14);
+    noticeBox->setMarginBottom(14);
+    noticeBox->setBorderThickness(1.0f);
+    noticeBox->setVisibility(brls::Visibility::GONE);
+
+    noticeLabel = new brls::Label();
+    noticeLabel->setFontSize(15);
+    noticeLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    noticeLabel->setGrow(1.0f);
+    noticeBox->addView(noticeLabel);
+    this->addView(noticeBox);
+
     grid = new RecyclingGrid();
     grid->setGrow(1.0f);
     grid->registerCell("CloudRow", CloudGameRowCell::create);
@@ -479,13 +497,29 @@ void LibraryView::renderSnapshot(const Snapshot& snapshot)
     {
         brls::Logger::info("CloudLib: renderSnapshot -> STATE (avail={} hasCatalog={} games={})",
             static_cast<int>(status.availability), snapshot.hasCatalog, snapshot.catalog.games.size());
+        noticeBox->setVisibility(brls::Visibility::GONE);
         grid->setVisibility(brls::Visibility::GONE);
         grid->clearData();
         showState(snapshot);
         return;
     }
 
-    brls::Logger::info("CloudLib: renderSnapshot -> CATALOG ({} games)", snapshot.catalog.games.size());
+    brls::Logger::info("CloudLib: renderSnapshot -> CATALOG ({} games, native={} degraded={})",
+        snapshot.catalog.games.size(), snapshot.catalog.nativeMode, status.degraded);
+
+    if (status.degraded && !status.detail.empty())
+    {
+        NVGcolor noticeColor = status.availability == Availability::Error ? pal.danger : pal.warning;
+        noticeLabel->setText(status.detail);
+        noticeLabel->setTextColor(noticeColor);
+        noticeBox->setBackgroundColor(akira::ui::withAlpha(noticeColor, 0x24));
+        noticeBox->setBorderColor(akira::ui::withAlpha(noticeColor, 0x99));
+        noticeBox->setVisibility(brls::Visibility::VISIBLE);
+    }
+    else
+    {
+        noticeBox->setVisibility(brls::Visibility::GONE);
+    }
 
     bool refocusGrid = false;
     for (brls::View* f = brls::Application::getCurrentFocus(); f; f = f->getParent())
@@ -666,6 +700,12 @@ void LibraryView::applyFilter()
 
     brls::Logger::info("CloudLib: applyFilter mode={} q='{}' -> {}/{} games",
         static_cast<int>(filterMode), searchQuery, filtered.size(), allGames.size());
+
+    if (filtered.empty() && !allGames.empty())
+    {
+        grid->setEmpty("akira/cloud/filter_no_matches"_i18n);
+        return;
+    }
 
     auto guard = alive;
     std::function<void(const Game&)> onLaunch = [this, guard](const Game& game) {
