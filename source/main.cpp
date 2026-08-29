@@ -270,6 +270,17 @@ void decorateAkiraHeader(brls::AppletFrame* appletFrame)
 
 void akiraOpenTrophies()
 {
+    /* Which screen asked, and how deep the stack was. Trophies opening from
+     * under the controller picker could not be explained by borealis's
+     * dispatch, and the focus at the moment of the call is what named the
+     * cause: the home tab taking focus back from four activities down. */
+    {
+        auto* focus = brls::Application::getCurrentFocus();
+        brls::Logger::info("akiraOpenTrophies: focus={} stack={}",
+                           focus ? focus->describe() : std::string("none"),
+                           brls::Application::getActivitiesStack().size());
+    }
+
     if (!SettingsManager::getInstance()->getActiveProfileTrophiesEnabled()) {
         brls::Application::notify("akira/trophies/disabled_for_profile"_i18n);
         return;

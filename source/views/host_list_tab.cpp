@@ -1207,7 +1207,24 @@ void HostListTab::refreshRailsIfActive() {
             currentInstance->isActive ? "yes" : "no",
             underHome ? "yes" : "no",
             (int)brls::Application::getActivitiesStack().size());
-        if (currentInstance->isActive && !underHome)
+        /*
+         * Only while this really is the screen in front.
+         *
+         * isActive says the home tab is the selected tab, not that its activity
+         * is on top - and this runs from onResume through brls::sync, a frame
+         * later. The remote route pops the connection view and pushes the
+         * stream view in the same breath, so the pop fires onResume, and by the
+         * time the callback runs the stream view and the controller picker are
+         * both above us. The old guard then read a focus it did not recognise
+         * as its own and took it back, leaving the picker on screen with focus
+         * four activities beneath it - where L and R are the home tab's, and
+         * open trophies out from under the stream.
+         */
+        const auto stack = brls::Application::getActivitiesStack();
+        const bool onTop = !stack.empty() &&
+                           currentInstance->getParentActivity() == stack.back();
+
+        if (currentInstance->isActive && !underHome && onTop)
             brls::Application::giveFocus(currentInstance);
     });
 }
