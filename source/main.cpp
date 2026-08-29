@@ -37,7 +37,6 @@
 #include "views/network_utilities_tab.hpp"
 #include "views/stream_view.hpp"
 #include "views/enter_pin_view.hpp"
-#include "views/connection_view.hpp"
 #include "views/settings_frame_view.hpp"
 #include "views/setup_account_view.hpp"
 #include "stream/session.hpp"
@@ -541,7 +540,6 @@ int main(int argc, char* argv[])
     brls::Application::registerXMLView("NetworkUtilitiesTab", NetworkUtilitiesTab::create);
     brls::Application::registerXMLView("StreamView", StreamView::create);
     brls::Application::registerXMLView("EnterPinView", EnterPinView::create);
-    brls::Application::registerXMLView("ConnectionView", ConnectionView::create);
 
     brls::Application::createWindow("Akira");
 

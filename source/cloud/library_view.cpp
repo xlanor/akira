@@ -1,6 +1,7 @@
 #include "cloud/library_view.hpp"
 
-#include "cloud/cloud_connection_view.hpp"
+#include "cloud/cloud_connect_task.hpp"
+#include "views/connecting_view.hpp"
 
 #include "core/settings_manager.hpp"
 #include "core/trophy_manager.hpp"
@@ -1003,9 +1004,7 @@ void LibraryView::launchGame(const Game& game, bool forceSkipAttr)
 
     bool skipAttr = forceSkipAttr || SettingsManager::getInstance()->getCloudAttrPassed();
 
-    auto view = SharedViewHolder::holdNew<CloudConnectionView>(game, skipAttr);
-    view->setupAndStart();
-    brls::Application::pushActivity(new brls::Activity(view.get()));
+    akira::views::startConnecting(std::make_unique<CloudConnectTask>(game, skipAttr));
 
     launching = false;
 }

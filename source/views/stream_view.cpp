@@ -128,7 +128,7 @@ void StreamView::startStream()
 
     if (sessionPreStarted)
     {
-        brls::Logger::info("Session already started by ConnectionView, activating stream...");
+        brls::Logger::info("Session already started while connecting, activating stream...");
         sessionStarted = true;
         streamActive = true;
         prepareVideoPipelineTick();
