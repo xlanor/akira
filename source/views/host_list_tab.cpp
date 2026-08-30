@@ -1,13 +1,14 @@
 #include "views/host_list_tab.hpp"
 #include "cloud/library_view.hpp"
-#include "cloud/cloud_connection_view.hpp"
+#include "cloud/cloud_connect_task.hpp"
 #include "ui/akira_header.hpp"
 #include "cloud/service.hpp"
 #include "ui/theme.hpp"
 #include "ui/log_pane.hpp"
 #include "ui/motion.hpp"
 #include "views/stream_view.hpp"
-#include "views/connection_view.hpp"
+#include "views/connecting_view.hpp"
+#include "views/host_connect_task.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/pair_view.hpp"
 #include "core/host.hpp"
@@ -1022,10 +1023,8 @@ HostListTab::HostListTab() {
     shortcutsRail = new CloudShortcutsRail();
     shortcutsRail->setLaunchHandler([](const cloud::Game& game) {
         bool skipAttr = SettingsManager::getInstance()->getCloudAttrPassed();
-        auto view = SharedViewHolder::holdNew<cloud::CloudConnectionView>(game, skipAttr);
         HostListTab::connectionActive = true;
-        view->setupAndStart();
-        brls::Application::pushActivity(new brls::Activity(view.get()));
+        akira::views::startConnecting(std::make_unique<cloud::CloudConnectTask>(game, skipAttr));
     });
     shortcutsRail->setLeadingCard([]() -> brls::View* { return new CloudCard(); });
     railSlot->addView(shortcutsRail);
@@ -1083,16 +1082,10 @@ void HostListTab::connectToHost(Host* host) {
     HostListTab::isConnecting = true;
     HostListTab::connectionActive = true;
 
-    if (host->isRemote()) {
-        auto connectionView = SharedViewHolder::holdNew<ConnectionView>(host);
-        brls::Application::pushActivity(new brls::Activity(connectionView.get()));
-        connectionView->setupAndStart();
-    } else {
-        auto streamView = SharedViewHolder::holdNew<StreamView>(host);
-        streamView->setupCallbacks();
-        brls::Application::pushActivity(new brls::Activity(streamView.get()));
-        streamView->startStream();
-    }
+    /* Local and remote alike. A local console resolves immediately, so the
+     * screen is barely seen - but the activity stack ends up the same shape it
+     * does for every other route, which is the point. */
+    akira::views::startConnecting(std::make_unique<akira::views::HostConnectTask>(host));
 
     HostListTab::isConnecting = false;
 }
@@ -1207,7 +1200,24 @@ void HostListTab::refreshRailsIfActive() {
             currentInstance->isActive ? "yes" : "no",
             underHome ? "yes" : "no",
             (int)brls::Application::getActivitiesStack().size());
-        if (currentInstance->isActive && !underHome)
+        /*
+         * Only while this really is the screen in front.
+         *
+         * isActive says the home tab is the selected tab, not that its activity
+         * is on top - and this runs from onResume through brls::sync, a frame
+         * later. The remote route pops the connection view and pushes the
+         * stream view in the same breath, so the pop fires onResume, and by the
+         * time the callback runs the stream view and the controller picker are
+         * both above us. The old guard then read a focus it did not recognise
+         * as its own and took it back, leaving the picker on screen with focus
+         * four activities beneath it - where L and R are the home tab's, and
+         * open trophies out from under the stream.
+         */
+        const auto stack = brls::Application::getActivitiesStack();
+        const bool onTop = !stack.empty() &&
+                           currentInstance->getParentActivity() == stack.back();
+
+        if (currentInstance->isActive && !underHome && onTop)
             brls::Application::giveFocus(currentInstance);
     });
 }

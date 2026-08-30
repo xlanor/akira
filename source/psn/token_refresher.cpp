@@ -1,7 +1,7 @@
 #include "psn/token_refresher.hpp"
 
 #include "cloud/service.hpp"
-#include "views/connection_view.hpp"
+#include "views/connecting_view.hpp"
 #include "views/stream_view.hpp"
 
 #include <chrono>
@@ -44,7 +44,7 @@ static bool shouldRefreshCloudInBackground()
     if (!top)
         return true;
 
-    return dynamic_cast<ConnectionView*>(top) == nullptr
+    return dynamic_cast<akira::views::ConnectingView*>(top) == nullptr
         && dynamic_cast<StreamView*>(top) == nullptr;
 }
 

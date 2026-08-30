@@ -1,6 +1,7 @@
 #include "cloud/library_view.hpp"
 
-#include "cloud/cloud_connection_view.hpp"
+#include "cloud/cloud_connect_task.hpp"
+#include "views/connecting_view.hpp"
 
 #include "core/settings_manager.hpp"
 #include "core/trophy_manager.hpp"
@@ -11,6 +12,8 @@
 #include "views/stream_view.hpp"
 
 #include <borealis/core/i18n.hpp>
+
+#include <chiaki/cloudcatalog.h>
 
 #include <algorithm>
 #include <cctype>
@@ -24,6 +27,33 @@ namespace cloud {
 
 static constexpr size_t kCloudPerRow = 4;
 static constexpr float kCloudRowHeight = 258.0f;
+
+/*
+ * Endonyms, so the list reads the same whatever the console is set to - and it
+ * is the only place these strings appear, since the picker's locales come from
+ * the catalog library rather than from our own translations.
+ */
+static std::string languageEndonym(const std::string& code)
+{
+    if (code == "en-US") return "English (US)";
+    if (code == "en-GB") return "English (UK)";
+    if (code == "de-DE") return "Deutsch";
+    if (code == "fr-FR") return "Fran\xc3\xa7ais";
+    if (code == "fi-FI") return "Suomi";
+    if (code == "it-IT") return "Italiano";
+    if (code == "es-ES") return "Espa\xc3\xb1ol";
+    if (code == "nl-NL") return "Nederlands";
+    if (code == "pt-BR") return "Portugu\xc3\xaas (BR)";
+    if (code == "ja-JP") return "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e";
+    if (code == "ko-KR") return "\xed\x95\x9c\xea\xb5\xad\xec\x96\xb4";
+    return code;
+}
+
+static std::string currentLanguageLabel()
+{
+    const std::string chosen = SettingsManager::getInstance()->getCloudGameLanguage();
+    return chosen.empty() ? "akira/cloud/language_auto"_i18n : languageEndonym(chosen);
+}
 
 static brls::Box* makePill(const std::string& text, NVGcolor color)
 {
@@ -293,6 +323,17 @@ private:
 
 LibraryView::LibraryView()
 {
+    /* Remembered between visits, and All unless another was asked for. */
+    if (auto* settings = SettingsManager::getInstance())
+    {
+        int mode = settings->getCloudFilterMode();
+        filterMode = mode == 1 ? Filter::Owned
+                   : mode == 2 ? Filter::Catalog
+                   : mode == 3 ? Filter::Store
+                   : mode == 4 ? Filter::Favorites
+                               : Filter::All;
+    }
+
     this->setAxis(brls::Axis::COLUMN);
     this->setPadding(22, 26, 22, 26);
 
@@ -343,7 +384,7 @@ LibraryView::LibraryView()
     loadFavorites();
 
     filterButton = new brls::Button();
-    filterButton->setText("akira/cloud/filter_streamable"_i18n);
+    filterButton->setText("akira/cloud/filter_all"_i18n);
     filterButton->setMarginRight(8);
     filterButton->registerClickAction([this](brls::View*) {
         openFilterPicker();
@@ -376,24 +417,6 @@ LibraryView::LibraryView()
         return true;
     });
     actions->addView(overflowButton);
-
-    noticeBox = new brls::Box();
-    noticeBox->setAxis(brls::Axis::ROW);
-    noticeBox->setAlignItems(brls::AlignItems::CENTER);
-    noticeBox->setJustifyContent(brls::JustifyContent::CENTER);
-    noticeBox->setWidthPercentage(100.0f);
-    noticeBox->setCornerRadius(10);
-    noticeBox->setPadding(9, 14, 9, 14);
-    noticeBox->setMarginBottom(14);
-    noticeBox->setBorderThickness(1.0f);
-    noticeBox->setVisibility(brls::Visibility::GONE);
-
-    noticeLabel = new brls::Label();
-    noticeLabel->setFontSize(15);
-    noticeLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
-    noticeLabel->setGrow(1.0f);
-    noticeBox->addView(noticeLabel);
-    this->addView(noticeBox);
 
     grid = new RecyclingGrid();
     grid->setGrow(1.0f);
@@ -497,29 +520,13 @@ void LibraryView::renderSnapshot(const Snapshot& snapshot)
     {
         brls::Logger::info("CloudLib: renderSnapshot -> STATE (avail={} hasCatalog={} games={})",
             static_cast<int>(status.availability), snapshot.hasCatalog, snapshot.catalog.games.size());
-        noticeBox->setVisibility(brls::Visibility::GONE);
         grid->setVisibility(brls::Visibility::GONE);
         grid->clearData();
         showState(snapshot);
         return;
     }
 
-    brls::Logger::info("CloudLib: renderSnapshot -> CATALOG ({} games, native={} degraded={})",
-        snapshot.catalog.games.size(), snapshot.catalog.nativeMode, status.degraded);
-
-    if (status.degraded && !status.detail.empty())
-    {
-        NVGcolor noticeColor = status.availability == Availability::Error ? pal.danger : pal.warning;
-        noticeLabel->setText(status.detail);
-        noticeLabel->setTextColor(noticeColor);
-        noticeBox->setBackgroundColor(akira::ui::withAlpha(noticeColor, 0x24));
-        noticeBox->setBorderColor(akira::ui::withAlpha(noticeColor, 0x99));
-        noticeBox->setVisibility(brls::Visibility::VISIBLE);
-    }
-    else
-    {
-        noticeBox->setVisibility(brls::Visibility::GONE);
-    }
+    brls::Logger::info("CloudLib: renderSnapshot -> CATALOG ({} games)", snapshot.catalog.games.size());
 
     bool refocusGrid = false;
     for (brls::View* f = brls::Application::getCurrentFocus(); f; f = f->getParent())
@@ -662,9 +669,10 @@ void LibraryView::applyFilter()
     for (const Game& game : allGames)
     {
         bool pass = filterMode == Filter::All ? true
-                  : filterMode == Filter::Owned ? game.isOwned
-                  : filterMode == Filter::Favorites ? isFavorite(game.productId)
-                                                    : game.streamableNow();
+                  : filterMode == Filter::Owned ? game.category == "owned"
+                  : filterMode == Filter::Catalog ? game.category == "streamable"
+                  : filterMode == Filter::Store ? game.category == "purchaseable"
+                                                : isFavorite(game.productId);
         if (!pass)
             continue;
         if (!q.empty())
@@ -691,21 +699,16 @@ void LibraryView::applyFilter()
         std::stable_sort(filtered.begin(), filtered.end(),
             [](const Game& a, const Game& b) { return a.streamableNow() && !b.streamableNow(); });
 
-    std::string filterLabel = filterMode == Filter::All ? "akira/cloud/filter_all"_i18n
-                            : filterMode == Filter::Owned ? "akira/cloud/filter_owned"_i18n
+    std::string filterLabel = filterMode == Filter::Owned ? "akira/cloud/filter_owned"_i18n
+                            : filterMode == Filter::Catalog ? "akira/cloud/filter_catalog"_i18n
+                            : filterMode == Filter::Store ? "akira/cloud/filter_store"_i18n
                             : filterMode == Filter::Favorites ? "akira/cloud/filter_favorites"_i18n
-                                                              : "akira/cloud/filter_streamable"_i18n;
+                                                              : "akira/cloud/filter_all"_i18n;
     if (filterButton)
         filterButton->setText(filterLabel);
 
     brls::Logger::info("CloudLib: applyFilter mode={} q='{}' -> {}/{} games",
         static_cast<int>(filterMode), searchQuery, filtered.size(), allGames.size());
-
-    if (filtered.empty() && !allGames.empty())
-    {
-        grid->setEmpty("akira/cloud/filter_no_matches"_i18n);
-        return;
-    }
 
     auto guard = alive;
     std::function<void(const Game&)> onLaunch = [this, guard](const Game& game) {
@@ -768,25 +771,35 @@ void LibraryView::updateServerButton()
 void LibraryView::openFilterPicker()
 {
     std::vector<std::string> names = {
-        "akira/cloud/filter_streamable"_i18n,
-        "akira/cloud/filter_owned"_i18n,
-        "akira/cloud/filter_favorites"_i18n,
         "akira/cloud/filter_all"_i18n,
+        "akira/cloud/filter_owned"_i18n,
+        "akira/cloud/filter_catalog"_i18n,
+        "akira/cloud/filter_store"_i18n,
+        "akira/cloud/filter_favorites"_i18n,
     };
-    int selected = filterMode == Filter::Streamable ? 0
-                 : filterMode == Filter::Owned ? 1
-                 : filterMode == Filter::Favorites ? 2
-                                                   : 3;
+    int selected = filterMode == Filter::Owned ? 1
+                 : filterMode == Filter::Catalog ? 2
+                 : filterMode == Filter::Store ? 3
+                 : filterMode == Filter::Favorites ? 4
+                                                   : 0;
     auto guard = alive;
     auto* dropdown = new brls::Dropdown(
         "akira/cloud/filter"_i18n, names,
         [this, guard](int sel) {
             if (!*guard)
                 return;
-            filterMode = sel == 0 ? Filter::Streamable
-                       : sel == 1 ? Filter::Owned
-                       : sel == 2 ? Filter::Favorites
+            filterMode = sel == 1 ? Filter::Owned
+                       : sel == 2 ? Filter::Catalog
+                       : sel == 3 ? Filter::Store
+                       : sel == 4 ? Filter::Favorites
                                   : Filter::All;
+
+            /* Kept, so the choice survives leaving the library. */
+            if (auto* settings = SettingsManager::getInstance()) {
+                settings->setCloudFilterMode(sel);
+                settings->writeFile();
+            }
+
             applyFilter();
         },
         selected);
@@ -818,17 +831,21 @@ void LibraryView::openSortPicker()
 
 void LibraryView::openOverflowMenu()
 {
+    enum Op { Refresh, Pair, Language, ClearCache };
+
     std::vector<std::string> names;
     std::vector<int> ops;
     names.push_back(checkingState ? "akira/cloud/refresh_busy"_i18n : "akira/cloud/refresh"_i18n);
-    ops.push_back(0);
-    names.push_back("akira/cloud/clear_cache"_i18n);
-    ops.push_back(2);
+    ops.push_back(Refresh);
     if (canPairState)
     {
         names.push_back("akira/cloud/pair"_i18n);
-        ops.push_back(1);
+        ops.push_back(Pair);
     }
+    names.push_back("akira/cloud/language"_i18n + std::string(": ") + currentLanguageLabel());
+    ops.push_back(Language);
+    names.push_back("akira/cloud/cache_clear"_i18n);
+    ops.push_back(ClearCache);
 
     auto guard = alive;
     auto* dropdown = new brls::Dropdown(
@@ -836,25 +853,78 @@ void LibraryView::openOverflowMenu()
         [this, guard, ops](int sel) {
             if (!*guard || sel < 0 || sel >= static_cast<int>(ops.size()))
                 return;
-            int op = ops[static_cast<size_t>(sel)];
-            if (op == 0)
+            switch (ops[static_cast<size_t>(sel)])
             {
-                refresh(true);
-            }
-            else if (op == 2)
-            {
-                Service::instance().clearCacheForActiveProfile();
-                allGames.clear();
-                grid->clearData();
-                refresh(true);
-            }
-            else
-            {
-                openPairing();
+            case Refresh: refresh(true); break;
+            case Pair: openPairing(); break;
+            case Language: openLanguagePicker(); break;
+            case ClearCache: clearCatalogCache(); break;
             }
         },
         0);
     brls::Application::pushActivity(new brls::Activity(dropdown));
+}
+
+/*
+ * Auto means the store locale the catalog settled on, which is not "English" -
+ * a non-English account gets its own language without ever opening this.
+ */
+void LibraryView::openLanguagePicker()
+{
+    auto* settings = SettingsManager::getInstance();
+    const std::string current = settings->getCloudGameLanguage();
+
+    std::vector<std::string> codes;
+    std::vector<std::string> names;
+    names.push_back("akira/cloud/language_auto"_i18n);
+    codes.push_back("");
+
+    int selected = 0;
+    const size_t count = chiaki_cloud_supported_locale_count();
+    for (size_t i = 0; i < count; i++)
+    {
+        const std::string code = chiaki_cloud_supported_locale(i);
+        if (code.empty())
+            continue;
+        codes.push_back(code);
+        names.push_back(languageEndonym(code) + " (" + code + ")");
+        if (code == current)
+            selected = static_cast<int>(codes.size()) - 1;
+    }
+
+    auto guard = alive;
+    auto* dropdown = new brls::Dropdown(
+        "akira/cloud/language"_i18n, names,
+        [guard, codes](int sel) {
+            if (!*guard || sel < 0 || sel >= static_cast<int>(codes.size()))
+                return;
+            auto* s = SettingsManager::getInstance();
+            const std::string chosen = codes[static_cast<size_t>(sel)];
+            if (chosen == s->getCloudGameLanguage())
+                return;
+            s->setCloudGameLanguage(chosen);
+            s->writeFile();
+            if (chosen.empty())
+                return;
+
+            /*
+             * Gaikai drops a language no datacenter in reach serves, silently
+             * and without falling back, so a pick here can look like it did
+             * nothing until the server is changed to match.
+             */
+            auto* dialog = new brls::Dialog("akira/cloud/language_caveat"_i18n);
+            dialog->addButton("akira/common/ok"_i18n, [dialog]() { dialog->close(); });
+            dialog->open();
+        },
+        selected);
+    brls::Application::pushActivity(new brls::Activity(dropdown));
+}
+
+void LibraryView::clearCatalogCache()
+{
+    Service::instance().clearCatalogCache();
+    brls::Application::notify("akira/cloud/cache_cleared"_i18n);
+    refresh(true);
 }
 
 void LibraryView::openServerPicker()
@@ -984,6 +1054,12 @@ void LibraryView::saveFavorites()
 void LibraryView::showAddGameDialog(const Game& game)
 {
     std::string msg = brls::getStr("akira/cloud/add_game_body", game.name);
+    /*
+     * The link rather than a way to follow it: there is no browser here, so the
+     * most this can do is name the page to open on something that has one.
+     */
+    if (!game.conceptUrl.empty())
+        msg += "\n\n" + brls::getStr("akira/cloud/add_game_store", game.conceptUrl);
     auto* dialog = new brls::Dialog(msg);
     dialog->addButton("akira/common/ok"_i18n, [dialog]() { dialog->close(); });
     dialog->open();
@@ -1003,9 +1079,7 @@ void LibraryView::launchGame(const Game& game, bool forceSkipAttr)
 
     bool skipAttr = forceSkipAttr || SettingsManager::getInstance()->getCloudAttrPassed();
 
-    auto view = SharedViewHolder::holdNew<CloudConnectionView>(game, skipAttr);
-    view->setupAndStart();
-    brls::Application::pushActivity(new brls::Activity(view.get()));
+    akira::views::startConnecting(std::make_unique<CloudConnectTask>(game, skipAttr));
 
     launching = false;
 }
