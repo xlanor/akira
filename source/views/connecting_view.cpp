@@ -129,6 +129,9 @@ void ConnectingView::addLogLine(const std::string& line)
      * nothing about its stages still gets a ring, because the lines it writes
      * on the way through name the stages anyway.
      */
+    if (steppedRoute.load())
+        return;
+
     currentStage.store(static_cast<int>(
         matchConnectionStage(line, static_cast<ConnectionStage>(currentStage.load()))));
 }
@@ -164,7 +167,23 @@ void ConnectingView::restoreMainLog()
 
 void ConnectingView::progress(ConnectionStage stage)
 {
-    currentStage.store(static_cast<int>(stage));
+    int reported = static_cast<int>(stage);
+    int current = currentStage.load();
+    while (reported > current && !currentStage.compare_exchange_weak(current, reported))
+        ;
+}
+
+void ConnectingView::progressStep(int index, int total, const std::string& label)
+{
+    steppedRoute.store(true);
+
+    if (index > 0 && total > 0) {
+        stepIndex.store(index);
+        stepTotal.store(total);
+    }
+
+    std::lock_guard<std::mutex> lock(stepMutex);
+    stepLabel = label;
 }
 
 bool ConnectingView::cancelled() const
@@ -287,6 +306,19 @@ void ConnectingView::draw(NVGcontext* vg, float x, float y, float width, float h
     }
 
     if (SettingsManager::getInstance()->getConnectionShowStages()) {
+        if (steppedRoute.load()) {
+            std::string label;
+            {
+                std::lock_guard<std::mutex> lock(stepMutex);
+                label = stepLabel;
+            }
+            if (label.empty())
+                label = brls::getStr("akira/connection/stage_connecting");
+            drawConnectionRing(vg, centerX, centerY, label,
+                               stepIndex.load(), stepTotal.load());
+            return;
+        }
+
         const auto stage = static_cast<ConnectionStage>(currentStage.load());
         const int raw = static_cast<int>(stage);
         const int idx = raw < 1 ? 1 : (raw > 6 ? 6 : raw);

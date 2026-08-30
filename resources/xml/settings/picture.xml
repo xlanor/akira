@@ -139,14 +139,26 @@
                 marginBottom="30">
 
                 <brls:SelectorCell
-                    id="settings/cloudResolution"
-                    title="@i18n/akira/settings/resolution"
+                    id="settings/pscloudResolution"
+                    title="@i18n/akira/settings/pscloud_resolution"
                     marginLeft="15"
                     marginRight="15"/>
 
                 <brls:SliderCell
-                    id="settings/cloudBitrate"
-                    title="@i18n/akira/settings/bitrate"
+                    id="settings/pscloudBitrate"
+                    title="@i18n/akira/settings/pscloud_bitrate"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SelectorCell
+                    id="settings/psnowResolution"
+                    title="@i18n/akira/settings/psnow_resolution"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:SliderCell
+                    id="settings/psnowBitrate"
+                    title="@i18n/akira/settings/psnow_bitrate"
                     marginLeft="15"
                     marginRight="15"/>
 

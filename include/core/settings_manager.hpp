@@ -70,9 +70,12 @@ private:
     int localVideoBitrate = 10000;
     int remoteVideoBitrate = 10000;
     int vpnVideoBitrate = 5000;
-    int cloudVideoBitrate = 10000;
-    int cloudVideoResolution = 1080;
-    bool cloudFsrEnabled = false;
+    int cloudVideoBitratePscloud = 10000;
+    int cloudVideoBitratePsnow = 10000;
+    int cloudVideoResolutionPscloud = 1080;
+    int cloudVideoResolutionPsnow = 1080;
+    bool cloudFsrEnabledPscloud = false;
+    bool cloudFsrEnabledPsnow = false;
     std::string cloudDatacenterPscloud;
     std::string cloudDatacenterPsnow;
     std::vector<cloud::Datacenter> cloudDatacentersPscloud;
@@ -159,6 +162,7 @@ private:
     // Runtime state (not persisted)
     bool streamingActive = false;
     StreamProfile activeStreamProfile = StreamProfile::Local;
+    bool activeCloudPscloud = true;
 
     // Companion server settings
     int companionPort = 8080;
@@ -300,12 +304,12 @@ public:
     void setRemoteVideoBitrate(int value);
     int getVpnVideoBitrate() const;
     void setVpnVideoBitrate(int value);
-    int getCloudVideoBitrate() const;
-    void setCloudVideoBitrate(int value);
-    int getCloudVideoResolution() const;
-    void setCloudVideoResolution(int value);
-    bool getCloudFsrEnabled() const;
-    void setCloudFsrEnabled(bool enabled);
+    int getCloudVideoBitrate(bool pscloud) const;
+    void setCloudVideoBitrate(bool pscloud, int value);
+    int getCloudVideoResolution(bool pscloud) const;
+    void setCloudVideoResolution(bool pscloud, int value);
+    bool getCloudFsrEnabled(bool pscloud) const;
+    void setCloudFsrEnabled(bool pscloud, bool enabled);
     std::string getCloudDatacenter(bool pscloud) const;
     void setCloudDatacenter(bool pscloud, const std::string& datacenter);
     const std::vector<cloud::Datacenter>& getCloudDatacenters(bool pscloud) const;
@@ -472,6 +476,8 @@ public:
     void setRcasSharpness(float sharpness);
     StreamProfile getActiveStreamProfile() const;
     void setActiveStreamProfile(StreamProfile profile);
+    bool getActiveCloudPscloud() const;
+    void setActiveCloudPscloud(bool pscloud);
 
     bool isStreamingActive() const;
     void setStreamingActive(bool active);

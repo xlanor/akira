@@ -31,6 +31,8 @@ HostConnectTask::~HostConnectTask()
 
     if (threadStarted.load())
         chiaki_thread_join(&thread, nullptr);
+
+    host->setOnHolepunchPhase(nullptr);
 }
 
 std::string HostConnectTask::title() const
@@ -54,6 +56,13 @@ void HostConnectTask::start(ConnectSink& s)
 {
     sink = &s;
     running.store(true);
+
+    host->setOnHolepunchPhase([this](HolepunchPhase phase) {
+        if (!sink)
+            return;
+        sink->progress(phase == HolepunchPhase::Punching ? ConnectionStage::Linking
+                                                         : ConnectionStage::Finding);
+    });
 
     const ChiakiErrorCode err = chiaki_thread_create(&thread, threadFunc, this);
     if (err != CHIAKI_ERR_SUCCESS) {

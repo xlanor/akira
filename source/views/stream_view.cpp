@@ -142,8 +142,12 @@ void StreamView::startStream()
     try
     {
         auto profile = SettingsManager::StreamProfile::Local;
-        if (host->isCloud())
+        if (host->isCloud()) {
             profile = SettingsManager::StreamProfile::Cloud;
+            const auto* cloudConfig = host->getCloudSessionConfig();
+            settings->setActiveCloudPscloud(
+                cloudConfig && cloudConfig->serviceType == CHIAKI_SERVICE_TYPE_PSCLOUD);
+        }
         else if (host->isRemote())
             profile = SettingsManager::StreamProfile::Remote;
         else if (WireGuardManager::instance().isConnected())

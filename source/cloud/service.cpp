@@ -570,8 +570,8 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
         cfg.forced_datacenter = forcedDatacenter.c_str();
         cfg.prior_datacenters_json = priorDatacenters.c_str();
         cfg.game_language = gameLanguage.c_str();
-        cfg.resolution = settings->getCloudVideoResolution();
-        cfg.bitrate_kbps = settings->getCloudVideoBitrate();
+        cfg.resolution = settings->getCloudVideoResolution(pscloud);
+        cfg.bitrate_kbps = settings->getCloudVideoBitrate(pscloud);
         cfg.progress = provisionProgress;
         cfg.is_cancelled = provisionCancelled;
         cfg.user = &bridge;

@@ -23,6 +23,8 @@ public:
 
     virtual void progress(ConnectionStage stage) = 0;
 
+    virtual void progressStep(int index, int total, const std::string& label) = 0;
+
     /*
      * Both forms of the host, because the two routes own it differently: a
      * console akira already knows outlives the view, and a cloud session is
