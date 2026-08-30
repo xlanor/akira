@@ -469,6 +469,10 @@ void SettingsManager::parseTomlFile() {
         cloudDatacentersPsnow = readDatacenters(config["cloud"]["datacenters"]["psnow"].as_array());
         cloudSortState = static_cast<int>(config["cloud"]["sort_state"].value<int64_t>().value_or(0));
         cloudAttrPassed = config["cloud"]["attr_passed"].value<bool>().value_or(false);
+        cloudFilterMode = static_cast<int>(config["cloud"]["filter_mode"].value<int64_t>().value_or(0));
+        cloudStoreLocale = config["cloud"]["store_locale"].value<std::string>().value_or("");
+        cloudStoreLocaleSource = config["cloud"]["store_locale_source"].value<std::string>().value_or("");
+        cloudGameLanguage = config["cloud"]["game_language"].value<std::string>().value_or("");
         cloudFavorites = readStringArray(config["cloud"]["favorites"].as_array());
 
         if (auto val = config["network"]["holepunch_retry"].value<bool>())
@@ -600,9 +604,6 @@ void SettingsManager::parseTomlFile() {
                 profile.npssoValid = (*pt)["npsso_valid"].value<bool>().value_or(false);
                 profile.duid = (*pt)["duid"].value<std::string>().value_or("");
                 profile.trophiesEnabled = (*pt)["trophies_enabled"].value<bool>().value_or(true);
-                profile.cloudStoreLocale = (*pt)["cloud_store_locale"].value<std::string>().value_or("");
-                profile.cloudResolvedStoreCountry = (*pt)["cloud_resolved_store_country"].value<std::string>().value_or("");
-                profile.cloudResolvedStoreLang = (*pt)["cloud_resolved_store_lang"].value<std::string>().value_or("");
                 profile.cloudShortcuts = readShortcuts((*pt)["cloud_shortcuts"].as_array());
 
                 profiles.push_back(profile);
@@ -913,6 +914,10 @@ int SettingsManager::writeFile() {
         if (!cloudDatacenterPsnow.empty()) cloud.insert("datacenter_psnow", cloudDatacenterPsnow);
         if (cloudSortState != 0) cloud.insert("sort_state", cloudSortState);
         if (cloudAttrPassed) cloud.insert("attr_passed", true);
+        if (cloudFilterMode != 0) cloud.insert("filter_mode", cloudFilterMode);
+        if (!cloudStoreLocale.empty()) cloud.insert("store_locale", cloudStoreLocale);
+        if (!cloudStoreLocaleSource.empty()) cloud.insert("store_locale_source", cloudStoreLocaleSource);
+        if (!cloudGameLanguage.empty()) cloud.insert("game_language", cloudGameLanguage);
         if (!cloudFavorites.empty()) {
             toml::array favorites;
             for (const std::string& id : cloudFavorites)
@@ -1053,9 +1058,6 @@ int SettingsManager::writeFile() {
             if (p.npssoLastCheckedAt > 0) pt.insert("npsso_valid", p.npssoValid);
             if (!p.duid.empty()) pt.insert("duid", p.duid);
             if (!p.trophiesEnabled) pt.insert("trophies_enabled", false);
-            if (!p.cloudStoreLocale.empty()) pt.insert("cloud_store_locale", p.cloudStoreLocale);
-            if (!p.cloudResolvedStoreCountry.empty()) pt.insert("cloud_resolved_store_country", p.cloudResolvedStoreCountry);
-            if (!p.cloudResolvedStoreLang.empty()) pt.insert("cloud_resolved_store_lang", p.cloudResolvedStoreLang);
             if (!p.cloudShortcuts.empty()) pt.insert("cloud_shortcuts", shortcutsToToml(p.cloudShortcuts));
             profilesArr.push_back(pt);
         }
@@ -1463,6 +1465,38 @@ void SettingsManager::setCloudAttrPassed(bool value) {
     cloudAttrPassed = value;
 }
 
+int SettingsManager::getCloudFilterMode() const {
+    return cloudFilterMode;
+}
+
+void SettingsManager::setCloudFilterMode(int value) {
+    cloudFilterMode = value;
+}
+
+std::string SettingsManager::getCloudStoreLocale() const {
+    return cloudStoreLocale;
+}
+
+void SettingsManager::setCloudStoreLocale(const std::string& locale) {
+    cloudStoreLocale = locale;
+}
+
+std::string SettingsManager::getCloudStoreLocaleSource() const {
+    return cloudStoreLocaleSource;
+}
+
+void SettingsManager::setCloudStoreLocaleSource(const std::string& locale) {
+    cloudStoreLocaleSource = locale;
+}
+
+std::string SettingsManager::getCloudGameLanguage() const {
+    return cloudGameLanguage;
+}
+
+void SettingsManager::setCloudGameLanguage(const std::string& language) {
+    cloudGameLanguage = language;
+}
+
 const std::vector<std::string>& SettingsManager::getCloudFavorites() const {
     return cloudFavorites;
 }
@@ -1738,37 +1772,6 @@ void SettingsManager::setActiveProfileTrophiesEnabled(bool enabled) {
     Profile* p = getActiveProfile();
     if (p)
         p->trophiesEnabled = enabled;
-}
-
-bool SettingsManager::noteCloudStoreResolution(int64_t profileId, const std::string& settledLocale,
-    const std::string& storeCountry, const std::string& storeLang) {
-    Profile* p = findProfile(profileId);
-    if (!p)
-        return false;
-
-    bool changed = false;
-    if (!settledLocale.empty() && p->cloudStoreLocale != settledLocale) {
-        p->cloudStoreLocale = settledLocale;
-        changed = true;
-    }
-    if (!storeCountry.empty() && p->cloudResolvedStoreCountry != storeCountry) {
-        p->cloudResolvedStoreCountry = storeCountry;
-        changed = true;
-    }
-    if (!storeLang.empty() && p->cloudResolvedStoreLang != storeLang) {
-        p->cloudResolvedStoreLang = storeLang;
-        changed = true;
-    }
-    return changed;
-}
-
-void SettingsManager::clearCloudStoreResolution(int64_t profileId) {
-    Profile* p = findProfile(profileId);
-    if (!p)
-        return;
-    p->cloudStoreLocale.clear();
-    p->cloudResolvedStoreCountry.clear();
-    p->cloudResolvedStoreLang.clear();
 }
 
 int64_t SettingsManager::addProfile(const Profile& profile) {

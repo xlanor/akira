@@ -8,7 +8,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <dirent.h>
 #include <sys/stat.h>
 
 #include "core/host.hpp"
@@ -207,16 +206,36 @@ CatalogFetchResult fetchCatalogBlocking(SettingsManager* settings, const Profile
         result.ok = true;
 
         bool expired = classifyWarning(catalog.warning) == WarningKind::SessionExpired;
-        result.snapshot.hasCatalog = catalog.nativeMode || !catalog.games.empty();
+
+        /*
+         * Whether there is a catalog, not whether it came from a storefront.
+         *
+         * nativeMode is not a health signal. It records whether PSN's storefront
+         * answered for this account's region, and downstream it selects exactly
+         * one step of the merge: the streamability gate, applied in native mode
+         * only. A region it does not cover takes the public APOLLOROOT fallback
+         * walk, which the library documents as graceful degradation rather than
+         * failure. Reading it as "do we have a catalog" made such a region look
+         * like an account with no cloud titles while the fallback sat on eight
+         * hundred of them.
+         */
+        result.snapshot.hasCatalog = !catalog.games.empty();
+
         if (!catalog.nativeMode && !expired && !catalog.games.empty())
         {
+            /*
+             * Shown, and labelled. The merge skipped the streamability gate, so
+             * these titles are real but nothing has checked which of them can
+             * actually be streamed here - which is worth saying rather than
+             * leaving to be discovered one launch at a time.
+             */
             result.snapshot.status = Status{};
-            result.snapshot.status.availability = Availability::Warning;
-            result.snapshot.status.title = "akira/cloud/status_foreign_title"_i18n;
-            result.snapshot.status.detail = "akira/cloud/status_foreign_detail"_i18n;
+            result.snapshot.status.availability = Availability::Ready;
+            result.snapshot.status.title = "akira/cloud/status_fallback_title"_i18n;
+            result.snapshot.status.detail = "akira/cloud/status_fallback_detail"_i18n;
             result.snapshot.status.canBrowse = true;
             result.snapshot.status.degraded = true;
-            result.snapshot.status.gameCount = catalog.launchableCount();
+            result.snapshot.status.gameCount = (int)catalog.games.size();
         }
     }
     else
@@ -306,20 +325,89 @@ void Service::markActiveProfileDirty()
         entries.erase(it);
 }
 
-std::string Service::selectedLocale() const
+std::string Service::consoleLocale() const
 {
     std::string locale = settings->getDebugLocale();
-    if (locale.empty())
-    {
-        const Profile* profile = settings->getActiveProfile();
-        if (profile)
-            locale = profile->cloudStoreLocale;
-    }
     if (locale.empty())
         locale = brls::Application::getLocale();
     if (locale.empty())
         locale = "en-US";
     return locale;
+}
+
+/*
+ * The locale the library settled on last time, which is not the one we asked
+ * for: it re-bases the request on the account's own country and returns the
+ * result. Handing that back is how an account in one region and a console set
+ * to another stop arguing every fetch.
+ */
+std::string Service::catalogLocale() const
+{
+    std::string stored = settings->getCloudStoreLocale();
+    return stored.empty() ? consoleLocale() : stored;
+}
+
+std::string Service::streamLanguage() const
+{
+    std::string chosen = settings->getCloudGameLanguage();
+    return chosen.empty() ? catalogLocale() : chosen;
+}
+
+/*
+ * A settled locale outlives the console locale that produced it, so a system
+ * language change would otherwise be invisible here - the cache is keyed by
+ * filename alone and would serve the old region for the rest of its day.
+ */
+std::string Service::reconcileCatalogLocale(int64_t profileId) const
+{
+    const std::string source = consoleLocale();
+    const std::string recorded = settings->getCloudStoreLocaleSource();
+    if (recorded == source)
+        return catalogLocale();
+
+    /*
+     * Nothing recorded means a config written before this was tracked, and
+     * those fetches were made with the console locale - the one we are holding.
+     * So the cache matches; only the note about it is missing.
+     */
+    if (recorded.empty())
+    {
+        settings->setCloudStoreLocaleSource(source);
+        settings->writeFile();
+        return catalogLocale();
+    }
+
+    brls::Logger::info("Cloud: console locale is now {}, dropping the cached catalog", source);
+    chiaki_cloudcatalog_invalidate_cache(cacheDirForProfile(profileId).c_str());
+    settings->setCloudStoreLocaleSource(source);
+    settings->setCloudStoreLocale(source);
+    settings->writeFile();
+    return source;
+}
+
+void Service::noteSettledLocale(const std::string& settled) const
+{
+    if (settled.empty() || settled == settings->getCloudStoreLocale())
+        return;
+    settings->setCloudStoreLocale(settled);
+    if (settings->getCloudStoreLocaleSource().empty())
+        settings->setCloudStoreLocaleSource(consoleLocale());
+    settings->writeFile();
+}
+
+void Service::clearCatalogCache()
+{
+    const Profile* profile = settings->getActiveProfile();
+    if (!profile)
+        return;
+
+    const int64_t profileId = profile->id;
+    chiaki_cloudcatalog_invalidate_cache(cacheDirForProfile(profileId).c_str());
+
+    std::lock_guard<std::mutex> lock(mutex);
+    auto it = entries.find(profileId);
+    if (it != entries.end() && !it->second.refreshing)
+        entries.erase(it);
 }
 
 std::string Service::cacheRoot() const
@@ -338,41 +426,6 @@ void Service::ensureCacheDirsForProfile(int64_t profileId) const
     mkdir(cacheRoot().c_str(), 0755);
     std::string profileDir = cacheDirForProfile(profileId);
     mkdir(profileDir.c_str(), 0755);
-}
-
-void Service::clearCacheForActiveProfile()
-{
-    const Profile* profile = settings->getActiveProfile();
-    if (!profile)
-        return;
-
-    const int64_t profileId = profile->id;
-    const std::string dir = cacheDirForProfile(profileId);
-
-    int removed = 0;
-    if (DIR* handle = opendir(dir.c_str()))
-    {
-        while (struct dirent* entry = readdir(handle))
-        {
-            if (entry->d_name[0] == '.')
-                continue;
-            std::string path = dir + "/" + entry->d_name;
-            if (std::remove(path.c_str()) == 0)
-                removed++;
-        }
-        closedir(handle);
-    }
-
-    settings->clearCloudStoreResolution(profileId);
-    settings->writeFile();
-
-    brls::Logger::info("CloudService: cleared {} cache file(s) and store resolution for profile {}",
-        removed, profileId);
-
-    std::lock_guard<std::mutex> lock(mutex);
-    Entry& entry = entries[profileId];
-    entry.snapshot = defaultSnapshotForProfile(true, !profile->npsso.empty());
-    entry.generation++;
 }
 
 void Service::storeSnapshot(int64_t profileId, const Snapshot& snapshot)
@@ -414,9 +467,9 @@ void Service::refreshActiveProfile(bool force, SnapshotCallback onDone)
     }
 
     const int64_t profileId = profile->id;
-    const std::string locale = selectedLocale();
     const std::string cacheDir = cacheDirForProfile(profileId);
     const std::string npsso = profile->npsso;
+    const std::string locale = reconcileCatalogLocale(profileId);
 
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -454,24 +507,9 @@ void Service::refreshActiveProfile(bool force, SnapshotCallback onDone)
             callbacks.swap(entry.pending);
         }
 
-        if (fetched.ok)
-        {
-            const Catalog& catalog = fetched.snapshot.catalog;
-            std::string settled = catalog.settledLocale;
-            std::string country = catalog.fallbackRegion;
-            std::string lang = catalog.resolvedStoreLang;
-            brls::sync([this, profileId, settled, country, lang]() {
-                if (settings->noteCloudStoreResolution(profileId, settled, country, lang))
-                {
-                    brls::Logger::info("CloudService: store resolution stored (locale='{}' country='{}' lang='{}')",
-                        settled, country, lang);
-                    settings->writeFile();
-                }
-            });
-        }
-
         Snapshot snapshot = fetched.snapshot;
-        brls::sync([callbacks, snapshot]() {
+        brls::sync([this, callbacks, snapshot]() {
+            noteSettledLocale(snapshot.catalog.settledLocale);
             for (const SnapshotCallback& cb : callbacks)
                 if (cb)
                     cb(snapshot);
@@ -493,13 +531,11 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
     const bool skipAttrCheck = forceSkipAttrCheck;
     const int64_t profileId = profile->id;
     const std::string npsso = profile->npsso;
-    const std::string locale = selectedLocale();
+    const std::string locale = catalogLocale();
+    const std::string gameLanguage = streamLanguage();
     const std::string cacheDir = cacheDirForProfile(profileId);
-    const std::string storedStoreCountry = profile->cloudResolvedStoreCountry;
-    const std::string storedStoreLang = profile->cloudResolvedStoreLang;
 
-    brls::async([this, game, profileId, npsso, locale, cacheDir, storedStoreCountry, storedStoreLang,
-                    skipAttrCheck, onSuccess, onError, onProgress]() {
+    brls::async([this, game, profileId, npsso, locale, gameLanguage, cacheDir, skipAttrCheck, onSuccess, onError, onProgress]() {
         Profile profileCopy;
         profileCopy.id = profileId;
         profileCopy.npsso = npsso;
@@ -525,27 +561,15 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
         cfg.game_identifier = game.streamIdentifier.c_str();
         cfg.game_name = game.name.c_str();
         cfg.npsso = npsso.c_str();
-        const std::string storeCountry = storedStoreCountry.empty()
-            ? catalogResult.snapshot.catalog.fallbackRegion
-            : storedStoreCountry;
-        const std::string storeLang = storedStoreLang.empty()
-            ? catalogResult.snapshot.catalog.resolvedStoreLang
-            : storedStoreLang;
-
-        brls::Logger::info("CloudLaunch: resolving in store {}/{} (catalog native={})",
-            storeCountry.empty() ? "US" : storeCountry.c_str(),
-            storeLang.empty() ? "en" : storeLang.c_str(),
-            catalogResult.snapshot.catalog.nativeMode);
-
-        cfg.store_country = storeCountry.c_str();
-        cfg.store_lang = storeLang.c_str();
+        cfg.store_country = catalogResult.snapshot.catalog.fallbackRegion.c_str();
+        cfg.store_lang = catalogResult.snapshot.catalog.resolvedStoreLang.c_str();
         cfg.owned_entitlement_id = game.entitlementId.c_str();
         cfg.owned_platform = game.platform.c_str();
         cfg.catalog_is_foreign = catalogResult.snapshot.catalog.foreignAccountCatalog();
         cfg.skip_account_attr_check = skipAttrCheck;
         cfg.forced_datacenter = forcedDatacenter.c_str();
         cfg.prior_datacenters_json = priorDatacenters.c_str();
-        cfg.game_language = locale.c_str();
+        cfg.game_language = gameLanguage.c_str();
         cfg.resolution = settings->getCloudVideoResolution();
         cfg.bitrate_kbps = settings->getCloudVideoBitrate();
         cfg.progress = provisionProgress;

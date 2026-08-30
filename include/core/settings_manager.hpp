@@ -79,6 +79,33 @@ private:
     std::vector<cloud::Datacenter> cloudDatacentersPsnow;
     int cloudSortState = 0;
     bool cloudAttrPassed = false;
+
+    /*
+     * Which of the library view's filters is showing: 0 all, 1 owned,
+     * 2 catalog, 3 store, 4 favorites. All by default, because the three
+     * category filters each hide most of a catalog and none of them is the
+     * question someone opening the library is asking.
+     */
+    int cloudFilterMode = 0;
+
+    /*
+     * Two locales, because they answer different questions.
+     *
+     * cloudStoreLocale is what the catalog library settled on: it re-bases the
+     * locale we hand it on the account's own country and returns the result,
+     * which is the locale the next fetch should start from. cloudGameLanguage is
+     * the language the console speaks during a stream, empty meaning follow the
+     * store. Keeping them apart is what stops a stream-language pick from
+     * moving the account to another region's storefront.
+     *
+     * cloudStoreLocaleSource records the console locale that produced the
+     * settled one, so a system language change can be told apart from the
+     * library's own re-basing and drop the cache instead of serving another
+     * region's catalog for a day.
+     */
+    std::string cloudStoreLocale;
+    std::string cloudStoreLocaleSource;
+    std::string cloudGameLanguage;
     std::vector<std::string> cloudFavorites;
     ChiakiVideoResolutionPreset vpnVideoResolution = CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     ChiakiVideoFPSPreset vpnVideoFPS = CHIAKI_VIDEO_FPS_PRESET_30;
@@ -226,10 +253,6 @@ public:
     bool getPsnNpssoValid() const;
     void setPsnNpssoValid(bool valid);
 
-    bool noteCloudStoreResolution(int64_t profileId, const std::string& settledLocale,
-        const std::string& storeCountry, const std::string& storeLang);
-    void clearCloudStoreResolution(int64_t profileId);
-
     void clearPsnNpssoData();
     void clearAllPsnData();
 
@@ -291,6 +314,15 @@ public:
     void setCloudSortState(int value);
     bool getCloudAttrPassed() const;
     void setCloudAttrPassed(bool value);
+
+    int getCloudFilterMode() const;
+    void setCloudFilterMode(int value);
+    std::string getCloudStoreLocale() const;
+    void setCloudStoreLocale(const std::string& locale);
+    std::string getCloudStoreLocaleSource() const;
+    void setCloudStoreLocaleSource(const std::string& locale);
+    std::string getCloudGameLanguage() const;
+    void setCloudGameLanguage(const std::string& language);
     const std::vector<std::string>& getCloudFavorites() const;
     void setCloudFavorites(std::vector<std::string> favorites);
     const std::vector<cloud::Game>& getCloudShortcuts() const;

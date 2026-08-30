@@ -28,8 +28,15 @@ private:
     void openPairing();
     void launchGame(const Game& game, bool forceSkipAttr = false);
 
-    enum class Filter { Streamable, Owned, Favorites, All };
-    Filter filterMode = Filter::Streamable;
+    /*
+     * The words the cards already carry. Owned, Catalog and Store are the three
+     * categories the library assigns, so choosing one gives you the cards badged
+     * with that word and nothing has to be inferred. Favorites cuts across them,
+     * and All is where everyone starts.
+     */
+    enum class Filter { All, Owned, Catalog, Store, Favorites };
+
+    Filter filterMode = Filter::All;
 
     std::set<std::string> favoriteIds;
     bool isFavorite(const std::string& productId) const;
@@ -50,14 +57,14 @@ private:
     void openFilterPicker();
     void openSortPicker();
     void openOverflowMenu();
+    void openLanguagePicker();
+    void clearCatalogCache();
     void updateServerButton();
     void updateSortButton();
     void showAddGameDialog(const Game& game);
 
     brls::Box* statusChip = nullptr;
     brls::Label* statusChipLabel = nullptr;
-    brls::Box* noticeBox = nullptr;
-    brls::Label* noticeLabel = nullptr;
     bool canPairState = false;
     bool checkingState = false;
     RecyclingGrid* grid = nullptr;

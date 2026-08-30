@@ -360,7 +360,7 @@ TrophyProfileCell::TrophyProfileCell()
     levelRing->setMarginRight(22);
 
     levelValue = new brls::Label();
-    levelValue->setText("—");
+    levelValue->setText("-");
     levelValue->setFontSize(34);
     levelValue->setSingleLine(true);
     levelRing->addView(levelValue);

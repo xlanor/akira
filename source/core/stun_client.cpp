@@ -91,15 +91,15 @@ std::string StunClient::natTypeDescription(NATType type) {
         case NATType::OpenInternet:
             return "Open internet, no NAT";
         case NATType::FullCone:
-            return "Full Cone — holepunch supported";
+            return "Full Cone, holepunch supported";
         case NATType::RestrictedCone:
-            return "Restricted Cone — holepunch supported";
+            return "Restricted Cone, holepunch supported";
         case NATType::PortRestrictedCone:
-            return "Port-Restricted Cone — holepunch supported";
+            return "Port-Restricted Cone, holepunch supported";
         case NATType::Symmetric:
-            return "Symmetric — holepunch may work depending on network";
+            return "Symmetric, holepunch may work depending on network";
         case NATType::SymmetricPortOnly:
-            return "Symmetric (port-dependent) — holepunch may work depending on network";
+            return "Symmetric (port-dependent), holepunch may work depending on network";
         case NATType::UDPBlocked:
             return "UDP traffic is blocked";
         default:

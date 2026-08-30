@@ -54,7 +54,7 @@ public:
     Snapshot snapshotForActiveProfile() const;
 
     void markActiveProfileDirty();
-    void clearCacheForActiveProfile();
+    void clearCatalogCache();
     void refreshActiveProfile(bool force, SnapshotCallback onDone = {});
     void launchGame(const Game& game, HostCallback onSuccess, ErrorCallback onError,
         ProgressCallback onProgress = {}, bool forceSkipAttrCheck = false);
@@ -73,7 +73,11 @@ private:
 
     Snapshot defaultSnapshotForActiveProfile() const;
     Snapshot defaultSnapshotForProfile(bool hasProfile, bool paired) const;
-    std::string selectedLocale() const;
+    std::string consoleLocale() const;
+    std::string catalogLocale() const;
+    std::string streamLanguage() const;
+    std::string reconcileCatalogLocale(int64_t profileId) const;
+    void noteSettledLocale(const std::string& settled) const;
     std::string cacheRoot() const;
     std::string cacheDirForProfile(int64_t profileId) const;
     void ensureCacheDirsForProfile(int64_t profileId) const;

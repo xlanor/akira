@@ -75,7 +75,7 @@ PairView::PairView(bool createProfile) : createProfile(createProfile) {
     listenPort = SettingsManager::getInstance()->getCompanionPort();
     std::string ip = PairListener::localIpv4();
     if (addrIpLabel) {
-        addrIpLabel->setText(ip.empty() ? "—" : ip);
+        addrIpLabel->setText(ip.empty() ? "-" : ip);
         addrIpLabel->setTextColor(nvgRGB(0x5c, 0xc8, 0xff));
     }
     if (addrPortLabel) {
@@ -201,6 +201,11 @@ void PairView::applyCredentials(const PairedCredentials& creds, bool createProfi
     brls::Logger::info("Imported PSN credentials from pairing push");
 
     TrophyManager::getInstance()->onActiveProfileChanged();
+    /*
+     * A new token can mean a different account behind the same profile, and the
+     * cached catalog carries the previous one's owned games.
+     */
+    cloud::Service::instance().clearCatalogCache();
     cloud::Service::instance().markActiveProfileDirty();
     cloud::Service::instance().refreshActiveProfile(true);
     HostListTab::notifyActiveProfileChanged();
