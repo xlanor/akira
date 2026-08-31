@@ -7,9 +7,37 @@
 #include "core/host.hpp"
 #include "core/settings_manager.hpp"
 
+#include <cstdio>
+#include <string>
+
 using namespace brls::literals;
 
 namespace cloud {
+
+namespace {
+
+bool parseProvisionStep(const std::string& stage, int& index, int& total, std::string& label)
+{
+    static const std::string marker = " - Step ";
+    const std::size_t at = stage.rfind(marker);
+    if (at == std::string::npos)
+        return false;
+
+    int parsedIndex = 0;
+    int parsedTotal = 0;
+    if (std::sscanf(stage.c_str() + at + marker.size(), "%d of %d",
+                    &parsedIndex, &parsedTotal) != 2)
+        return false;
+    if (parsedIndex <= 0 || parsedTotal <= 0)
+        return false;
+
+    index = parsedIndex;
+    total = parsedTotal;
+    label = stage.substr(0, at);
+    return true;
+}
+
+} // namespace
 
 CloudConnectTask::CloudConnectTask(const Game& game, bool skipAttr)
     : game(game), skipAttr(skipAttr)
@@ -24,6 +52,7 @@ std::string CloudConnectTask::title() const
 void CloudConnectTask::start(akira::views::ConnectSink& s)
 {
     sink = &s;
+    s.progressStep(0, 0, "");
     provision();
 }
 
@@ -36,14 +65,18 @@ void CloudConnectTask::provision()
         [s](std::shared_ptr<Host> host) { s->succeeded(host.get(), host); },
         [s](const std::string& error) { s->failed(error); },
         [s](const std::string& stage) {
-            /*
-             * The service narrates in prose. Its lines land in the log like
-             * everything else, and the connecting view reads its stage from
-             * there - so nothing has to translate "Step 3 of 5" into a stage
-             * twice.
-             */
-            if (!stage.empty())
-                brls::Logger::info("{}", stage);
+            if (stage.empty())
+                return;
+
+            brls::Logger::info("{}", stage);
+
+            int index = 0;
+            int total = 0;
+            std::string label;
+            if (parseProvisionStep(stage, index, total, label))
+                s->progressStep(index, total, label);
+            else
+                s->progressStep(0, 0, stage);
         },
         skipAttr);
 }

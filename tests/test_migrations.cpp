@@ -11,6 +11,7 @@
 #include "core/migrations/m003_drop_hardened_nat.hpp"
 #include "core/migrations/m004_cloud_datacenter_tables.hpp"
 #include "core/migrations/m005_group_settings_tables.hpp"
+#include "core/migrations/m006_split_cloud_video_by_service.hpp"
 
 namespace {
 
@@ -27,6 +28,7 @@ toml::table run_migrate(std::string_view src)
     chiaki_migrations::register_m003_drop_hardened_nat(m);
     chiaki_migrations::register_m004_cloud_datacenter_tables(m);
     chiaki_migrations::register_m005_group_settings_tables(m);
+    chiaki_migrations::register_m006_split_cloud_video_by_service(m);
 
     toml::table doc = toml::parse(src);
     m.migrate(doc);
@@ -148,7 +150,7 @@ rp_key_type = 0
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
 
     CHECK_EQ(arr_size(doc, "profiles"), 1);
     const toml::table* p0 = nth(doc, "profiles", 0);
@@ -235,7 +237,7 @@ rp_key_type = 0
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     CHECK_EQ(arr_size(doc, "profiles"), 1);
     CHECK_EQ(tstr(nth(doc, "profiles", 0), "account_id"), std::string("TEVH"));
 
@@ -265,7 +267,7 @@ nickname = "PS5"
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     CHECK_EQ(arr_size(doc, "profiles"), 1);
     CHECK_EQ(arr_size(doc, "consoles"), 1);
     CHECK_EQ(tstr(nth(doc, "profiles", 0), "account_id"), std::string("WA=="));
@@ -277,7 +279,7 @@ TEST(migration_empty_new_user)
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     CHECK(!doc.contains("profiles"));
     CHECK(!doc.contains("consoles"));
     CHECK(!doc.contains("active_profile_id"));
@@ -308,7 +310,7 @@ port_guessing = true
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     CHECK(!doc.contains("hardened_nat_traversal"));
     CHECK(doc["network"]["port_guessing"].value<bool>().value_or(false));
 }
@@ -322,7 +324,7 @@ port_guessing = true
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     CHECK(!doc.contains("hardened_nat_traversal"));
     CHECK(doc["network"]["port_guessing"].value<bool>().value_or(false));
 }
@@ -337,7 +339,7 @@ cloud_datacenters_psnow = '[{"dataCenter":"lona","rtt":2,"rtts":[2],"mtu_in":145
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     const toml::array* pscloud = doc["cloud"]["datacenters"]["pscloud"].as_array();
     const toml::array* psnow = doc["cloud"]["datacenters"]["psnow"].as_array();
     CHECK_EQ(size_of(pscloud), 2);
@@ -376,7 +378,7 @@ cloud_datacenters_psnow = '[]'
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     CHECK(!doc.contains("cloud_datacenters_pscloud"));
     CHECK(!doc.contains("cloud_datacenters_psnow"));
     CHECK(!doc.contains("cloud"));
@@ -431,15 +433,15 @@ cross = [ 'A' ]
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
 
     CHECK_EQ(doc["video"]["local"]["resolution"].value_or(std::string()), std::string("1080p"));
     CHECK_EQ(doc["video"]["local"]["fps"].value_or(int64_t(0)), 60);
     CHECK_EQ(doc["video"]["local"]["bitrate"].value_or(int64_t(0)), 23500);
     CHECK(doc["video"]["local"]["fsr_enabled"].value_or(false));
-    CHECK_EQ(doc["video"]["cloud"]["resolution"].value_or(int64_t(0)), 1080);
-    CHECK_EQ(doc["video"]["cloud"]["bitrate"].value_or(int64_t(0)), 23500);
-    CHECK(!doc["video"]["cloud"]["fsr_enabled"].value_or(true));
+    CHECK_EQ(doc["video"]["cloud"]["pscloud"]["resolution"].value_or(int64_t(0)), 1080);
+    CHECK_EQ(doc["video"]["cloud"]["pscloud"]["bitrate"].value_or(int64_t(0)), 23500);
+    CHECK(!doc["video"]["cloud"]["pscloud"]["fsr_enabled"].value_or(true));
     CHECK(!doc["video"].as_table()->contains("remote"));
 
     CHECK(doc["picture"]["dithering_enabled"].value_or(false));
@@ -509,7 +511,7 @@ profile_id = 2
 
     toml::table doc = run_migrate(src);
 
-    CHECK_EQ(version_of(doc), 6);
+    CHECK_EQ(version_of(doc), 7);
     CHECK(!doc.contains("cloud_shortcuts"));
 
     const toml::table* p1 = nth(doc, "profiles", 0);
@@ -530,4 +532,47 @@ profile_id = 2
     const toml::array* adopted = p2 ? (*p2)["cloud_shortcuts"].as_array() : nullptr;
     CHECK_EQ(size_of(adopted), 1);
     CHECK_EQ(tstr(nth_in(adopted, 0), "product_id"), std::string("LEGACY-1"));
+}
+
+TEST(migration_splits_cloud_video_by_service)
+{
+    static constexpr std::string_view src = R"(
+version = 5
+cloud_video_resolution = 1080
+cloud_video_bitrate = 15000
+cloud_fsr_enabled = true
+)";
+
+    toml::table doc = run_migrate(src);
+
+    CHECK_EQ(version_of(doc), 7);
+    CHECK(!doc["video"]["cloud"].as_table()->contains("resolution"));
+
+    for (const char* service : {"pscloud", "psnow"}) {
+        const auto* t = doc["video"]["cloud"][service].as_table();
+        CHECK_EQ((*t)["resolution"].value_or(int64_t(0)), 1080);
+        CHECK_EQ((*t)["bitrate"].value_or(int64_t(0)), 15000);
+        CHECK((*t)["fsr_enabled"].value_or(false));
+    }
+}
+
+TEST(migration_leaves_split_cloud_video_alone)
+{
+    static constexpr std::string_view src = R"(
+version = 6
+
+[video.cloud.pscloud]
+resolution = 1080
+bitrate = 15000
+
+[video.cloud.psnow]
+resolution = 720
+bitrate = 5000
+)";
+
+    toml::table doc = run_migrate(src);
+
+    CHECK_EQ(version_of(doc), 7);
+    CHECK_EQ(doc["video"]["cloud"]["pscloud"]["resolution"].value_or(int64_t(0)), 1080);
+    CHECK_EQ(doc["video"]["cloud"]["psnow"]["resolution"].value_or(int64_t(0)), 720);
 }

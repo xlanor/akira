@@ -20,8 +20,12 @@ SettingsPictureView::SettingsPictureView() {
     initVpnResolutionSelector();
     initVpnFpsSelector();
     initVpnBitrateSlider();
-    initCloudResolutionSelector();
-    initCloudBitrateSlider();
+    initCloudResolutionSelector(true, pscloudResolutionSelector,
+        "akira/settings/pscloud_resolution"_i18n);
+    initCloudBitrateSlider(true, pscloudBitrateSlider);
+    initCloudResolutionSelector(false, psnowResolutionSelector,
+        "akira/settings/psnow_resolution"_i18n);
+    initCloudBitrateSlider(false, psnowBitrateSlider);
     initEnableDitheringToggle();
     initDitheringStrengthSlider();
     initRcasEnabledToggle();
@@ -401,7 +405,9 @@ void SettingsPictureView::updateVpnBitrateSlider() {
     vpnBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", VPN_DEFAULT_BITRATE));
 }
 
-void SettingsPictureView::initCloudResolutionSelector() {
+void SettingsPictureView::initCloudResolutionSelector(bool pscloud,
+                                                      brls::SelectorCell* selector,
+                                                      const std::string& title) {
     std::vector<std::string> options = {
         "akira/settings/res_720p"_i18n,
         "akira/settings/res_1080p"_i18n,
@@ -409,17 +415,19 @@ void SettingsPictureView::initCloudResolutionSelector() {
     };
 
     int currentIndex;
-    if (settings->getCloudFsrEnabled())
+    if (settings->getCloudFsrEnabled(pscloud))
         currentIndex = 2;
     else
-        currentIndex = settings->getCloudVideoResolution() <= 720 ? 0 : 1;
+        currentIndex = settings->getCloudVideoResolution(pscloud) <= 720 ? 0 : 1;
 
-    cloudResolutionSelector->init(
-        "akira/settings/cloud_resolution"_i18n,
+    brls::SliderCell* slider = pscloud ? pscloudBitrateSlider : psnowBitrateSlider;
+
+    selector->init(
+        title,
         options,
         currentIndex,
         [](int selected) {},
-        [this](int selected) {
+        [this, pscloud, slider](int selected) {
             int resolution;
             bool fsr = false;
             switch (selected) {
@@ -428,42 +436,43 @@ void SettingsPictureView::initCloudResolutionSelector() {
                 case 2: resolution = 720; fsr = true; break;
                 default: resolution = 1080; break;
             }
-            settings->setCloudVideoResolution(resolution);
-            settings->setCloudFsrEnabled(fsr);
-            updateCloudBitrateSlider();
+            settings->setCloudVideoResolution(pscloud, resolution);
+            settings->setCloudFsrEnabled(pscloud, fsr);
+            updateCloudBitrateSlider(pscloud, slider);
             settings->writeFile();
-            brls::Logger::info("Cloud resolution set to {}p{}", resolution, fsr ? " (FSR)" : "");
+            brls::Logger::info("{} resolution set to {}p{}",
+                pscloud ? "PS5 cloud" : "PS Now", resolution, fsr ? " (FSR)" : "");
         }
     );
 }
 
-void SettingsPictureView::initCloudBitrateSlider() {
-    auto resolution = settings->getCloudVideoResolution() <= 720
+void SettingsPictureView::initCloudBitrateSlider(bool pscloud, brls::SliderCell* slider) {
+    auto resolution = settings->getCloudVideoResolution(pscloud) <= 720
         ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
         : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
     int maxBitrate = settings->getMaxBitrateForResolution(resolution);
     int minBitrate = settings->getMinBitrateForResolution(resolution);
-    int currentBitrate = settings->getCloudVideoBitrate();
+    int currentBitrate = settings->getCloudVideoBitrate(pscloud);
 
     bool needsSave = false;
     if (currentBitrate < minBitrate) { currentBitrate = minBitrate; needsSave = true; }
     if (currentBitrate > maxBitrate) { currentBitrate = maxBitrate; needsSave = true; }
     if (needsSave) {
-        settings->setCloudVideoBitrate(currentBitrate);
+        settings->setCloudVideoBitrate(pscloud, currentBitrate);
         settings->writeFile();
     }
 
     float normalizedValue = static_cast<float>(currentBitrate - minBitrate) / (maxBitrate - minBitrate);
     normalizedValue = std::max(0.0f, std::min(1.0f, normalizedValue));
 
-    cloudBitrateSlider->detail->setWidth(100);
-    cloudBitrateSlider->detail->setShrink(0);
-    cloudBitrateSlider->slider->setDiscreteStep(500.0f / static_cast<float>(maxBitrate - minBitrate));
-    cloudBitrateSlider->init(
-        "akira/settings/cloud_bitrate"_i18n,
+    slider->detail->setWidth(100);
+    slider->detail->setShrink(0);
+    slider->slider->setDiscreteStep(500.0f / static_cast<float>(maxBitrate - minBitrate));
+    slider->init(
+        pscloud ? "akira/settings/pscloud_bitrate"_i18n : "akira/settings/psnow_bitrate"_i18n,
         normalizedValue,
-        [this](float value) {
-            auto resolution = settings->getCloudVideoResolution() <= 720
+        [this, pscloud, slider](float value) {
+            auto resolution = settings->getCloudVideoResolution(pscloud) <= 720
                 ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
                 : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
             int maxBitrate = settings->getMaxBitrateForResolution(resolution);
@@ -471,29 +480,29 @@ void SettingsPictureView::initCloudBitrateSlider() {
             int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
             bitrate = ((bitrate + 250) / 500) * 500;
             bitrate = std::clamp(bitrate, minBitrate, maxBitrate);
-            settings->setCloudVideoBitrate(bitrate);
-            cloudBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", bitrate));
+            settings->setCloudVideoBitrate(pscloud, bitrate);
+            slider->detail->setText(brls::getStr("akira/settings/kbps", bitrate));
             settings->writeFile();
-            brls::Logger::info("Cloud bitrate set to {}", bitrate);
+            brls::Logger::info("{} bitrate set to {}", pscloud ? "PS5 cloud" : "PS Now", bitrate);
         }
     );
 
-    cloudBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", currentBitrate));
+    slider->detail->setText(brls::getStr("akira/settings/kbps", currentBitrate));
 }
 
-void SettingsPictureView::updateCloudBitrateSlider() {
-    auto resolution = settings->getCloudVideoResolution() <= 720
+void SettingsPictureView::updateCloudBitrateSlider(bool pscloud, brls::SliderCell* slider) {
+    auto resolution = settings->getCloudVideoResolution(pscloud) <= 720
         ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
         : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
     int defaultBitrate = SettingsManager::getDefaultBitrateForResolution(resolution);
     int maxBitrate = settings->getMaxBitrateForResolution(resolution);
     int minBitrate = settings->getMinBitrateForResolution(resolution);
 
-    settings->setCloudVideoBitrate(defaultBitrate);
+    settings->setCloudVideoBitrate(pscloud, defaultBitrate);
 
     float normalizedValue = static_cast<float>(defaultBitrate - minBitrate) / (maxBitrate - minBitrate);
-    cloudBitrateSlider->slider->setProgress(normalizedValue);
-    cloudBitrateSlider->detail->setText(brls::getStr("akira/settings/kbps", defaultBitrate));
+    slider->slider->setProgress(normalizedValue);
+    slider->detail->setText(brls::getStr("akira/settings/kbps", defaultBitrate));
 }
 
 void SettingsPictureView::initEnableDitheringToggle() {

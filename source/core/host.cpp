@@ -463,10 +463,11 @@ int Host::initSession(Session* streamSession)
 int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSession holepunch)
 {
     bool cloud = isCloud();
+    bool pscloud = cloud && cloudSession->serviceType == CHIAKI_SERVICE_TYPE_PSCLOUD;
     ChiakiVideoResolutionPreset resolution;
     ChiakiVideoFPSPreset fps;
     if (cloud) {
-        resolution = settings->getCloudVideoResolution() <= 720
+        resolution = settings->getCloudVideoResolution(pscloud) <= 720
             ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
             : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
         fps = CHIAKI_VIDEO_FPS_PRESET_60;
@@ -475,7 +476,7 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
         fps = settings->getVideoFPS(this);
     }
     chiaki_connect_video_profile_preset(&videoProfile, resolution, fps);
-    videoProfile.bitrate = cloud ? settings->getCloudVideoBitrate() : settings->getVideoBitrate(this);
+    videoProfile.bitrate = cloud ? settings->getCloudVideoBitrate(pscloud) : settings->getVideoBitrate(this);
 
     chiaki_opus_decoder_init(&opusDecoder, log);
 
@@ -951,6 +952,9 @@ ChiakiErrorCode Host::connectHolepunch()
         brls::Logger::info("Starting holepunch connection sequence for {} ({}) - attempt {}/{}",
             hostName, isPS5() ? "PS5" : "PS4", attempt, maxRetries);
 
+        if (onHolepunchPhase)
+            onHolepunchPhase(HolepunchPhase::Negotiating);
+
         err = chiaki_holepunch_upnp_discover(holepunchSession);
         if (err != CHIAKI_ERR_SUCCESS)
         {
@@ -989,6 +993,8 @@ ChiakiErrorCode Host::connectHolepunch()
         brls::Logger::info("Holepunch session started for device");
 
         brls::Logger::info("Punching CTRL hole...");
+        if (onHolepunchPhase)
+            onHolepunchPhase(HolepunchPhase::Punching);
         err = chiaki_holepunch_session_punch_hole(holepunchSession, CHIAKI_HOLEPUNCH_PORT_TYPE_CTRL);
         if (err == CHIAKI_ERR_SUCCESS)
         {

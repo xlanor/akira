@@ -50,6 +50,7 @@ public:
 
     /* ConnectSink */
     void progress(ConnectionStage stage) override;
+    void progressStep(int index, int total, const std::string& label) override;
     void succeeded(Host* host, std::shared_ptr<Host> owner) override;
     void failed(const std::string& error) override;
     bool cancelled() const override;
@@ -62,6 +63,11 @@ private:
     static constexpr std::size_t MAX_LOG_LINES = 100;
 
     std::atomic<int> currentStage{0};
+    std::atomic<int> stepIndex{0};
+    std::atomic<int> stepTotal{0};
+    std::atomic<bool> steppedRoute{false};
+    std::string stepLabel;
+    mutable std::mutex stepMutex;
     std::atomic<bool> settled{false};
     std::atomic<bool> wasCancelled{false};
     std::atomic<bool> showFailure{false};

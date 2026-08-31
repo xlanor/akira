@@ -369,6 +369,12 @@ LibraryView::LibraryView()
     statusChip->addView(statusChipLabel);
     headerText->addView(statusChip);
 
+    countLabel = new brls::Label();
+    countLabel->setFontSize(16);
+    countLabel->setMarginLeft(10);
+    countLabel->setVisibility(brls::Visibility::GONE);
+    headerText->addView(countLabel);
+
     searchButton = new brls::Button();
     searchButton->setText("akira/cloud/search"_i18n);
     searchButton->setMarginRight(8);
@@ -522,6 +528,9 @@ void LibraryView::renderSnapshot(const Snapshot& snapshot)
             static_cast<int>(status.availability), snapshot.hasCatalog, snapshot.catalog.games.size());
         grid->setVisibility(brls::Visibility::GONE);
         grid->clearData();
+        allGames.clear();
+        if (countLabel)
+            countLabel->setVisibility(brls::Visibility::GONE);
         showState(snapshot);
         return;
     }
@@ -706,6 +715,17 @@ void LibraryView::applyFilter()
                                                               : "akira/cloud/filter_all"_i18n;
     if (filterButton)
         filterButton->setText(filterLabel);
+
+    if (countLabel)
+    {
+        const bool narrowed = filtered.size() != allGames.size();
+        countLabel->setVisibility(allGames.empty() ? brls::Visibility::GONE
+                                                   : brls::Visibility::VISIBLE);
+        countLabel->setTextColor(akira::ui::active().textDim);
+        countLabel->setText(narrowed
+            ? brls::getStr("akira/cloud/count_filtered", filtered.size(), allGames.size())
+            : brls::getStr("akira/cloud/count_all", allGames.size()));
+    }
 
     brls::Logger::info("CloudLib: applyFilter mode={} q='{}' -> {}/{} games",
         static_cast<int>(filterMode), searchQuery, filtered.size(), allGames.size());

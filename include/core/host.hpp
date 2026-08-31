@@ -39,6 +39,11 @@ enum class HostType {
     Remote = 3
 };
 
+enum class HolepunchPhase {
+    Negotiating,
+    Punching
+};
+
 class Host {
     friend class SettingsManager;
     friend class DiscoveryManager;
@@ -112,6 +117,7 @@ private:
     std::function<void()> onRegistSuccess;
     std::function<void(int, int)> onRegistStage;
     std::function<void()> onMotionReset;
+    std::function<void(HolepunchPhase)> onHolepunchPhase;
 
 public:
     struct CloudSessionConfig {
@@ -246,6 +252,7 @@ public:
     void setOnRegistFailed(std::function<void()> callback) { onRegistFailed = std::move(callback); }
     void setOnRegistSuccess(std::function<void()> callback) { onRegistSuccess = std::move(callback); }
     void setOnRegistStage(std::function<void(int, int)> callback) { onRegistStage = std::move(callback); }
+    void setOnHolepunchPhase(std::function<void(HolepunchPhase)> callback) { onHolepunchPhase = std::move(callback); }
     void setOnMotionReset(std::function<void()> callback) { onMotionReset = std::move(callback); }
 };
 

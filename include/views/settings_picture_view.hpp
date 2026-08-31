@@ -22,8 +22,10 @@ private:
     BRLS_BIND(brls::SelectorCell, vpnResolutionSelector, "settings/vpnResolution");
     BRLS_BIND(brls::SelectorCell, vpnFpsSelector, "settings/vpnFps");
     BRLS_BIND(brls::SliderCell, vpnBitrateSlider, "settings/vpnBitrate");
-    BRLS_BIND(brls::SelectorCell, cloudResolutionSelector, "settings/cloudResolution");
-    BRLS_BIND(brls::SliderCell, cloudBitrateSlider, "settings/cloudBitrate");
+    BRLS_BIND(brls::SelectorCell, pscloudResolutionSelector, "settings/pscloudResolution");
+    BRLS_BIND(brls::SliderCell, pscloudBitrateSlider, "settings/pscloudBitrate");
+    BRLS_BIND(brls::SelectorCell, psnowResolutionSelector, "settings/psnowResolution");
+    BRLS_BIND(brls::SliderCell, psnowBitrateSlider, "settings/psnowBitrate");
     BRLS_BIND(brls::BooleanCell, enableDitheringToggle, "settings/enableDithering");
     BRLS_BIND(brls::SliderCell, ditheringStrengthSlider, "settings/ditheringStrength");
     BRLS_BIND(brls::BooleanCell, rcasEnabledToggle, "settings/rcasEnabled");
@@ -43,9 +45,10 @@ private:
     void initVpnFpsSelector();
     void initVpnBitrateSlider();
     void updateVpnBitrateSlider();
-    void initCloudResolutionSelector();
-    void initCloudBitrateSlider();
-    void updateCloudBitrateSlider();
+    void initCloudResolutionSelector(bool pscloud, brls::SelectorCell* selector,
+                                     const std::string& title);
+    void initCloudBitrateSlider(bool pscloud, brls::SliderCell* slider);
+    void updateCloudBitrateSlider(bool pscloud, brls::SliderCell* slider);
     void initEnableDitheringToggle();
     void initDitheringStrengthSlider();
     void initRcasEnabledToggle();

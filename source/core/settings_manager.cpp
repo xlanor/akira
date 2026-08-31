@@ -406,7 +406,10 @@ void SettingsManager::parseTomlFile() {
             remoteVideoResolution = stringToResolution(*val);
         if (auto val = config["video"]["vpn"]["resolution"].value<std::string>())
             vpnVideoResolution = stringToResolution(*val);
-        cloudVideoResolution = config["video"]["cloud"]["resolution"].value<int64_t>().value_or(1080);
+        cloudVideoResolutionPscloud =
+            config["video"]["cloud"]["pscloud"]["resolution"].value<int64_t>().value_or(1080);
+        cloudVideoResolutionPsnow =
+            config["video"]["cloud"]["psnow"]["resolution"].value<int64_t>().value_or(1080);
 
         if (auto val = config["video"]["local"]["fps"].value<int64_t>())
             localVideoFPS = stringToFps(std::to_string(*val));
@@ -427,7 +430,10 @@ void SettingsManager::parseTomlFile() {
 
         if (auto val = config["video"]["vpn"]["bitrate"].value<int64_t>())
             vpnVideoBitrate = static_cast<int>(*val);
-        cloudVideoBitrate = config["video"]["cloud"]["bitrate"].value<int64_t>().value_or(10000);
+        cloudVideoBitratePscloud =
+            config["video"]["cloud"]["pscloud"]["bitrate"].value<int64_t>().value_or(10000);
+        cloudVideoBitratePsnow =
+            config["video"]["cloud"]["psnow"]["bitrate"].value<int64_t>().value_or(10000);
 
         if (auto val = config["video"]["local"]["fsr_enabled"].value<bool>())
             localFsrEnabled = *val;
@@ -435,8 +441,10 @@ void SettingsManager::parseTomlFile() {
             remoteFsrEnabled = *val;
         if (auto val = config["video"]["vpn"]["fsr_enabled"].value<bool>())
             vpnFsrEnabled = *val;
-        if (auto val = config["video"]["cloud"]["fsr_enabled"].value<bool>())
-            cloudFsrEnabled = *val;
+        if (auto val = config["video"]["cloud"]["pscloud"]["fsr_enabled"].value<bool>())
+            cloudFsrEnabledPscloud = *val;
+        if (auto val = config["video"]["cloud"]["psnow"]["fsr_enabled"].value<bool>())
+            cloudFsrEnabledPsnow = *val;
 
         if (auto val = config["picture"]["dithering_enabled"].value<bool>())
             enableDithering = *val;
@@ -883,10 +891,19 @@ int SettingsManager::writeFile() {
             return t;
         };
 
+        auto cloudVideoProfile = [](int resolution, int bitrate, bool fsr) {
+            toml::table t;
+            t.insert("resolution", resolution);
+            t.insert("bitrate", bitrate);
+            t.insert("fsr_enabled", fsr);
+            return t;
+        };
+
         toml::table cloudVideo;
-        cloudVideo.insert("resolution", cloudVideoResolution);
-        cloudVideo.insert("bitrate", cloudVideoBitrate);
-        cloudVideo.insert("fsr_enabled", cloudFsrEnabled);
+        cloudVideo.insert("pscloud", cloudVideoProfile(cloudVideoResolutionPscloud,
+            cloudVideoBitratePscloud, cloudFsrEnabledPscloud));
+        cloudVideo.insert("psnow", cloudVideoProfile(cloudVideoResolutionPsnow,
+            cloudVideoBitratePsnow, cloudFsrEnabledPsnow));
 
         toml::table video;
         video.insert("local", videoProfile(resolutionToString(localVideoResolution),
@@ -1403,28 +1420,37 @@ void SettingsManager::setVpnVideoBitrate(int value) {
     vpnVideoBitrate = value;
 }
 
-int SettingsManager::getCloudVideoBitrate() const {
-    return cloudVideoBitrate;
+int SettingsManager::getCloudVideoBitrate(bool pscloud) const {
+    return pscloud ? cloudVideoBitratePscloud : cloudVideoBitratePsnow;
 }
 
-void SettingsManager::setCloudVideoBitrate(int value) {
-    cloudVideoBitrate = value;
+void SettingsManager::setCloudVideoBitrate(bool pscloud, int value) {
+    if (pscloud)
+        cloudVideoBitratePscloud = value;
+    else
+        cloudVideoBitratePsnow = value;
 }
 
-int SettingsManager::getCloudVideoResolution() const {
-    return cloudVideoResolution;
+int SettingsManager::getCloudVideoResolution(bool pscloud) const {
+    return pscloud ? cloudVideoResolutionPscloud : cloudVideoResolutionPsnow;
 }
 
-void SettingsManager::setCloudVideoResolution(int value) {
-    cloudVideoResolution = value;
+void SettingsManager::setCloudVideoResolution(bool pscloud, int value) {
+    if (pscloud)
+        cloudVideoResolutionPscloud = value;
+    else
+        cloudVideoResolutionPsnow = value;
 }
 
-bool SettingsManager::getCloudFsrEnabled() const {
-    return cloudFsrEnabled;
+bool SettingsManager::getCloudFsrEnabled(bool pscloud) const {
+    return pscloud ? cloudFsrEnabledPscloud : cloudFsrEnabledPsnow;
 }
 
-void SettingsManager::setCloudFsrEnabled(bool enabled) {
-    cloudFsrEnabled = enabled;
+void SettingsManager::setCloudFsrEnabled(bool pscloud, bool enabled) {
+    if (pscloud)
+        cloudFsrEnabledPscloud = enabled;
+    else
+        cloudFsrEnabledPsnow = enabled;
 }
 
 std::string SettingsManager::getCloudDatacenter(bool pscloud) const {
@@ -2012,7 +2038,7 @@ bool SettingsManager::getEasuEnabled() const {
     switch (activeStreamProfile) {
         case StreamProfile::Remote: return remoteFsrEnabled;
         case StreamProfile::Vpn: return vpnFsrEnabled;
-        case StreamProfile::Cloud: return cloudFsrEnabled;
+        case StreamProfile::Cloud: return getCloudFsrEnabled(activeCloudPscloud);
         case StreamProfile::Local:
         default: return localFsrEnabled;
     }
@@ -2024,7 +2050,7 @@ int SettingsManager::getEasuTargetHeight() const {
         case StreamProfile::Remote: res = remoteVideoResolution; break;
         case StreamProfile::Vpn: res = vpnVideoResolution; break;
         case StreamProfile::Cloud:
-            res = cloudVideoResolution <= 720
+            res = getCloudVideoResolution(activeCloudPscloud) <= 720
                 ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
                 : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
             break;
@@ -2080,6 +2106,14 @@ SettingsManager::StreamProfile SettingsManager::getActiveStreamProfile() const {
 
 void SettingsManager::setActiveStreamProfile(StreamProfile profile) {
     activeStreamProfile = profile;
+}
+
+bool SettingsManager::getActiveCloudPscloud() const {
+    return activeCloudPscloud;
+}
+
+void SettingsManager::setActiveCloudPscloud(bool pscloud) {
+    activeCloudPscloud = pscloud;
 }
 
 bool SettingsManager::getEnableFileLogging() const {
