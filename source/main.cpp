@@ -543,7 +543,7 @@ int main(int argc, char* argv[])
 
     brls::Application::createWindow("Akira");
 
-    brls::Application::getPlatform()->exitToHomeMode(true);
+    brls::Application::getPlatform()->exitToHomeMode(false);
 
     if (appletType == AppletType_Application)
     {

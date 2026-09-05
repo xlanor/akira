@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -13,6 +15,7 @@
 #include "core/version.hpp"
 #include "util/http_pool.hpp"
 #include "views/progress_ring.hpp"
+#include "views/quit_dialog.hpp"
 
 using namespace brls::literals;
 
@@ -115,21 +118,42 @@ void UpdateFlow::startDownload(const UpdateInfo& info) {
 
     auto* dialog = new brls::Dialog(content);
     dialog->setCancelable(false);
+
+    auto canceled = std::make_shared<std::atomic_bool>(false);
+    auto dismissed = std::make_shared<std::atomic_bool>(false);
+    dialog->addButton("akira/common/cancel"_i18n, [canceled, dismissed]() {
+        canceled->store(true);
+        dismissed->store(true);
+    });
     dialog->open();
 
-    HttpPool::instance().submit([info, dialog, ring, label](HttpSession&) {
+    HttpPool::instance().submit([info, dialog, ring, label, canceled, dismissed](HttpSession&) {
         UpdateManager& mgr = UpdateManager::getInstance();
+
+        auto finish = [dialog, dismissed](std::function<void()> then) {
+            brls::sync([dialog, dismissed, then]() {
+                if (dismissed->exchange(true))
+                    then();
+                else
+                    dialog->close(then);
+            });
+        };
+
         std::string err;
         std::string sha = info.sha256.empty() ? mgr.fetchExpectedSha256(info) : info.sha256;
 
         auto lastPct = std::make_shared<int>(-1);
         std::string tmp = mgr.download(info,
-            [ring, label, lastPct](int64_t received, int64_t total) {
+            [ring, label, lastPct, canceled, dismissed](int64_t received, int64_t total) {
+                if (canceled->load())
+                    return false;
                 int pct = total > 0 ? static_cast<int>((received * 100) / total) : 0;
                 if (pct != *lastPct) {
                     *lastPct = pct;
                     float ratio = total > 0 ? static_cast<float>(received) / static_cast<float>(total) : 0.0f;
-                    brls::sync([ring, label, pct, ratio]() {
+                    brls::sync([ring, label, pct, ratio, dismissed]() {
+                        if (dismissed->load())
+                            return;
                         ring->setProgress(ratio);
                         label->setText(brls::getStr("akira/update/downloading", pct));
                     });
@@ -139,36 +163,34 @@ void UpdateFlow::startDownload(const UpdateInfo& info) {
             err);
 
         if (tmp.empty()) {
-            brls::sync([dialog, err]() {
-                dialog->close();
-                showUpdateError("akira/update/failed"_i18n + std::string("\n") + err);
-            });
+            if (canceled->load())
+                return;
+            finish([err]() { showUpdateError("akira/update/failed"_i18n + std::string("\n") + err); });
             return;
         }
 
-        brls::sync([label]() { label->setText("akira/update/verifying"_i18n); });
+        if (canceled->load()) {
+            std::remove(tmp.c_str());
+            return;
+        }
+
+        brls::sync([label, dismissed]() {
+            if (!dismissed->load())
+                label->setText("akira/update/verifying"_i18n);
+        });
 
         if (!mgr.verify(tmp, sha, info.size, err)) {
             std::remove(tmp.c_str());
-            brls::sync([dialog, err]() {
-                dialog->close();
-                showUpdateError("akira/update/verify_failed"_i18n + std::string("\n") + err);
-            });
+            finish([err]() { showUpdateError("akira/update/verify_failed"_i18n + std::string("\n") + err); });
             return;
         }
 
-        brls::sync([dialog, tmp]() {
-            dialog->close();
-            auto* done = new brls::Dialog("akira/update/installed_relaunch"_i18n);
-            done->setCancelable(false);
-            done->addButton("akira/common/ok"_i18n, [tmp]() {
-                std::string err;
-                if (UpdateManager::getInstance().applyDownloaded(tmp, err))
-                    std::_Exit(0);
-                else
-                    showUpdateError("akira/update/install_failed"_i18n + std::string("\n") + err);
-            });
-            done->open();
+        finish([tmp]() {
+            std::string err;
+            if (UpdateManager::getInstance().applyDownloaded(tmp, err))
+                quitApp(true, "akira/update/installed_relaunch"_i18n);
+            else
+                showUpdateError("akira/update/install_failed"_i18n + std::string("\n") + err);
         });
     });
 }

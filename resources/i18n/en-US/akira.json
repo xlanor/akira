@@ -670,7 +670,7 @@
     "failed": "Update check failed",
     "downloading": "Downloading… {}%",
     "verifying": "Verifying…",
-    "installed_relaunch": "Akira will close to finish updating. Please reopen it afterward.",
+    "installed_relaunch": "Update installed. Akira will close to the homebrew menu — relaunch it to run the new version.",
     "update_now": "Update now",
     "skip": "Skip this version",
     "later": "Later",
@@ -746,7 +746,8 @@
     "ip_prefix": "IP: ",
     "discovery_off": "Discovery off",
     "discovery_local": "Discovery running · local network",
-    "discovery_running_for": "Discovery running for"
+    "discovery_running_for": "Discovery running for",
+    "quitting": "Closing…"
   },
   "pair": {
     "title": "Pair with Companion",

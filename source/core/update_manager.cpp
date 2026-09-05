@@ -65,40 +65,6 @@ bool endsWithNro(const std::string& p) {
     return p.size() >= 4 && toLowerHex(p.substr(p.size() - 4)) == ".nro";
 }
 
-bool copyFile(const std::string& src, const std::string& dst, std::string& err) {
-    FILE* in = std::fopen(src.c_str(), "rb");
-    if (!in) {
-        err = "open src '" + src + "': " + std::strerror(errno);
-        return false;
-    }
-    FILE* out = std::fopen(dst.c_str(), "wb");
-    if (!out) {
-        err = "open dst '" + dst + "': " + std::strerror(errno);
-        std::fclose(in);
-        return false;
-    }
-    char buf[65536];
-    size_t n;
-    bool ok = true;
-    while ((n = std::fread(buf, 1, sizeof(buf), in)) > 0) {
-        if (std::fwrite(buf, 1, n, out) != n) {
-            err = "write '" + dst + "': " + std::strerror(errno);
-            ok = false;
-            break;
-        }
-    }
-    if (ok && std::ferror(in)) {
-        err = "read '" + src + "': " + std::strerror(errno);
-        ok = false;
-    }
-    std::fclose(in);
-    if (std::fclose(out) != 0 && ok) {
-        err = "close '" + dst + "': " + std::strerror(errno);
-        ok = false;
-    }
-    return ok;
-}
-
 }
 
 UpdateManager& UpdateManager::getInstance() {
@@ -343,29 +309,29 @@ bool UpdateManager::applyDownloaded(const std::string& tempPath, std::string& ou
         std::fclose(t);
     }
 
-    if (hadTarget) {
-        std::remove(bak.c_str());
-        std::string e;
-        if (!copyFile(target, bak, e))
-            brls::Logger::warning("Update: backup failed ({}), continuing", e);
-    }
-
     romfsExit();
 
-    std::string e;
-    if (!copyFile(tempPath, target, e)) {
-        outError = "write failed: " + e;
-        if (hadTarget) {
-            std::string re;
-            copyFile(bak, target, re);
+    bool haveBak = false;
+    if (hadTarget) {
+        std::remove(bak.c_str());
+        if (std::rename(target.c_str(), bak.c_str()) == 0) {
+            haveBak = true;
+        } else {
+            brls::Logger::warning("Update: backup rename failed ({}), removing target", std::strerror(errno));
+            std::remove(target.c_str());
         }
+    }
+
+    if (std::rename(tempPath.c_str(), target.c_str()) != 0) {
+        outError = std::string("rename failed: ") + std::strerror(errno);
+        if (haveBak)
+            std::rename(bak.c_str(), target.c_str());
         std::remove(tempPath.c_str());
         romfsInit();
         return false;
     }
 
-    std::remove(tempPath.c_str());
-    brls::Logger::info("Update applied to {} (backup at {})", target, bak);
+    brls::Logger::info("Update applied to {}{}", target, haveBak ? " (backup at " + bak + ")" : "");
     return true;
 }
 
