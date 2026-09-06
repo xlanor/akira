@@ -1164,6 +1164,8 @@ std::string SettingsManager::resolutionToString(ChiakiVideoResolutionPreset reso
         case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return "540p";
         case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return "720p";
         case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return "1080p";
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1440p: return "1440p";
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_2160p: return "2160p";
         default: return "720p";
     }
 }
@@ -1174,11 +1176,24 @@ int SettingsManager::resolutionToInt(ChiakiVideoResolutionPreset resolution) {
         case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 540;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 720;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 1080;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1440p: return 1440;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_2160p: return 2160;
         default: return 720;
     }
 }
 
+ChiakiVideoResolutionPreset SettingsManager::intToResolution(int height) {
+    if (height >= 2160) return CHIAKI_VIDEO_RESOLUTION_PRESET_2160p;
+    if (height >= 1440) return CHIAKI_VIDEO_RESOLUTION_PRESET_1440p;
+    if (height >= 1080) return CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+    if (height >= 720) return CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
+    if (height >= 540) return CHIAKI_VIDEO_RESOLUTION_PRESET_540p;
+    return CHIAKI_VIDEO_RESOLUTION_PRESET_360p;
+}
+
 ChiakiVideoResolutionPreset SettingsManager::stringToResolution(const std::string& value) {
+    if (value == "2160p") return CHIAKI_VIDEO_RESOLUTION_PRESET_2160p;
+    if (value == "1440p") return CHIAKI_VIDEO_RESOLUTION_PRESET_1440p;
     if (value == "1080p") return CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
     if (value == "720p") return CHIAKI_VIDEO_RESOLUTION_PRESET_720p;
     if (value == "540p") return CHIAKI_VIDEO_RESOLUTION_PRESET_540p;
@@ -1211,6 +1226,8 @@ ChiakiVideoFPSPreset SettingsManager::stringToFps(const std::string& value) {
 
 int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset res) {
     switch (res) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_2160p: return 50000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1440p: return 30000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 15000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 10000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 5000;
@@ -1222,6 +1239,8 @@ int SettingsManager::getDefaultBitrateForResolution(ChiakiVideoResolutionPreset 
 int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res) const {
     if (unlockBitrateMax) {
         switch (res) {
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_2160p: return 120000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1440p: return 80000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 50000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 40000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
@@ -1230,6 +1249,8 @@ int SettingsManager::getMaxBitrateForResolution(ChiakiVideoResolutionPreset res)
         }
     }
     switch (res) {
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_2160p: return 60000;
+        case CHIAKI_VIDEO_RESOLUTION_PRESET_1440p: return 40000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 25000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 20000;
         case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 10000;
@@ -1992,6 +2013,8 @@ void SettingsManager::setDevForceWsFqdn(const std::string& fqdn) {
 int SettingsManager::getMinBitrateForResolution(ChiakiVideoResolutionPreset res) const {
     if (unlockBitrateMax) {
         switch (res) {
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_2160p: return 10000;
+            case CHIAKI_VIDEO_RESOLUTION_PRESET_1440p: return 5000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_1080p: return 5000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_720p: return 5000;
             case CHIAKI_VIDEO_RESOLUTION_PRESET_540p: return 1000;
@@ -2050,9 +2073,7 @@ int SettingsManager::getEasuTargetHeight() const {
         case StreamProfile::Remote: res = remoteVideoResolution; break;
         case StreamProfile::Vpn: res = vpnVideoResolution; break;
         case StreamProfile::Cloud:
-            res = getCloudVideoResolution(activeCloudPscloud) <= 720
-                ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
-                : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+            res = intToResolution(getCloudVideoResolution(activeCloudPscloud));
             break;
         case StreamProfile::Local:
         default: res = localVideoResolution; break;

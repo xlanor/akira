@@ -413,12 +413,23 @@ void SettingsPictureView::initCloudResolutionSelector(bool pscloud,
         "akira/settings/res_1080p"_i18n,
         "1080p (FSR)",
     };
+    if (pscloud) {
+        options.push_back("1440p");
+        options.push_back("2160p");
+    }
 
     int currentIndex;
-    if (settings->getCloudFsrEnabled(pscloud))
+    if (settings->getCloudFsrEnabled(pscloud)) {
         currentIndex = 2;
-    else
-        currentIndex = settings->getCloudVideoResolution(pscloud) <= 720 ? 0 : 1;
+    } else {
+        int currentResolution = settings->getCloudVideoResolution(pscloud);
+        if (pscloud && currentResolution >= 2160)
+            currentIndex = 4;
+        else if (pscloud && currentResolution >= 1440)
+            currentIndex = 3;
+        else
+            currentIndex = currentResolution <= 720 ? 0 : 1;
+    }
 
     brls::SliderCell* slider = pscloud ? pscloudBitrateSlider : psnowBitrateSlider;
 
@@ -434,6 +445,8 @@ void SettingsPictureView::initCloudResolutionSelector(bool pscloud,
                 case 0: resolution = 720; break;
                 case 1: resolution = 1080; break;
                 case 2: resolution = 720; fsr = true; break;
+                case 3: resolution = 1440; break;
+                case 4: resolution = 2160; break;
                 default: resolution = 1080; break;
             }
             settings->setCloudVideoResolution(pscloud, resolution);
@@ -447,9 +460,7 @@ void SettingsPictureView::initCloudResolutionSelector(bool pscloud,
 }
 
 void SettingsPictureView::initCloudBitrateSlider(bool pscloud, brls::SliderCell* slider) {
-    auto resolution = settings->getCloudVideoResolution(pscloud) <= 720
-        ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
-        : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+    auto resolution = SettingsManager::intToResolution(settings->getCloudVideoResolution(pscloud));
     int maxBitrate = settings->getMaxBitrateForResolution(resolution);
     int minBitrate = settings->getMinBitrateForResolution(resolution);
     int currentBitrate = settings->getCloudVideoBitrate(pscloud);
@@ -472,9 +483,7 @@ void SettingsPictureView::initCloudBitrateSlider(bool pscloud, brls::SliderCell*
         pscloud ? "akira/settings/pscloud_bitrate"_i18n : "akira/settings/psnow_bitrate"_i18n,
         normalizedValue,
         [this, pscloud, slider](float value) {
-            auto resolution = settings->getCloudVideoResolution(pscloud) <= 720
-                ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
-                : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+            auto resolution = SettingsManager::intToResolution(settings->getCloudVideoResolution(pscloud));
             int maxBitrate = settings->getMaxBitrateForResolution(resolution);
             int minBitrate = settings->getMinBitrateForResolution(resolution);
             int bitrate = minBitrate + static_cast<int>(value * (maxBitrate - minBitrate));
@@ -491,9 +500,7 @@ void SettingsPictureView::initCloudBitrateSlider(bool pscloud, brls::SliderCell*
 }
 
 void SettingsPictureView::updateCloudBitrateSlider(bool pscloud, brls::SliderCell* slider) {
-    auto resolution = settings->getCloudVideoResolution(pscloud) <= 720
-        ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
-        : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+    auto resolution = SettingsManager::intToResolution(settings->getCloudVideoResolution(pscloud));
     int defaultBitrate = SettingsManager::getDefaultBitrateForResolution(resolution);
     int maxBitrate = settings->getMaxBitrateForResolution(resolution);
     int minBitrate = settings->getMinBitrateForResolution(resolution);

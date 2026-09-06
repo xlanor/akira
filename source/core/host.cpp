@@ -467,15 +467,23 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
     ChiakiVideoResolutionPreset resolution;
     ChiakiVideoFPSPreset fps;
     if (cloud) {
-        resolution = settings->getCloudVideoResolution(pscloud) <= 720
-            ? CHIAKI_VIDEO_RESOLUTION_PRESET_720p
-            : CHIAKI_VIDEO_RESOLUTION_PRESET_1080p;
+        resolution = SettingsManager::intToResolution(settings->getCloudVideoResolution(pscloud));
         fps = CHIAKI_VIDEO_FPS_PRESET_60;
     } else {
         resolution = settings->getVideoResolution(this);
         fps = settings->getVideoFPS(this);
     }
     chiaki_connect_video_profile_preset(&videoProfile, resolution, fps);
+    if (pscloud) {
+        int cloudRes = settings->getCloudVideoResolution(pscloud);
+        if (cloudRes >= 2160) {
+            videoProfile.width = 3840;
+            videoProfile.height = 2160;
+        } else if (cloudRes >= 1440) {
+            videoProfile.width = 2560;
+            videoProfile.height = 1440;
+        }
+    }
     videoProfile.bitrate = cloud ? settings->getCloudVideoBitrate(pscloud) : settings->getVideoBitrate(this);
 
     chiaki_opus_decoder_init(&opusDecoder, log);

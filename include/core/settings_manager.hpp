@@ -203,6 +203,7 @@ public:
 
     static std::string resolutionToString(ChiakiVideoResolutionPreset resolution);
     static int resolutionToInt(ChiakiVideoResolutionPreset resolution);
+    static ChiakiVideoResolutionPreset intToResolution(int height);
     static ChiakiVideoResolutionPreset stringToResolution(const std::string& value);
 
     static std::string fpsToString(ChiakiVideoFPSPreset fps);
