@@ -14,24 +14,14 @@ public:
     SettingsControllerView();
 
 private:
-    BRLS_BIND(brls::SelectorCell, hapticSelector, "settings/haptic");
-    BRLS_BIND(brls::SliderCell, rumbleFreqLowSlider, "settings/rumbleFreqLow");
-    BRLS_BIND(brls::SliderCell, rumbleFreqHighSlider, "settings/rumbleFreqHigh");
-    BRLS_BIND(brls::SliderCell, rumbleEnvelopeAttackSlider, "settings/rumbleEnvelopeAttack");
-    BRLS_BIND(brls::SliderCell, rumbleEnvelopeDecaySlider, "settings/rumbleEnvelopeDecay");
-    BRLS_BIND(brls::SelectorCell, gyroSourceSelector, "settings/gyroSource");
     BRLS_BIND(brls::BooleanCell, sleepOnExitToggle, "settings/sleepOnExit");
+    BRLS_BIND(brls::DetailCell, connectedControllersCell, "settings/connectedControllers");
     BRLS_BIND(brls::DetailCell, buttonMappingCell, "settings/buttonMapping");
 
     SettingsManager* settings = nullptr;
 
-    void initHapticSelector();
-    void initRumbleFreqLowSlider();
-    void initRumbleFreqHighSlider();
-    void initRumbleEnvelopeAttackSlider();
-    void initRumbleEnvelopeDecaySlider();
-    void initGyroSourceSelector();
     void initSleepOnExitToggle();
+    void initConnectedControllers();
     void initButtonMappingCell();
 };
 

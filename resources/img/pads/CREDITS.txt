@@ -1,0 +1,14 @@
+Controller line art from the Classic Controller Pack (v1.2) by Aleksandr Makarov.
+  https://www.patreon.com/aleksandrmakarov
+
+Used with permission of the pack licence: free for use and modification in free
+and commercial projects, with attribution.
+
+  switch_handheld.png  <- nintendoswitch.png
+  switch_pro.png       <- nintendoswitchpro.png
+  dualsense.png        <- ps5.png
+  dualshock4.png       <- ps4.png
+  dualshock3.png       <- ps3.png
+  gamepad.png          <- xboxs.png       (stands in for any pad we can name but have no drawing for)
+  switch_joycons.png   <- nintendoswitch-vleft.png + nintendoswitch-vright.png,
+                          trimmed and composed side by side

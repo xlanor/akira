@@ -36,6 +36,18 @@ struct StreamStats
     size_t frames_recovered = 0;
 
     uint64_t stream_duration_seconds = 0;
+
+    /*
+     * Analog triggers, shown live because there is no other way to know.
+     *
+     * The value Akira sends is indistinguishable from a digital press once it
+     * has left the console, and "it felt right" is not evidence. A percentage
+     * that moves with your finger is - and if it only ever reads 0 or 100, the
+     * pressure is not arriving however convincing the game feels.
+     */
+    bool analog_triggers_active = false;
+    uint8_t analog_l2 = 0;   /* 0..255, as sent */
+    uint8_t analog_r2 = 0;
 };
 
 #endif // AKIRA_IO_STREAM_STATS_HPP

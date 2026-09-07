@@ -2,6 +2,7 @@
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "core/swipe_direction.hpp"
+#include "input/ps_output.hpp"
 #include <borealis.hpp>
 #include <chiaki/controller.h>
 #include <cmath>
@@ -19,6 +20,24 @@ InputManager::~InputManager()
 
 bool InputManager::init()
 {
+    /*
+     * Said once, at the top of a stream.
+     *
+     * Controller Vibration in System Settings switches off the whole HOS
+     * vibration path, and hidSendVibrationValues still returns success when it
+     * is off - HOS accepts the values and drops them. Every symptom of that is
+     * a symptom of a broken driver: amplitudes in our log, no error anywhere,
+     * and a pad that does nothing. It cost an evening once.
+     *
+     * Only the HOS path is affected. A pad akira writes to directly never goes
+     * near it, which is why haptics can work while rumble does not.
+     */
+    bool vibration_permitted = true;
+    if (R_SUCCEEDED(hidIsVibrationPermitted(&vibration_permitted)) && !vibration_permitted) {
+        brls::Logger::warning("Controller Vibration is off in System Settings - "
+                              "nothing sent through HOS will be felt");
+    }
+
     for (int i = 0; i < SDL_JOYSTICK_COUNT; i++)
     {
         m_sdl_joystick_ptr[i] = SDL_JoystickOpen(i);
@@ -29,23 +48,27 @@ bool InputManager::init()
         }
     }
 
-    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
-    padInitializeDefault(&m_pad);
+    /*
+     * Configure for every pad, not just player one. Akira used to narrow this
+     * to 1, which meant a controller HOS had put in any other slot - a
+     * DualSense paired alongside handheld Joy-Cons, say - was invisible here
+     * no matter what it was doing. Nothing can be offered as a choice that the
+     * console will not report.
+     */
+    padConfigureInput(8, HidNpadStyleSet_NpadStandard);
     hidInitializeTouchScreen();
 
-    hidGetSixAxisSensorHandles(&m_sixaxis_handles[0], 1, HidNpadIdType_Handheld, HidNpadStyleTag_NpadHandheld);
-    hidGetSixAxisSensorHandles(&m_sixaxis_handles[1], 1, HidNpadIdType_No1, HidNpadStyleTag_NpadFullKey);
-    hidGetSixAxisSensorHandles(&m_sixaxis_handles[2], 2, HidNpadIdType_No1, HidNpadStyleTag_NpadJoyDual);
-    hidStartSixAxisSensor(m_sixaxis_handles[0]);
-    hidStartSixAxisSensor(m_sixaxis_handles[1]);
-    hidStartSixAxisSensor(m_sixaxis_handles[2]);
-    hidStartSixAxisSensor(m_sixaxis_handles[3]);
+    m_path = akira::input::DefaultPadPath(m_extended);
+
+    m_extended.initializeOptional();
 
     return true;
 }
 
 void InputManager::cleanup()
 {
+    m_extended.shutdown();
+
     for (int i = 0; i < SDL_JOYSTICK_COUNT; i++)
     {
         if (m_sdl_joystick_ptr[i])
@@ -55,25 +78,179 @@ void InputManager::cleanup()
         }
     }
 
-    hidStopSixAxisSensor(m_sixaxis_handles[0]);
-    hidStopSixAxisSensor(m_sixaxis_handles[1]);
-    hidStopSixAxisSensor(m_sixaxis_handles[2]);
-    hidStopSixAxisSensor(m_sixaxis_handles[3]);
+    m_path.reset();
+}
+
+void InputManager::setPath(std::unique_ptr<akira::input::PadPath> path)
+{
+    if (!path)
+        return;
+
+    /* Leave the outgoing pad's motors quiet - its destructor stops them, but
+     * only after the new path is live, and a pad handed over mid-buzz would
+     * otherwise keep buzzing for a frame. */
+    if (m_path)
+        m_path->sendRumble(0.0f, 0.0f, 0.0f, 0.0f);
+    m_path = std::move(path);
+
+    brls::Logger::info("InputManager: input path is now {}", m_path->label());
+}
+
+std::vector<akira::input::PadDescription> InputManager::describePads()
+{
+    return akira::input::DescribePads(m_extended);
+}
+
+void InputManager::selectNpad(HidNpadIdType npad)
+{
+    for (const auto& desc : describePads()) {
+        if (desc.npad != npad)
+            continue;
+
+        auto path = akira::input::MakePath(desc, m_extended);
+        if (!path)
+            break;
+
+        m_bound_npad = npad;
+
+        brls::Logger::info("InputManager: using {} on npad {}", path->label(), (int)npad);
+        setPath(std::move(path));
+        return;
+    }
+
+    /*
+     * The pad went away between being offered and being chosen - switched off,
+     * or out of range. Falling back is better than binding to nothing, and the
+     * default path is what someone who never picked would have had anyway.
+     */
+    brls::Logger::warning("InputManager: npad {} no longer present, falling back to default", (int)npad);
+    setPath(akira::input::DefaultPadPath(m_extended));
+}
+
+void InputManager::retryPathIdentification()
+{
+    if (m_identify_done)
+        return;
+
+    const uint32_t now = (uint32_t)(armTicksToNs(armGetSystemTick()) / 1000000ull);
+
+    if (m_identify_until == 0) {
+        /* Ten seconds from the first frame. Long enough for a pad that is
+         * still connecting, short enough that a console with no DualSense on
+         * it is not making an IPC call a second for the whole stream. */
+        m_identify_until = now + 10000;
+        m_identify_next  = now;
+    }
+
+    if (akira::input::PadTakesDirectOutput(m_path->vendorId(), m_path->productId())) {
+        m_identify_done = true;
+        return;
+    }
+
+    if (now > m_identify_until) {
+        m_identify_done = true;
+        return;
+    }
+
+    if (now < m_identify_next)
+        return;
+    m_identify_next = now + 1000;
+
+    for (const auto& desc : describePads()) {
+        if (desc.kind != akira::input::PadPathKind::McPsNative)
+            continue;
+        if (m_bound_npad != kNoNpad && desc.npad != m_bound_npad)
+            continue;
+
+        auto path = akira::input::MakePath(desc, m_extended);
+        if (!path)
+            continue;
+
+        brls::Logger::info("InputManager: {} identified on npad {} after the path was chosen"
+                           " - upgrading from {}",
+                           path->label(), (int)desc.npad, m_path->label());
+
+        m_bound_npad    = desc.npad;
+        m_identify_done = true;
+        setPath(std::move(path));
+        return;
+    }
+}
+
+void InputManager::reconcilePathDriver()
+{
+    if (m_bound_npad == kNoNpad)
+        return;
+
+    /*
+     * Once a second. The answer only moves when someone opens the overlay, and
+     * resolving it describes every pad, which is not a per-frame cost.
+     */
+    const uint32_t now = (uint32_t)(armTicksToNs(armGetSystemTick()) / 1000000ull);
+    if (now < m_driver_next)
+        return;
+    m_driver_next = now + 1000;
+
+    for (const auto& desc : describePads()) {
+        if (desc.npad != m_bound_npad)
+            continue;
+
+        const akira::input::PadDriver driver =
+            akira::input::ResolvePadDriver(desc, m_extended);
+        const bool native_now = m_path->nativeRumble();
+
+        if ((driver == akira::input::PadDriver::Akira) == native_now)
+            return;
+
+        auto path = akira::input::MakePath(desc, m_extended);
+        if (!path)
+            return;
+
+        brls::Logger::info("InputManager: pad on npad {} is now driven by {}"
+                           " - {} to {}",
+                           (int)desc.npad, akira::input::PadDriverName(driver),
+                           m_path->label(), path->label());
+        setPath(std::move(path));
+        return;
+    }
 }
 
 void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
 {
-    padUpdate(&m_pad);
+    if (!m_path)
+    {
+        chiaki_controller_state_set_idle(state);
+        return;
+    }
 
-    u64 buttons = padGetButtons(&m_pad);
+    retryPathIdentification();
+    reconcilePathDriver();
+
+    m_path->poll();
 
     state->buttons = 0;
     state->l2_state = 0x00;
     state->r2_state = 0x00;
 
-    const ButtonMapping& mapping = SettingsManager::getInstance()->getButtonMapping();
+    /*
+     * HOS's view of a MissionControl pad *is* MC's remap of it - Create,
+     * Options and Mute already folded onto minus, plus and capture, with a
+     * touchpad click folded onto the same three by zone. A path that reads the
+     * pad natively must not also ingest that, or a single touchpad click fires
+     * twice: once as TOUCHPAD, and again as whatever minus happens to be bound
+     * to. Overwriting the result afterwards is not enough; the chain has to not
+     * run.
+     */
+    const bool mapped = m_path->usesButtonMapping();
 
+    u64 buttons = mapped ? m_path->heldButtons() : 0;
     u64 consumedButtons = 0;
+
+    if (!mapped) {
+        m_path->readButtons(state);
+        m_path->readTriggers(state);
+    } else {
+    const ButtonMapping& mapping = SettingsManager::getInstance()->getButtonMapping();
     for (const auto& [chiakiBtn, combo] : mapping) {
         if (combo.size() <= 1) continue;
         if (!SettingsManager::getInstance()->isButtonEnabled(chiakiBtn))
@@ -134,9 +311,11 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
         }
     }
 
+    m_path->readTriggers(state);
+    }
 
-    HidAnalogStickState left = padGetStickPos(&m_pad, 0);
-    HidAnalogStickState right = padGetStickPos(&m_pad, 1);
+    HidAnalogStickState left = m_path->stickPos(0);
+    HidAnalogStickState right = m_path->stickPos(1);
 
     static constexpr u64 leftStickDirs = HidNpadButton_StickLUp | HidNpadButton_StickLDown
                                        | HidNpadButton_StickLLeft | HidNpadButton_StickLRight;
@@ -159,23 +338,33 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
         state->right_y = -right.y;
     }
 
-    readTouchScreen(state, finger_id_touch_id);
-    updateSyntheticSwipes(state, buttons);
-
-    if (m_touchpad_button_hold < 0)
+    /*
+     * Everything below is compensation for a Switch touchscreen not being a
+     * touchpad: no physical click, so a tap is synthesised into one, held for
+     * a few frames, and the touch release deferred until after it lands. A pad
+     * with a real touchpad has an actual click bit and needs none of it - and
+     * running both would inject phantom clicks alongside genuine ones.
+     */
+    if (!m_path->readTouchpad(state))
     {
-        m_touchpad_button_hold++;
+        readTouchScreen(state, finger_id_touch_id);
+        updateSyntheticSwipes(state, buttons);
+
+        if (m_touchpad_button_hold < 0)
+        {
+            m_touchpad_button_hold++;
+            if (m_touchpad_button_hold == 0)
+                m_touchpad_button_hold = PendingBorderTap::TAP_BUTTON_HOLD_FRAMES;
+        }
+        else if (m_touchpad_button_hold > 0)
+        {
+            state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
+            m_touchpad_button_hold--;
+        }
+
         if (m_touchpad_button_hold == 0)
-            m_touchpad_button_hold = PendingBorderTap::TAP_BUTTON_HOLD_FRAMES;
+            fireDeferredRelease(state);
     }
-    else if (m_touchpad_button_hold > 0)
-    {
-        state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
-        m_touchpad_button_hold--;
-    }
-
-    if (m_touchpad_button_hold == 0)
-        fireDeferredRelease(state);
 
     if (++m_sixaxis_frame_counter >= 3) {
         m_sixaxis_frame_counter = 0;
@@ -371,49 +560,14 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
 
 bool InputManager::readSixAxis(ChiakiControllerState* state)
 {
+    /*
+     * Zeroed up front and written regardless of whether the path had anything
+     * to give: a pad with no usable sensor has always reported a flat zero
+     * here rather than leaving the previous frame's motion standing, and
+     * changing that would make a still controller drift.
+     */
     HidSixAxisSensorState sixaxis = {0};
-    uint64_t style_set = padGetStyleSet(&m_pad);
-
-    if (style_set & HidNpadStyleTag_NpadHandheld)
-    {
-        hidGetSixAxisSensorStates(m_sixaxis_handles[0], &sixaxis, 1);
-    }
-    else if (style_set & HidNpadStyleTag_NpadFullKey)
-    {
-        hidGetSixAxisSensorStates(m_sixaxis_handles[1], &sixaxis, 1);
-    }
-    else if (style_set & HidNpadStyleTag_NpadJoyDual)
-    {
-        u64 attrib = padGetAttributes(&m_pad);
-        GyroSource gyroSource = SettingsManager::getInstance()->getGyroSource();
-
-        bool leftConnected = attrib & HidNpadAttribute_IsLeftConnected;
-        bool rightConnected = attrib & HidNpadAttribute_IsRightConnected;
-
-        bool useLeft = false;
-        bool useRight = false;
-
-        switch (gyroSource) {
-            case GyroSource::Left:
-                useLeft = leftConnected;
-                break;
-            case GyroSource::Right:
-                useRight = rightConnected;
-                break;
-            case GyroSource::Auto:
-            default:
-                if (leftConnected)
-                    useLeft = true;
-                else if (rightConnected)
-                    useRight = true;
-                break;
-        }
-
-        if (useLeft)
-            hidGetSixAxisSensorStates(m_sixaxis_handles[2], &sixaxis, 1);
-        else if (useRight)
-            hidGetSixAxisSensorStates(m_sixaxis_handles[3], &sixaxis, 1);
-    }
+    m_path->readGyro(&sixaxis);
 
     state->gyro_x = sixaxis.angular_velocity.x * 2.0f * M_PI;
     state->gyro_y = sixaxis.angular_velocity.z * 2.0f * M_PI;
@@ -472,13 +626,14 @@ bool InputManager::readSixAxis(ChiakiControllerState* state)
 
 void InputManager::resetMotionControls()
 {
+    if (!m_path)
+        return;
+
     m_accel_zero_x = m_raw_accel_x;
     m_accel_zero_y = m_raw_accel_y - 1.0f;
     m_accel_zero_z = m_raw_accel_z;
 
-    for (int i = 0; i < 4; i++) {
-        hidResetSixAxisSensorFusionParameters(m_sixaxis_handles[i]);
-    }
+    m_path->resetMotion();
 
     brls::Logger::info("Motion controls reset: zero offset = ({}, {}, {})",
         m_accel_zero_x, m_accel_zero_y, m_accel_zero_z);
@@ -510,8 +665,8 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
 
     const ButtonMapping& mapping = SettingsManager::getInstance()->getButtonMapping();
 
-    HidAnalogStickState leftStick = padGetStickPos(&m_pad, 0);
-    HidAnalogStickState rightStick = padGetStickPos(&m_pad, 1);
+    HidAnalogStickState leftStick = m_path->stickPos(0);
+    HidAnalogStickState rightStick = m_path->stickPos(1);
 
     static const char* swipeNames[4] = { "UP", "DOWN", "LEFT", "RIGHT" };
 

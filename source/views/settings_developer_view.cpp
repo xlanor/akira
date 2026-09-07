@@ -116,7 +116,7 @@ SettingsDeveloperView::SettingsDeveloperView() {
             settings->writeFile();
         });
 
-    static const int takionOffered[] = { 15, 20 };
+    static const int takionOffered[] = { 12, 15, 20 };
 
     const int currentTakion = settings->getTakionVersion();
 

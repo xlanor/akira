@@ -17,12 +17,28 @@
 #include "profile.hpp"
 
 // Forward declaration
+#include "input/rumble_profile.hpp"
+
 class Host;
 
 enum class HapticPreset {
     Disabled = 0,
     Weak = 1,
-    Strong = 2
+    Strong = 2,
+
+    /*
+     * Ask the console for rumble instead of haptics.
+     *
+     * enable_dualsense announces the client as a DualSense, and a PS5 talking
+     * to a DualSense sends a haptic waveform and no rumble events at all -
+     * correct, because the pad has no motors and renders rumble on its own
+     * coils. We cannot reach those coils, so we reconstruct two motor
+     * amplitudes from the waveform, and it feels like what it is.
+     *
+     * Announcing a DualShock 4 instead makes the console send the amplitudes
+     * the game actually asked for. No haptic audio, no derivation.
+     */
+    ConsoleRumble = 3
 };
 
 enum class GyroSource {
@@ -63,10 +79,41 @@ private:
     int64_t nextProfileId = 1;
     int64_t nextConsoleId = 1;
     HapticPreset globalHaptic = HapticPreset::Disabled;
+    /* Off on a fresh install, but remembered once chosen - they reset on every
+     * launch before this, so a test could silently run with the path disabled
+     * and nothing on screen said so. */
+    bool  directRumbleInStream  = false;
+    bool  directHapticsInStream = false;
+
+    /*
+     * How many haptic frames a second the pad is allowed.
+     *
+     * Not a quality knob. The link goes down after about seventeen seconds of
+     * an unthrottled stream, and the only run that ever survived two minutes
+     * was one where a checksum bug happened to discard fifteen frames in every
+     * sixteen - roughly three a second getting through. That accident is the
+     * only evidence we have of a rate this link tolerates, so it is the
+     * default until a run establishes a better one.
+     */
+    /*
+     * One frame per 21.3ms, which is the rate the coils consume them at - two
+     * 64-byte blocks of 3kHz stereo per frame. It was 3 while every frame over
+     * 78 bytes was being refused by the link; that is fixed, and 3 Hz delivers
+     * 21ms of audio every 333ms, which cannot sound like anything.
+     */
+
     float rumbleFreqLow = 140.0f;
     float rumbleFreqHigh = 185.0f;
     float rumbleEnvelopeDecay = 0.85f;
     float rumbleEnvelopeAttack = 0.60f;
+
+    /*
+     * Rumble shaping per controller, keyed three ways: a MAC for one physical
+     * pad, a vid/pid for a model, and two reserved names - "switch" for the
+     * pads HOS drives itself (which have no vendor id to key on) and "default"
+     * for anything unrecognised.
+     */
+    std::map<std::string, akira::input::RumbleProfile> rumbleProfiles;
     int localVideoBitrate = 10000;
     int remoteVideoBitrate = 10000;
     int vpnVideoBitrate = 5000;
@@ -342,14 +389,48 @@ public:
     void setHaptic(Host* host, HapticPreset value);
     void setHaptic(Host* host, const std::string& value);
 
-    float getRumbleFreqLow() const;
-    void setRumbleFreqLow(float value);
-    float getRumbleFreqHigh() const;
-    void setRumbleFreqHigh(float value);
-    float getRumbleEnvelopeDecay() const;
-    void setRumbleEnvelopeDecay(float value);
-    float getRumbleEnvelopeAttack() const;
-    void setRumbleEnvelopeAttack(float value);
+    bool getDirectRumbleInStream() const;
+    void setDirectRumbleInStream(bool value);
+    bool getDirectHapticsInStream() const;
+    void setDirectHapticsInStream(bool value);
+
+
+    /*
+     * The profile a pad resolves to, walking unit then model then fallback.
+     *
+     * Returns a copy: callers read it every frame on the audio path, and a
+     * reference into a map that the settings screen can rehash underneath them
+     * is a crash waiting for someone to open Controller mid-stream.
+     */
+    akira::input::RumbleProfile resolveRumbleProfile(uint16_t vendorId, uint16_t productId,
+                                                     const uint8_t* address,
+                                                     bool switchNative, bool joycon) const;
+
+    /* Which key resolveRumbleProfile would have used, for a screen that has to
+     * say which tier it is editing. */
+    std::string resolveRumbleKey(uint16_t vendorId, uint16_t productId,
+                                 const uint8_t* address, bool switchNative,
+                                 bool joycon) const;
+
+    akira::input::RumbleProfile getRumbleProfile(const std::string& key) const;
+    void setRumbleProfile(const std::string& key, const akira::input::RumbleProfile& profile);
+    bool hasRumbleProfile(const std::string& key) const;
+
+    /*
+     * Seeds an entry for a pad we can see but have never written down, so the
+     * settings screen has something to edit. Returns true if it created one.
+     *
+     * A new entry starts from whatever that pad was already resolving to, not
+     * from the defaults. Creating a narrower tier must not change how the pad
+     * behaves at the moment it is created - otherwise adding a DualSense entry
+     * silently discards the values someone had already tuned one tier down.
+     */
+    bool seedRumbleProfile(const std::string& key,
+                           const akira::input::RumbleProfile* inheritFrom = nullptr);
+
+    /* Back to the defaults for that key rather than removing it - a deleted
+     * entry only comes back the next time the pad wakes up. */
+    void resetRumbleProfile(const std::string& key);
 
     ChiakiTarget getChiakiTarget(Host* host);
     bool setChiakiTarget(Host* host, ChiakiTarget target);

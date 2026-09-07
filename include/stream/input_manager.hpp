@@ -8,6 +8,12 @@
 #include <chiaki/log.h>
 #include <switch.h>
 
+#include "input/extended_input_manager.hpp"
+#include "input/pad_path.hpp"
+
+#include <memory>
+#include <vector>
+
 #define SDL_JOYSTICK_COUNT 2
 
 // Trackpad and touchscreen dimensions for coordinate mapping
@@ -53,9 +59,58 @@ public:
     void cleanup();
     void update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
 
-    PadState* getPad() { return &m_pad; }
+    /*
+     * The one pad everything reads from. Swapping it is how a controller is
+     * chosen; until something calls this, the default path reproduces the
+     * behaviour Akira had before paths existed.
+     */
+    void setPath(std::unique_ptr<akira::input::PadPath> path);
+    akira::input::PadPath* path() { return m_path.get(); }
+
+    /*
+     * Bind to the pad the user picked. Everything the stream reads follows from
+     * this - buttons, sticks, gyro, triggers, touch and rumble - so it is the
+     * one decision that has to be made explicitly rather than inferred.
+     *
+     * Falls back to the default path if the npad no longer resolves, which is
+     * the case where the pad was switched off between picking and starting.
+     */
+    void selectNpad(HidNpadIdType npad);
+
+    /* What the picker offers. Requires the backend to have been subscribed for
+     * a moment, so it is worth re-reading while the picker is on screen rather
+     * than once. */
+    std::vector<akira::input::PadDescription> describePads();
+
+    ExtendedInputManager& extendedInput() { return m_extended; }
 
 private:
+    /*
+     * A pad the backend had not identified yet, picked up once it has.
+     *
+     * A DualSense is only known to be one after the sysmodule has seen a report
+     * from it, and reports only flow once Akira has subscribed - which it does
+     * moments before a stream starts. Start quickly enough and the pad is still
+     * anonymous when the path is chosen, so it gets the generic MissionControl
+     * path and keeps it for the whole session: no analog triggers, no direct
+     * rumble, no touchpad. Opening the overlay first happened to warm the
+     * backend, which is why it looked like the overlay was required.
+     *
+     * Identity only ever improves, so re-checking costs one IPC call a second
+     * and stops for good the moment it upgrades or the pad turns out to be
+     * something else.
+     */
+    void retryPathIdentification();
+
+    /*
+     * Rebuild the path when the driver changes under it.
+     *
+     * retryPathIdentification only ever upgrades, and stops for good once it
+     * has. The overlay toggle moves in both directions and can move during a
+     * stream, so the downgrade needs a check that does not retire itself.
+     */
+    void reconcilePathDriver();
+
     bool readTouchScreen(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
     bool readSixAxis(ChiakiControllerState* state);
     void updateSyntheticSwipes(ChiakiControllerState* state, u64 buttons);
@@ -64,9 +119,21 @@ private:
     ChiakiLog* m_log = nullptr;
     SDL_Joystick* m_sdl_joystick_ptr[SDL_JOYSTICK_COUNT] = {nullptr};
 
-    PadState m_pad;
-    HidSixAxisSensorHandle m_sixaxis_handles[4];
+    ExtendedInputManager m_extended;
+
+    std::unique_ptr<akira::input::PadPath> m_path;
+
+    /* kNoNpad means nothing was picked explicitly, so any pad that identifies
+     * as one we drive directly is fair game. */
+    static constexpr HidNpadIdType kNoNpad = (HidNpadIdType)0xff;
+    HidNpadIdType m_bound_npad     = kNoNpad;
+    bool          m_identify_done  = false;
+    uint32_t      m_identify_next  = 0;
+    uint32_t      m_identify_until = 0;
+    uint32_t      m_driver_next    = 0;
     int m_sixaxis_frame_counter = 0;
+
+
 
     SyntheticSwipe m_swipes[4];
 

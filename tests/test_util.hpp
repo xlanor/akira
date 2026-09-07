@@ -39,6 +39,19 @@ struct Register {
         }                                                                   \
     } while (0)
 
+/* Like CHECK, but abandons the test instead of continuing. Use it whenever the
+ * rest of the test would dereference what is being checked - CHECK alone
+ * records the failure and carries on, so a regression there takes down the
+ * whole run with a segfault and reports nothing at all. */
+#define REQUIRE(cond)                                                       \
+    do {                                                                    \
+        if (!(cond)) {                                                      \
+            std::printf("      %s:%d: REQUIRE(%s)\n", __FILE__, __LINE__, #cond); \
+            tests::failures++;                                              \
+            return;                                                         \
+        }                                                                   \
+    } while (0)
+
 #define CHECK_EQ(actual, expected)                                          \
     do {                                                                    \
         auto actualValue = (actual);                                        \

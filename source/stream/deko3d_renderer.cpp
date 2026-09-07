@@ -1193,6 +1193,22 @@ void Deko3dRenderer::renderStatsOverlay()
         m_stats.is_hevc ? "HEVC" : "H.264",
         m_stats.is_hardware_decoder ? "NVTEGRA" : "SW");
 
+    /*
+     * Percentages rather than raw bytes, because the question this answers is
+     * "is pressure getting through", and 0 or 100 with nothing in between is
+     * the failure it exists to make visible.
+     */
+    std::string triggerSection;
+    if (m_stats.analog_triggers_active) {
+        triggerSection = std::format(
+            "Analog: ON\n"
+            "L2: {:3}%  R2: {:3}%",
+            (static_cast<int>(m_stats.analog_l2) * 100 + 127) / 255,
+            (static_cast<int>(m_stats.analog_r2) * 100 + 127) / 255);
+    } else {
+        triggerSection = "Analog: off (digital)";
+    }
+
     std::string statsText = std::format(
         "=== Requested ===\n"
         "{}x{} @ {}fps\n"
@@ -1207,7 +1223,10 @@ void Deko3dRenderer::renderStatsOverlay()
         "Frame Loss: {} (Rec: {})\n"
         "Duration: {}m{:02}s\n"
         "GHASH: {}\n"
-        "VPN: {}",
+        "VPN: {}\n"
+        "\n"
+        "=== Triggers ===\n"
+        "{}",
         m_stats.requested_width,
         m_stats.requested_height,
         m_stats.requested_fps,
@@ -1221,7 +1240,8 @@ void Deko3dRenderer::renderStatsOverlay()
         mins,
         secs,
         ghashMode,
-        vpnStatus
+        vpnStatus,
+        triggerSection
     );
 
     // Calculate overlay dimensions

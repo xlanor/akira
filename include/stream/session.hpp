@@ -13,6 +13,7 @@
 #include <chrono>
 
 #include "core/exception.hpp"
+#include "input/rumble_profile.hpp"
 #include "stream/stream_stats.hpp"
 
 class AudioManager;
@@ -67,6 +68,8 @@ public:
     void setRumbleFreqs(float freqLow, float freqHigh);
     void setEnvelopeDecay(float decay);
     void setEnvelopeAttack(float attack);
+    void setRumbleCeiling(float ceiling);
+    void setRumbleSource(akira::input::RumbleSource source);
 
     ~Session();
 
@@ -82,6 +85,24 @@ public:
     bool MainLoop();
     void UpdateControllerState(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
     void SetRumble(uint8_t left, uint8_t right);
+
+    /* Straight to the chosen pad rather than through the haptic manager: this
+     * is not an amplitude to shape, it is a setting to hand over intact. */
+    void SetTriggerEffects(const ChiakiTriggerEffectsEvent* effects);
+
+    /* The user's console-side accessory settings, in the wire's own numbering.
+     * Handed to the pad rather than applied here - see PadPath. */
+    void SetEffectIntensity(uint8_t vibration, uint8_t trigger);
+
+    /* The colour the game asked for, for as long as the game is running. */
+    void SetLedColor(uint8_t red, uint8_t green, uint8_t blue);
+
+private:
+    /* Kept here so trigger effects can be dropped at the source when the
+     * console has them off. Strong until it says otherwise. */
+    uint8_t m_trigger_intensity = 1;
+
+public:
     void HapticCB(uint8_t* buf, size_t buf_size);
     void CleanUpHaptic();
 

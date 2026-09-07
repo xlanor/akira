@@ -25,6 +25,7 @@ public:
 
     brls::View* getDefaultFocus() override { return this; }
 
+    bool beginPadChoice();
     void startStream();
     void stopStream();
     void setSessionAlreadyStarted(bool started) { sessionPreStarted = started; }
@@ -32,6 +33,11 @@ public:
     static brls::View* create();
 
 private:
+    void waitForPads(int attempt);
+    /* Stand down a stream that was never started, from the picker. */
+    void abandonBeforeStart();
+    void finishPadChoice();
+
     Host* host = nullptr;
     std::shared_ptr<Host> hostOwner;
     Session* session = nullptr;
@@ -39,6 +45,8 @@ private:
     bool streamActive = false;
     bool sessionStarted = false;
     bool sessionPreStarted = false;
+    bool padChoiceDone = false;
+    bool controllerReady = false;
     bool wakeAttempted = false;
     int wakeRetryCount = 0;
     static constexpr int MAX_WAKE_RETRIES = 4;

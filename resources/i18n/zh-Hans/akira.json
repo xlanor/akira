@@ -633,7 +633,16 @@
     "rumble_reset_hint": "恢复此手柄的默认值",
     "audio_probe": "探测音频通道",
     "audio_probe_hint": "能否连接到触觉执行器？",
-    "audio_probe_unavailable": "后端不可用"
+    "audio_probe_unavailable": "后端不可用",
+    "rumble_source_heading": "震动",
+    "rumble_source": "来源",
+    "rumble_source_off": "关闭",
+    "rumble_source_derived": "触觉信号",
+    "rumble_source_game": "游戏震动",
+    "rumble_source_hint_off": "此手柄不震动",
+    "rumble_source_hint_derived": "由主机触觉信号转换，细节更丰富",
+    "rumble_source_hint_game": "游戏本身发出的震动指令",
+    "rumble_envelope_heading": "包络"
   },
   "update": {
     "channel": "更新通道",

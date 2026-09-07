@@ -32,45 +32,15 @@
                 cornerRadius="14"
                 marginBottom="30">
 
-                <brls:SelectorCell
-                    id="settings/haptic"
-                    title="@i18n/akira/settings/haptic_feedback"
-                    marginLeft="15"
-                    marginRight="15"/>
-
-                <brls:SliderCell
-                    id="settings/rumbleFreqLow"
-                    title="@i18n/akira/settings/rumble_low_freq"
-                    marginLeft="15"
-                    marginRight="15"/>
-
-                <brls:SliderCell
-                    id="settings/rumbleFreqHigh"
-                    title="@i18n/akira/settings/rumble_high_freq"
-                    marginLeft="15"
-                    marginRight="15"/>
-
-                <brls:SliderCell
-                    id="settings/rumbleEnvelopeAttack"
-                    title="@i18n/akira/settings/rumble_attack"
-                    marginLeft="15"
-                    marginRight="15"/>
-
-                <brls:SliderCell
-                    id="settings/rumbleEnvelopeDecay"
-                    title="@i18n/akira/settings/rumble_sustain"
-                    marginLeft="15"
-                    marginRight="15"/>
-
-                <brls:SelectorCell
-                    id="settings/gyroSource"
-                    title="@i18n/akira/settings/gyro_source"
-                    marginLeft="15"
-                    marginRight="15"/>
-
                 <brls:BooleanCell
                     id="settings/sleepOnExit"
                     title="@i18n/akira/settings/sleep_on_exit"
+                    marginLeft="15"
+                    marginRight="15"/>
+
+                <brls:DetailCell
+                    id="settings/connectedControllers"
+                    title="@i18n/akira/settings/connected_controllers"
                     marginLeft="15"
                     marginRight="15"/>
 

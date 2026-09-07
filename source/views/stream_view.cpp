@@ -1,4 +1,7 @@
 #include "views/stream_view.hpp"
+#include "views/controller_picker_view.hpp"
+#include "input/extended_input_manager.hpp"
+#include "input/pad_path.hpp"
 #include "views/stream_menu.hpp"
 #include "ui/theme.hpp"
 #include "views/connection_stage.hpp"
@@ -64,6 +67,24 @@ void StreamView::setupCallbacks()
 
     session->getInputManager()->setTargetPS5(host->isPS5());
 
+    host->setOnTriggerEffects([weak](const ChiakiTriggerEffectsEvent* effects) {
+        if (auto self = weak.lock()) {
+            self->session->SetTriggerEffects(effects);
+        }
+    });
+
+    host->setOnEffectIntensity([weak](uint8_t haptics, uint8_t triggers) {
+        if (auto self = weak.lock()) {
+            self->session->SetEffectIntensity(haptics, triggers);
+        }
+    });
+
+    host->setOnLedColor([weak](uint8_t red, uint8_t green, uint8_t blue) {
+        if (auto self = weak.lock()) {
+            self->session->SetLedColor(red, green, blue);
+        }
+    });
+
     host->setOnMotionReset([weak]() {
         if (auto self = weak.lock()) {
             if (self->session->getInputManager()) {
@@ -119,9 +140,234 @@ brls::View* StreamView::create()
     return nullptr;
 }
 
+/*
+ * Ask which controller to use, if there is anything to ask.
+ *
+ * Deliberately after InitController and deliberately delayed. The backend
+ * reports nothing about a pad until something has subscribed to it, and
+ * subscribing is what InitController does - so asking immediately would offer a
+ * list with the interesting controller missing from it. A moment on the
+ * connecting screen costs nothing; a picker that cannot see your DualSense is
+ * worse than no picker.
+ *
+ * The stream carries on connecting behind it. Input does not matter until the
+ * stream is live, so there is no reason to hold that up, and no clock the user
+ * has to beat.
+ */
+/*
+ * Which pad, decided before anything is in flight.
+ *
+ * This used to run on a fixed delay after the session had started, which was
+ * wrong twice over. The stream turns on exclusive rendering as soon as the
+ * video pipeline is prepared, and from that moment borealis draws the stream
+ * and not the activity stack - so a picker pushed later is racing the
+ * connection for the right to be drawn at all. And the delay was a guess at how
+ * long the backend needs to identify a Bluetooth pad, so the pad most worth
+ * choosing was the one most likely to be missing from the list.
+ *
+ * Returning true means the caller must stop: the choice is being made, and
+ * startStream() runs again once it has been.
+ */
+bool StreamView::beginPadChoice()
+{
+    if (padChoiceDone)
+        return false;
+
+    if (session == nullptr) {
+        padChoiceDone = true;
+        return false;
+    }
+
+    /*
+     * Bring the controller up first. describePads() cannot see a MissionControl
+     * pad until the backend session exists, and nothing reports before then.
+     */
+    if (!controllerReady) {
+        if (!session->InitController()) {
+            /* Let the normal path raise this - it already has the message. */
+            padChoiceDone = true;
+            return false;
+        }
+        controllerReady = true;
+    }
+
+    waitForPads(0);
+    return true;
+}
+
+/*
+ * Wait for the backend to name the pads rather than guessing how long it takes.
+ *
+ * A console with no sysmodule has nothing to wait for, so it never pays this.
+ * Everywhere else the wait ends the moment a Bluetooth pad is identified, which
+ * on a pad that is already awake is the first attempt.
+ */
+void StreamView::waitForPads(int attempt)
+{
+    constexpr int kMaxAttempts = 20;   /* 20 x 100ms */
+    constexpr int kIntervalMs  = 100;
+
+    auto* input = session ? session->getInputManager() : nullptr;
+    if (input == nullptr) {
+        finishPadChoice();
+        return;
+    }
+
+    const auto availability = input->extendedInput().availability();
+    const bool backendUsable =
+        availability == ExtendedInputManager::Availability::Available;
+
+    if (!backendUsable) {
+        brls::Logger::info("PadChoice: no backend to wait for, deciding now");
+        finishPadChoice();
+        return;
+    }
+
+    for (const auto& pad : input->describePads()) {
+        if (pad.kind == akira::input::PadPathKind::McPsNative ||
+            pad.kind == akira::input::PadPathKind::McGeneric) {
+            brls::Logger::info("PadChoice: backend named a pad after {}ms",
+                               attempt * kIntervalMs);
+            finishPadChoice();
+            return;
+        }
+    }
+
+    if (attempt >= kMaxAttempts) {
+        brls::Logger::info("PadChoice: no backend pad after {}ms, deciding anyway",
+                           attempt * kIntervalMs);
+        finishPadChoice();
+        return;
+    }
+
+    auto weak = weak_from_this();
+    brls::delay(kIntervalMs, [weak, attempt]() {
+        if (auto self = weak.lock())
+            self->waitForPads(attempt + 1);
+    });
+}
+
+void StreamView::finishPadChoice()
+{
+    padChoiceDone = true;
+
+    auto* input = session ? session->getInputManager() : nullptr;
+    if (input == nullptr) {
+        startStream();
+        return;
+    }
+
+    auto pads = input->describePads();
+
+    /*
+     * What the backend actually holds, verbatim.
+     *
+     * describePads() only reports what it concluded, and three different
+     * faults - the pad missing from the list, present but not Identified, or
+     * Identified but carrying no npad assignment - all present identically as
+     * a pad named "Controller". Reading the raw entries separates them.
+     */
+    {
+        AkiraInputDeviceList devices{};
+        if (input->extendedInput().listDevices(&devices)) {
+            brls::Logger::info("PadChoice: backend lists {} device(s)", devices.count);
+            for (uint8_t i = 0; i < devices.count && i < AKIRA_INPUT_MAX_LISTED_DEVICES; i++) {
+                const AkiraInputDeviceInfo& d = devices.devices[i];
+                brls::Logger::info(
+                    "PadChoice:   {:04x}:{:04x} report=0x{:02x} flags=0x{:02x}{}{}{}",
+                    d.vendor_id, d.product_id, d.report_id, d.flags,
+                    (d.flags & AkiraInputDevice_Identified) ? " identified" : "",
+                    (d.flags & AkiraInputDevice_Reporting)  ? " reporting"  : "",
+                    (d.flags & AkiraInputDevice_Claimed)    ? " claimed"    : "");
+            }
+        } else {
+            brls::Logger::warning("PadChoice: listDevices failed");
+        }
+    }
+
+    /*
+     * Logged unconditionally. Without it a picker that does not appear is
+     * indistinguishable between "only one pad was found", "they were judged
+     * interchangeable" and "it was pushed and never drawn" - and the first two
+     * are silent by design.
+     */
+    for (const auto& pad : pads) {
+        brls::Logger::info("PadChoice: npad {} {} [{}{}]",
+                           (int)pad.npad, pad.label,
+                           pad.caps.analog_triggers ? "analog " : "",
+                           pad.caps.touchpad ? "touch " : "");
+    }
+
+    if (!ControllerPickerView::worthAsking(pads)) {
+        brls::Logger::info("PadChoice: {} pad(s), nothing worth asking", pads.size());
+        for (const auto& pad : pads) {
+            if (pad.caps.analog_triggers || pad.caps.touchpad) {
+                input->selectNpad(pad.npad);
+                break;
+            }
+        }
+        startStream();
+        return;
+    }
+
+    brls::Logger::info("PadChoice: asking between {} pads", pads.size());
+
+    auto weak = weak_from_this();
+    auto describe = [weak]() -> std::vector<akira::input::PadDescription> {
+        if (auto self = weak.lock()) {
+            if (auto* mgr = self->session ? self->session->getInputManager() : nullptr)
+                return mgr->describePads();
+        }
+        return {};
+    };
+
+    auto* picker = new ControllerPickerView(pads, [weak](HidNpadIdType npad) {
+        auto self = weak.lock();
+
+        /*
+         * Backed out. Nothing has started, so stand the attempt down: release
+         * the controller we brought up to enumerate pads, and leave.
+         *
+         * The two pops are chained rather than issued together because
+         * popActivity animates and only removes the activity in its hide()
+         * completion - so two calls in the same tick both target the picker,
+         * and the stream view is left behind with no stream running and no way
+         * out of it.
+         */
+        if (npad == ControllerPickerView::kCancelled) {
+            if (self)
+                self->abandonBeforeStart();
+            else
+                brls::Application::popActivity();
+            return;
+        }
+
+        brls::Application::popActivity();
+
+        if (!self)
+            return;
+
+        if (npad != ControllerPickerView::kNoChoice) {
+            if (auto* mgr = self->session ? self->session->getInputManager() : nullptr)
+                mgr->selectNpad(npad);
+        }
+        self->startStream();
+    }, describe);
+
+    brls::Application::pushActivity(new brls::Activity(picker),
+                                    brls::TransitionAnimation::NONE);
+}
+
 void StreamView::startStream()
 {
     if (sessionStarted)
+    {
+        return;
+    }
+
+    /* Resolve which pad before anything renders. Returns true while the choice
+     * is outstanding; we are called again once it is made. */
+    if (beginPadChoice())
     {
         return;
     }
@@ -154,10 +400,14 @@ void StreamView::startStream()
             profile = SettingsManager::StreamProfile::Vpn;
         settings->setActiveStreamProfile(profile);
 
-        if (!session->InitController())
+        if (!controllerReady)
         {
-            brls::Logger::error("Failed to initialize controller");
-            throw Exception("akira/stream/failed_init_controller"_i18n);
+            if (!session->InitController())
+            {
+                brls::Logger::error("Failed to initialize controller");
+                throw Exception("akira/stream/failed_init_controller"_i18n);
+            }
+            controllerReady = true;
         }
 
         if (host->isRemote())
@@ -377,6 +627,19 @@ void StreamView::streamingTick()
 
     host->sendFeedbackState();
 
+    /* One toast per session, the first time the optional analog backend gives
+     * up. After this the digital ZL/ZR values are used and nothing retries, so
+     * there is nothing further to tell the user about. */
+    if (auto* input = session->getInputManager())
+    {
+        if (input->extendedInput().consumeDegradedNotice())
+        {
+            brls::sync([]() {
+                brls::Application::notify("akira/settings/analog_triggers_degraded"_i18n);
+            });
+        }
+    }
+
     if (!session->MainLoop())
     {
         brls::Application::setSwapInterval(1);
@@ -585,12 +848,26 @@ void StreamView::onLoginPinRequest(bool pinIncorrect)
 
 void StreamView::checkMenuTrigger()
 {
-    PadState pad;
-    padInitializeDefault(&pad);
-    padUpdate(&pad);
-    u64 buttons = padGetButtons(&pad);
+    /*
+     * Ask the chosen pad, not a merged one.
+     *
+     * This used to build its own padInitializeDefault state, which merges
+     * Handheld and player one only - so the menu was unreachable from a pad in
+     * any other slot, and it read whichever of the two pressed first rather
+     * than the controller the user actually picked. The chord itself also
+     * differs per pad, and the path is the thing that knows which.
+     */
+    bool minusPressed = false;
 
-    bool minusPressed = (buttons & HidNpadButton_Minus) != 0;
+    auto* input = session ? session->getInputManager() : nullptr;
+    if (input != nullptr && input->path() != nullptr) {
+        minusPressed = input->path()->menuHeld();
+    } else {
+        PadState pad;
+        padInitializeDefault(&pad);
+        padUpdate(&pad);
+        minusPressed = (padGetButtons(&pad) & HidNpadButton_Minus) != 0;
+    }
 
     static int checkCount = 0;
     if (minusPressed && checkCount++ % 30 == 0) {
@@ -678,6 +955,40 @@ void StreamView::showDisconnectMenu()
 
     brls::Application::pushActivity(new brls::Activity(menu));
     brls::Logger::info("showDisconnectMenu: menu opened");
+}
+
+/*
+ * Backed out of the picker, so the stream never started.
+ *
+ * disconnectWithSleep() cannot be reused wholesale: it leaves the popping to
+ * onQuit, which only fires because a running session quit. Here stopStream()
+ * returns immediately - sessionStarted is still false - so nothing would ever
+ * pop and the stream view would sit there with no stream and no way out.
+ *
+ * The ordering it establishes does carry over, and matters: release the holder
+ * before anything is popped, so a pending brls::sync fails weak.lock() rather
+ * than reaching a view mid-teardown. The two pops are chained because
+ * popActivity animates and only removes in its hide() completion - issued
+ * together, both target the picker.
+ */
+void StreamView::abandonBeforeStart()
+{
+    brls::Logger::info("Pad choice abandoned before the stream started");
+
+    intentionalDisconnect = true;
+    padChoiceDone         = false;
+    controllerReady       = false;
+
+    if (session)
+        session->FreeController();
+
+    brls::Application::forceUnblockInputs();
+
+    SharedViewHolder::release(this);
+
+    brls::Application::popActivity(brls::TransitionAnimation::NONE, []() {
+        brls::Application::popActivity();
+    });
 }
 
 void StreamView::disconnectWithSleep(bool sleep)

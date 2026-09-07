@@ -117,7 +117,13 @@ private:
     std::function<void()> onRegistSuccess;
     std::function<void(int, int)> onRegistStage;
     std::function<void()> onMotionReset;
+    std::function<void(const ChiakiTriggerEffectsEvent*)> onTriggerEffects;
     std::function<void(HolepunchPhase)> onHolepunchPhase;
+
+    /* The console's own accessory settings, and the colour the game asked the
+     * lightbar to show. Both arrive whenever they change rather than once. */
+    std::function<void(uint8_t, uint8_t)> onEffectIntensity;
+    std::function<void(uint8_t, uint8_t, uint8_t)> onLedColor;
 
 public:
     struct CloudSessionConfig {
@@ -254,6 +260,24 @@ public:
     void setOnRegistStage(std::function<void(int, int)> callback) { onRegistStage = std::move(callback); }
     void setOnHolepunchPhase(std::function<void(HolepunchPhase)> callback) { onHolepunchPhase = std::move(callback); }
     void setOnMotionReset(std::function<void()> callback) { onMotionReset = std::move(callback); }
+    void setOnTriggerEffects(std::function<void(const ChiakiTriggerEffectsEvent*)> callback) {
+        onTriggerEffects = std::move(callback);
+    }
+    void setOnEffectIntensity(std::function<void(uint8_t, uint8_t)> callback) {
+        onEffectIntensity = std::move(callback);
+    }
+    void setOnLedColor(std::function<void(uint8_t, uint8_t, uint8_t)> callback) {
+        onLedColor = std::move(callback);
+    }
+
+    /*
+     * The two halves arrive as separate events and the pad takes them as one
+     * byte, so whichever moved last is sent alongside the other's last known
+     * value. Both start at Strong, which is what the stream connection assumes
+     * before either has been named.
+     */
+    uint8_t hapticIntensity = 1;
+    uint8_t triggerIntensity = 1;
 };
 
 #endif // AKIRA_HOST_HPP

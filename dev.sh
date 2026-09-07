@@ -190,7 +190,14 @@ print_status "Deploying to Switch at ${SWITCH_IP}..."
 print_status "Logging to: ${LOG_FILE}"
 print_status "Press Ctrl+C to stop receiving logs"
 
-docker run --rm -it --init \
+# nxlink wants a terminal, and docker refuses -t when there is not one.
+if [ -t 0 ]; then
+    DOCKER_TTY="-it"
+else
+    DOCKER_TTY="-i"
+fi
+
+docker run --rm $DOCKER_TTY --init \
     --network host \
     -v "${SCRIPT_DIR}:/build" \
     -w /build \
