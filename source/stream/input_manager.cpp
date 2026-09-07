@@ -174,18 +174,23 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
         m_touchpad_button_hold--;
     }
 
-    if (m_touchpad_button_hold == 0 && m_deferred_release_touch_id >= 0)
-    {
-        brls::Logger::debug("Touch: deferred stop_touch={} fires now", m_deferred_release_touch_id);
-        chiaki_controller_state_stop_touch(state, (uint8_t)m_deferred_release_touch_id);
-        m_deferred_release_touch_id = -1;
-        m_active_click_touch_id = -1;
-    }
+    if (m_touchpad_button_hold == 0)
+        fireDeferredRelease(state);
 
     if (++m_sixaxis_frame_counter >= 3) {
         m_sixaxis_frame_counter = 0;
         readSixAxis(state);
     }
+}
+
+void InputManager::fireDeferredRelease(ChiakiControllerState* state)
+{
+    if (m_deferred_release_touch_id < 0)
+        return;
+    brls::Logger::info("Touch: deferred stop_touch={} fires now", m_deferred_release_touch_id);
+    chiaki_controller_state_stop_touch(state, (uint8_t)m_deferred_release_touch_id);
+    m_deferred_release_touch_id = -1;
+    m_active_click_touch_id = -1;
 }
 
 bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map<uint32_t, int8_t>* finger_id_touch_id)
@@ -313,6 +318,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
             }
             else
             {
+                fireDeferredRelease(chiaki_state);
                 int8_t touch_id = chiaki_controller_state_start_touch(chiaki_state, x, y);
                 (*finger_id_touch_id)[sw_state.touches[i].finger_id] = touch_id;
                 brls::Logger::info("Touch: new finger_id={} -> touch_id={}, raw=({},{}) mapped=({},{})",
@@ -330,6 +336,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
 
             if (moved)
             {
+                fireDeferredRelease(chiaki_state);
                 int8_t touch_id = chiaki_controller_state_start_touch(chiaki_state, x, y);
                 (*finger_id_touch_id)[sw_state.touches[i].finger_id] = touch_id;
                 brls::Logger::info("Touch: border swipe committed finger_id={} -> touch_id={} at mapped=({},{})",
@@ -338,6 +345,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
             }
             else if (++pt->second.frame_count >= PendingBorderTap::TAP_COMMIT_FRAMES)
             {
+                fireDeferredRelease(chiaki_state);
                 int8_t touch_id = chiaki_controller_state_start_touch(chiaki_state, x, y);
                 (*finger_id_touch_id)[sw_state.touches[i].finger_id] = touch_id;
                 m_touchpad_button_hold = -PendingBorderTap::TAP_BUTTON_DELAY_FRAMES;

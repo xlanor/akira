@@ -72,6 +72,8 @@ private:
 
     std::map<uint32_t, PendingBorderTap> m_pending_border_taps;
     int m_touchpad_button_hold = 0;
+    void fireDeferredRelease(ChiakiControllerState* state);
+
     int8_t m_deferred_release_touch_id = -1;
     int8_t m_active_click_touch_id = -1;
 
