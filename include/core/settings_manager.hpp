@@ -136,6 +136,7 @@ private:
     GyroSource globalGyroSource = GyroSource::Auto;
     bool sleepOnExit = false;
     bool requestIdrOnFecFailure = true;
+    int takionVersion = 0;
     float packetLossMax = 0.05f;
     bool enableFileLogging = false;
     bool enableThreadAffinity = false;
@@ -414,6 +415,9 @@ public:
 
     bool getRequestIdrOnFecFailure() const;
     void setRequestIdrOnFecFailure(bool enabled);
+
+    int getTakionVersion() const;
+    void setTakionVersion(int version);
 
     float getPacketLossMax() const;
     void setPacketLossMax(float value);

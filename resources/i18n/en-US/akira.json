@@ -610,6 +610,8 @@
     "dev_fake_hosts": "Fake hosts (20 PS5s)",
     "dev_force_ws_node": "Force PSN push node",
     "dev_force_ws_node_off": "Off (assigned by PSN)",
+    "dev_takion_version": "Takion protocol version",
+    "dev_takion_version_auto": "Auto (15 for PS5, 9 for PS4)",
     "menu_updates": "Updates",
     "simulate_update": "Simulate update available",
     "dev_update_server_hint": "Dev update server (host:port)",

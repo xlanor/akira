@@ -1,11 +1,11 @@
-Akira 0.6.0+5ec0a50 (dev)
-Commit: 5ec0a50
-Build: 2026-08-14 22:32:12 UTC
+Akira 0.6.2+a5903b9 (dev)
+Commit: a5903b9
+Build: 2026-09-07 18:20:36 UTC
 
 === Custom Libraries ===
 chiaki-ng 
-curl 8.19.0-libnx (libnx TLS)
-ffmpeg 8.1 (nvtegra)
+curl 8.21.0-libnx (libnx TLS)
+ffmpeg 9.0.1 (nvtegra)
 
 === DevkitPro Packages ===
 catnip 0.2.0-1

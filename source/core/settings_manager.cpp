@@ -502,6 +502,8 @@ void SettingsManager::parseTomlFile() {
             sleepOnExit = *val;
         if (auto val = config["stream"]["request_idr_on_fec_failure"].value<bool>())
             requestIdrOnFecFailure = *val;
+        if (auto val = config["stream"]["takion_version"].value<int64_t>())
+            takionVersion = static_cast<int>(*val);
         if (auto val = config["stream"]["packet_loss_max"].value<double>())
             packetLossMax = static_cast<float>(*val);
 
@@ -970,6 +972,7 @@ int SettingsManager::writeFile() {
         if (!autoReconnect) stream.insert("auto_reconnect", false);
         if (sleepOnExit) stream.insert("sleep_on_exit", true);
         stream.insert("request_idr_on_fec_failure", requestIdrOnFecFailure);
+        if (takionVersion) stream.insert("takion_version", static_cast<int64_t>(takionVersion));
         stream.insert("packet_loss_max", static_cast<double>(packetLossMax));
         config.insert("stream", std::move(stream));
     }
@@ -2049,6 +2052,14 @@ void SettingsManager::setRequestIdrOnFecFailure(bool enabled) {
     requestIdrOnFecFailure = enabled;
 }
 
+int SettingsManager::getTakionVersion() const {
+    return takionVersion;
+}
+
+void SettingsManager::setTakionVersion(int version) {
+    takionVersion = version;
+}
+
 float SettingsManager::getPacketLossMax() const {
     return packetLossMax;
 }
@@ -2290,30 +2301,39 @@ ButtonMapping SettingsManager::getDefaultButtonMapping() const {
     return defaults;
 }
 
+static void pruneOldLogs() {
+    static constexpr size_t KEEP = 40;
+
+    DIR* dir = opendir(SettingsManager::LOG_DIR);
+    if (!dir)
+        return;
+
+    std::vector<std::pair<time_t, std::string>> logFiles;
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        std::string name = entry->d_name;
+        if (name.size() <= 4 || name.substr(name.size() - 4) != ".log")
+            continue;
+        std::string path = std::string(SettingsManager::LOG_DIR) + "/" + name;
+        struct stat st;
+        time_t mtime = (stat(path.c_str(), &st) == 0) ? st.st_mtime : 0;
+        logFiles.emplace_back(mtime, std::move(path));
+    }
+    closedir(dir);
+
+    if (logFiles.size() < KEEP)
+        return;
+
+    std::sort(logFiles.begin(), logFiles.end());
+    size_t toDelete = logFiles.size() - (KEEP - 1);
+    for (size_t i = 0; i < toDelete; i++)
+        remove(logFiles[i].second.c_str());
+}
+
 std::string SettingsManager::getLogFilePath() {
     mkdir(LOG_DIR, 0755);
 
-    DIR* dir = opendir(LOG_DIR);
-    if (dir) {
-        std::vector<std::string> logFiles;
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            std::string name = entry->d_name;
-            if (name.size() > 4 && name.substr(name.size() - 4) == ".log") {
-                logFiles.push_back(name);
-            }
-        }
-        closedir(dir);
-
-        if (logFiles.size() >= 10) {
-            std::sort(logFiles.begin(), logFiles.end());
-            size_t toDelete = logFiles.size() - 9;  // Keep 9, new one makes 10
-            for (size_t i = 0; i < toDelete; i++) {
-                std::string path = std::string(LOG_DIR) + "/" + logFiles[i];
-                remove(path.c_str());
-            }
-        }
-    }
+    pruneOldLogs();
 
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);
@@ -2325,27 +2345,7 @@ std::string SettingsManager::getLogFilePath() {
 std::string SettingsManager::getConnectionLogFilePath(const std::string& connType) {
     mkdir(LOG_DIR, 0755);
 
-    DIR* dir = opendir(LOG_DIR);
-    if (dir) {
-        std::vector<std::string> logFiles;
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            std::string name = entry->d_name;
-            if (name.size() > 4 && name.substr(name.size() - 4) == ".log") {
-                logFiles.push_back(name);
-            }
-        }
-        closedir(dir);
-
-        if (logFiles.size() >= 10) {
-            std::sort(logFiles.begin(), logFiles.end());
-            size_t toDelete = logFiles.size() - 9;
-            for (size_t i = 0; i < toDelete; i++) {
-                std::string path = std::string(LOG_DIR) + "/" + logFiles[i];
-                remove(path.c_str());
-            }
-        }
-    }
+    pruneOldLogs();
 
     time_t now = time(nullptr);
     struct tm* t = localtime(&now);

@@ -4,8 +4,12 @@
 
 #include <borealis/core/i18n.hpp>
 
+#include <chiaki/akira/takion_profile.h>
+
 #include "util/http.hpp"
 #include "util/http_pool.hpp"
+
+#include <algorithm>
 
 using namespace brls::literals;
 
@@ -109,6 +113,45 @@ SettingsDeveloperView::SettingsDeveloperView() {
         currentWsIndex,
         [this](int selected) {
             settings->setDevForceWsFqdn(wsNodes[selected]);
+            settings->writeFile();
+        });
+
+    static const int takionOffered[] = { 15, 20 };
+
+    const int currentTakion = settings->getTakionVersion();
+
+    std::vector<int> takionVersions = { 0 };
+    for (int v : takionOffered)
+    {
+        if (chiaki_akira_takion_version_implemented(static_cast<unsigned int>(v)))
+            takionVersions.push_back(v);
+    }
+    if (currentTakion != 0
+        && std::find(takionVersions.begin(), takionVersions.end(), currentTakion) == takionVersions.end())
+    {
+        takionVersions.push_back(currentTakion);
+    }
+
+    std::vector<std::string> takionLabels = { "akira/settings/dev_takion_version_auto"_i18n };
+    for (size_t i = 1; i < takionVersions.size(); i++)
+        takionLabels.push_back("v" + std::to_string(takionVersions[i]));
+
+    int currentTakionIndex = 0;
+    for (size_t i = 1; i < takionVersions.size(); i++)
+    {
+        if (takionVersions[i] == currentTakion)
+        {
+            currentTakionIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    takionVersionSelector->init(
+        "akira/settings/dev_takion_version"_i18n,
+        takionLabels,
+        currentTakionIndex,
+        [this, takionVersions](int selected) {
+            settings->setTakionVersion(takionVersions[selected]);
             settings->writeFile();
         });
 

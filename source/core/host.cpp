@@ -533,6 +533,7 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
     connectInfo.video_profile = videoProfile;
     connectInfo.video_profile_auto_downgrade = true;
     connectInfo.enable_idr_on_fec_failure = settings->getRequestIdrOnFecFailure();
+    connectInfo.takion_version_override = static_cast<unsigned int>(settings->getTakionVersion());
     connectInfo.packet_loss_max = settings->getPacketLossMax();
     connectInfo.holepunch_session = holepunch;
 

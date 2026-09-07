@@ -111,7 +111,8 @@ void initCustomTheme()
 static void chiaki_to_brls_log(ChiakiLogLevel level, const char* msg, void* user)
 {
     auto* settings = SettingsManager::getInstance();
-    if (settings->isStreamingActive() && !settings->getDebugChiakiLog())
+    const bool quiet = settings->isStreamingActive() && !settings->getDebugChiakiLog();
+    if (quiet && level != CHIAKI_LOG_ERROR && level != CHIAKI_LOG_WARNING)
         return;
 
     switch (level)

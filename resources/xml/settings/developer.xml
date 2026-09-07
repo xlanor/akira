@@ -38,6 +38,12 @@
                     marginLeft="15"
                     marginRight="15"/>
 
+                <brls:SelectorCell
+                    id="settings/devTakionVersion"
+                    title="@i18n/akira/settings/dev_takion_version"
+                    marginLeft="15"
+                    marginRight="15"/>
+
                 <brls:DetailCell
                     id="settings/simulateUpdate"
                     title="@i18n/akira/settings/simulate_update"
