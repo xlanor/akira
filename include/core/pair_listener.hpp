@@ -35,6 +35,8 @@ struct PairedCredentials {
     int64_t mobileExpiresAt = 0;
 };
 
+bool validAccountId(const std::string& accountId);
+
 class PairListener {
 public:
     using EventCallback = std::function<void(ListenerEvent)>;

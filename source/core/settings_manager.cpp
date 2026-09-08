@@ -2,6 +2,7 @@
 #include "core/swipe_direction.hpp"
 #include "core/host.hpp"
 #include "core/migrations/registry.hpp"
+#include "util/http.hpp"
 
 #include <borealis.hpp>
 #include <format>
@@ -612,6 +613,7 @@ void SettingsManager::parseTomlFile() {
                 profile.npssoValid = (*pt)["npsso_valid"].value<bool>().value_or(false);
                 profile.duid = (*pt)["duid"].value<std::string>().value_or("");
                 profile.trophiesEnabled = (*pt)["trophies_enabled"].value<bool>().value_or(true);
+                profile.legacy = (*pt)["legacy"].value<bool>().value_or(false);
                 profile.cloudShortcuts = readShortcuts((*pt)["cloud_shortcuts"].as_array());
 
                 profiles.push_back(profile);
@@ -686,6 +688,8 @@ void SettingsManager::parseTomlFile() {
 
         brls::Logger::info("Loaded {} profile(s), {} console(s) from TOML config",
             profiles.size(), hosts.size());
+
+        refreshLegacyGate();
 
         if (configMigrated) {
             brls::Logger::info("Config migrated to current schema, rewriting");
@@ -1075,6 +1079,7 @@ int SettingsManager::writeFile() {
             if (p.npssoLastCheckedAt > 0) pt.insert("npsso_valid", p.npssoValid);
             if (!p.duid.empty()) pt.insert("duid", p.duid);
             if (!p.trophiesEnabled) pt.insert("trophies_enabled", false);
+            if (p.legacy) pt.insert("legacy", true);
             if (!p.cloudShortcuts.empty()) pt.insert("cloud_shortcuts", shortcutsToToml(p.cloudShortcuts));
             profilesArr.push_back(pt);
         }
@@ -1787,6 +1792,7 @@ int64_t SettingsManager::getActiveProfileId() const {
 
 void SettingsManager::setActiveProfileId(int64_t id) {
     activeProfileId = id;
+    refreshLegacyGate();
 }
 
 bool SettingsManager::getActiveProfileTrophiesEnabled() const {
@@ -1811,6 +1817,27 @@ void SettingsManager::removeProfile(int64_t id) {
     std::erase_if(profiles, [id](const Profile& p) { return p.id == id; });
     if (activeProfileId == id)
         activeProfileId = profiles.empty() ? 0 : profiles.front().id;
+
+    /*
+     * Registrations are keyed by profile, so dropping the profile without them left the
+     * rp keys behind forever. Deleting and re-pairing is the sanctioned way to change a
+     * profile's mode, which makes this the common path rather than a rare one.
+     */
+    for (auto& [name, host] : hosts) {
+        if (host)
+            host->removeRegistrationsForProfile(id);
+    }
+
+    refreshLegacyGate();
+}
+
+bool SettingsManager::isLegacyProfileActive() const {
+    const Profile* p = getActiveProfile();
+    return p && p->legacy;
+}
+
+void SettingsManager::refreshLegacyGate() {
+    httpSetSonyBlocked(isLegacyProfileActive());
 }
 
 bool SettingsManager::getHolepunchRetry() const {

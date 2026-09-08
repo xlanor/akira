@@ -11,6 +11,60 @@
 #include "util/curl_wrappers.hpp"
 
 static std::atomic<unsigned long long> g_httpEpoch{0};
+static std::atomic<bool> g_sonyBlocked{false};
+
+void httpSetSonyBlocked(bool blocked)
+{
+    g_sonyBlocked.store(blocked, std::memory_order_relaxed);
+}
+
+bool httpSonyBlocked()
+{
+    return g_sonyBlocked.load(std::memory_order_relaxed);
+}
+
+static std::string urlHost(const std::string& url)
+{
+    std::size_t start = url.find("://");
+    start = (start == std::string::npos) ? 0 : start + 3;
+    std::size_t end = url.find_first_of("/?#", start);
+    std::string host = url.substr(start, end == std::string::npos ? std::string::npos : end - start);
+
+    std::size_t at = host.rfind('@');
+    if (at != std::string::npos)
+        host = host.substr(at + 1);
+    std::size_t colon = host.rfind(':');
+    if (colon != std::string::npos && host.find(']') == std::string::npos)
+        host = host.substr(0, colon);
+
+    std::transform(host.begin(), host.end(), host.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return host;
+}
+
+static bool isSonyHost(const std::string& url)
+{
+    static constexpr const char* SONY_DOMAINS[] = {
+        "playstation.com",
+        "playstation.net",
+        "sony.com",
+        "sonyentertainmentnetwork.com",
+    };
+
+    const std::string host = urlHost(url);
+    for (const char* domain : SONY_DOMAINS)
+    {
+        const std::size_t len = std::char_traits<char>::length(domain);
+        if (host.size() < len)
+            continue;
+        if (host.compare(host.size() - len, len, domain) != 0)
+            continue;
+        /* Suffix match only on a label boundary, so "notplaystation.com" does not hit. */
+        if (host.size() == len || host[host.size() - len - 1] == '.')
+            return true;
+    }
+    return false;
+}
 
 void httpMarkConnectionsStale()
 {
@@ -103,6 +157,12 @@ std::string HttpResponse::header(const std::string& name) const
 HttpResponse httpPerform(const HttpRequest& request)
 {
     HttpResponse response;
+
+    if (httpSonyBlocked() && isSonyHost(request.url))
+    {
+        response.error = "blocked: legacy profile makes no PSN requests";
+        return response;
+    }
 
     CurlHandle ownHandle;
     CURL* curl = static_cast<CURL*>(request.reuseHandle);

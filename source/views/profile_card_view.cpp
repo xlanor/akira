@@ -89,12 +89,14 @@ void ProfileCardView::refresh() {
     std::string status = p && p->isRemote()
         ? "akira/settings/profile_remote"_i18n
         : "akira/settings/profile_local"_i18n;
-    if (p)
+    if (p && !p->legacy)
     {
         std::string cloud = cloudSummary(cloud::Service::instance().snapshotForActiveProfile().status);
         if (!cloud.empty())
             status += "  ·  " + cloud;
     }
+    if (p && p->legacy)
+        status = "akira/settings/profile_legacy"_i18n;
     statusLabel->setText(status);
     plusLabel->setVisibility(brls::Visibility::GONE);
     trophyCol->setVisibility(brls::Visibility::GONE);
@@ -106,6 +108,10 @@ void ProfileCardView::refresh() {
     bronzeLabel->setText("");
 
     if (!p)
+        return;
+
+    /* No token, so no profile lookup and no avatar to fetch. */
+    if (p->legacy)
         return;
 
     auto guard = alive;

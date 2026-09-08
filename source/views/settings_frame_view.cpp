@@ -19,7 +19,10 @@
 
 using namespace brls::literals;
 
+SettingsFrameView* SettingsFrameView::currentInstance = nullptr;
+
 SettingsFrameView::SettingsFrameView() {
+    currentInstance = this;
     buildMenus();
 
     this->setAxis(brls::Axis::COLUMN);
@@ -97,10 +100,35 @@ SettingsFrameView::SettingsFrameView() {
 }
 
 SettingsFrameView::~SettingsFrameView() {
+    *alive = false;
+    if (currentInstance == this)
+        currentInstance = nullptr;
     brls::Application::getGlobalFocusChangeEvent()->unsubscribe(focusSub);
 }
 
+void SettingsFrameView::onActiveProfileChanged() {
+    /*
+     * The profile switcher lives inside the Account tab, so a legacy <-> normal switch
+     * happens while this frame is on screen and its menu bar was built for the other
+     * mode. Deferred, because rebuilding here would free the switcher whose click
+     * handler is still running.
+     */
+    auto guard = alive;
+    brls::sync([this, guard]() {
+        if (!*guard)
+            return;
+        buildMenus();
+        activeMenu = 0;
+        activeSub = 0;
+        renderMenuBar();
+        renderSubBar();
+        loadContent(false);
+    });
+}
+
 void SettingsFrameView::buildMenus() {
+    menus.clear();
+
     menus.push_back({"akira/settings/menu_account"_i18n, {{"", []() -> brls::Box* { return new SettingsAccountView(); }}}});
     menus.push_back({"akira/settings/menu_general"_i18n, {{"", []() -> brls::Box* { return new SettingsGeneralView(); }}}});
     menus.push_back({"akira/settings/menu_updates"_i18n, {{"", []() -> brls::Box* { return new SettingsUpdatesView(); }}}});

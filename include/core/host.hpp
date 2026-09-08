@@ -234,6 +234,7 @@ public:
     void copyRegistrationFrom(const Host* other);
     const Registration* activeRegistration() const;
     void upsertRegistration(const Registration& reg);
+    void removeRegistrationsForProfile(int64_t profileId);
     int64_t getConsoleId() const { return consoleId; }
 
     // Event callbacks from chiaki

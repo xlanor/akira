@@ -58,10 +58,12 @@
             </brls:Box>
 
             <brls:Header
+                id="settings/remoteHeader"
                 title="@i18n/akira/settings/remote_play"
                 marginBottom="10"/>
 
             <brls:Box
+                id="settings/remoteSection"
                 width="auto"
                 height="auto"
                 axis="column"
@@ -126,10 +128,12 @@
             </brls:Box>
 
             <brls:Header
+                id="settings/cloudHeader"
                 title="@i18n/akira/settings/cloud"
                 marginBottom="10"/>
 
             <brls:Box
+                id="settings/cloudSection"
                 width="auto"
                 height="auto"
                 axis="column"

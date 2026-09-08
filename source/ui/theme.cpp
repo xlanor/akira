@@ -142,6 +142,9 @@ void applyToBorealis()
     set("brls/text", p.text);
     set("brls/text_disabled", p.textDim);
     set("brls/click_pulse", withAlpha(p.accent, 0x26));
+    set("akira/text_muted", p.textMuted);
+    set("akira/accent", p.accent);
+    set("akira/surface_line", p.surfaceLine);
 
     set("brls/applet_frame/separator", p.surfaceLine);
     set("brls/header/border", p.surfaceLine);

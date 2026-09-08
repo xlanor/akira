@@ -145,6 +145,16 @@ void TokenRefresher::run()
 
 void TokenRefresher::tick(HttpSession& session, bool force)
 {
+    /*
+     * The thread keeps running because the active profile can change under it; it is the
+     * tick that has nothing to do.
+     */
+    if (SettingsManager::getInstance()->isLegacyProfileActive())
+    {
+        brls::Logger::debug("PSN refresher: legacy profile active, nothing to refresh");
+        return;
+    }
+
     if (!hasConnectivity())
     {
         brls::Logger::debug("PSN refresher: no connectivity, skipping tick");

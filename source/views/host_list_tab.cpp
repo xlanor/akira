@@ -11,6 +11,7 @@
 #include "views/host_connect_task.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/pair_view.hpp"
+#include "views/profile_setup_view.hpp"
 #include "core/host.hpp"
 #include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
@@ -776,7 +777,7 @@ public:
         this->addView(hint);
 
         this->registerClickAction([](brls::View*) {
-            brls::Application::pushActivity(new brls::Activity(new PairView()));
+            brls::Application::pushActivity(new brls::Activity(new ProfileSetupView()));
             return true;
         });
         akira::ui::motion::liftOnFocus(this, focusAnim);
@@ -903,7 +904,7 @@ public:
         this->registerClickAction([snapshot](brls::View*) {
             if (snapshot.status.canPair && !snapshot.status.canBrowse)
             {
-                brls::Application::pushActivity(new brls::Activity(new PairView()));
+                brls::Application::pushActivity(new brls::Activity(new ProfileSetupView()));
                 return true;
             }
 
@@ -1020,6 +1021,34 @@ HostListTab::HostListTab() {
         return true;
     });
 
+    applyProfileMode();
+
+    syncHostList();
+}
+
+/*
+ * Which of these surfaces exist depends on the active profile, and this tab outlives any
+ * number of profile switches - so the decision cannot live in the constructor. Idempotent
+ * on purpose: called once at construction and again on every switch.
+ */
+void HostListTab::applyProfileMode() {
+    const bool legacy = settings->isLegacyProfileActive();
+
+    if (findRemoteBtn)
+        findRemoteBtn->setVisibility(legacy ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
+
+    /* Cloud needs an npsso: a permanent "pair to use this" card is a dead end. */
+    if (legacy) {
+        if (shortcutsRail) {
+            railSlot->clearViews();
+            shortcutsRail = nullptr;
+        }
+        return;
+    }
+
+    if (shortcutsRail)
+        return;
+
     shortcutsRail = new CloudShortcutsRail();
     shortcutsRail->setLaunchHandler([](const cloud::Game& game) {
         bool skipAttr = SettingsManager::getInstance()->getCloudAttrPassed();
@@ -1037,8 +1066,6 @@ HostListTab::HostListTab() {
             if (HostListTab::currentInstance->profileChip)
                 HostListTab::currentInstance->profileChip->refresh();
         });
-
-    syncHostList();
 }
 
 brls::View* HostListTab::getDefaultFocus() {
@@ -1091,6 +1118,11 @@ void HostListTab::connectToHost(Host* host) {
 }
 
 void HostListTab::initFindRemoteButton() {
+    /*
+     * Wired unconditionally; applyProfileMode decides whether it is on screen. Find
+     * Remote is a PSN device lookup, so legacy hides it rather than offering a button
+     * that always fails.
+     */
     findRemoteBtn->setStyle(&BUTTONSTYLE_BLUE);
 
     findRemoteGate.attach(
@@ -1226,6 +1258,7 @@ void HostListTab::notifyActiveProfileChanged() {
     cloud::Service::instance().refreshActiveProfile(false);
     if (!currentInstance)
         return;
+    currentInstance->applyProfileMode();
     currentInstance->syncHostList();
     if (currentInstance->profileChip)
         currentInstance->profileChip->refresh();
@@ -1263,6 +1296,16 @@ void HostListTab::syncHostList() {
     hostContainer->clearViews();
     hostItems.clear();
 
+    /*
+     * activeRegistration() keys off the active profile, so with no profile every host
+     * reports hasRpKey() == false and none of them can be connected to or registered.
+     * Listing a console the user cannot use is worse than not listing it: the whole
+     * screen becomes the same starting state a fresh install shows.
+     */
+    const bool noProfile = settings->getProfiles().empty();
+    if (noProfile)
+        entrancePlayed = false;
+
     bool animateEntrance = !entrancePlayed;
     int shownIndex = 0;
 
@@ -1270,13 +1313,20 @@ void HostListTab::syncHostList() {
     int col = 0;
     brls::Box* row = nullptr;
     auto* hostsMap = settings->getHostsMap();
-    if (hostsMap) {
+    if (hostsMap && !noProfile) {
         for (auto& [name, host] : *hostsMap) {
             if (!host) {
                 brls::Logger::error("Null host in hosts map for key: {}", name);
                 continue;
             }
             if (!host->hasRpKey() && !host->isDiscovered() && !host->isManual())
+                continue;
+            /*
+             * A profile converted from a normal one keeps its "(Remote)" entries in the
+             * toml. They are inert without a token, but they would still list and then
+             * dead-end on click.
+             */
+            if (host->isRemote() && settings->isLegacyProfileActive())
                 continue;
             if (col == 0) {
                 row = new brls::Box();
@@ -1321,7 +1371,7 @@ void HostListTab::syncHostList() {
     if (hasHosts && animateEntrance)
         entrancePlayed = true;
 
-    bool hasProfile = !settings->getProfiles().empty();
+    bool hasProfile = !noProfile;
 
     emptyActionCard = nullptr;
 
@@ -1358,7 +1408,7 @@ void HostListTab::syncHostList() {
                                                               : brls::Visibility::GONE);
     }
 
-    if (childFocused) {
+    if (childFocused || noProfile) {
         if (hasHosts) {
             brls::Application::giveFocus(hostContainer);
         } else if (emptyActionCard) {

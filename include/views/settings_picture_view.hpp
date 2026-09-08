@@ -16,12 +16,16 @@ private:
     BRLS_BIND(brls::SelectorCell, localResolutionSelector, "settings/localResolution");
     BRLS_BIND(brls::SelectorCell, localFpsSelector, "settings/localFps");
     BRLS_BIND(brls::SliderCell, localBitrateSlider, "settings/localBitrate");
+    BRLS_BIND(brls::Header, remoteHeader, "settings/remoteHeader");
+    BRLS_BIND(brls::Box, remoteSection, "settings/remoteSection");
     BRLS_BIND(brls::SelectorCell, remoteResolutionSelector, "settings/remoteResolution");
     BRLS_BIND(brls::SelectorCell, remoteFpsSelector, "settings/remoteFps");
     BRLS_BIND(brls::SliderCell, remoteBitrateSlider, "settings/remoteBitrate");
     BRLS_BIND(brls::SelectorCell, vpnResolutionSelector, "settings/vpnResolution");
     BRLS_BIND(brls::SelectorCell, vpnFpsSelector, "settings/vpnFps");
     BRLS_BIND(brls::SliderCell, vpnBitrateSlider, "settings/vpnBitrate");
+    BRLS_BIND(brls::Header, cloudHeader, "settings/cloudHeader");
+    BRLS_BIND(brls::Box, cloudSection, "settings/cloudSection");
     BRLS_BIND(brls::SelectorCell, pscloudResolutionSelector, "settings/pscloudResolution");
     BRLS_BIND(brls::SliderCell, pscloudBitrateSlider, "settings/pscloudBitrate");
     BRLS_BIND(brls::SelectorCell, psnowResolutionSelector, "settings/psnowResolution");

@@ -6,6 +6,7 @@
 #include "core/discovery_manager.hpp"
 
 #include <borealis.hpp>
+#include <algorithm>
 #include <cstring>
 #include <format>
 #include <thread>
@@ -168,6 +169,12 @@ void Host::upsertRegistration(const Registration& reg)
     registrations.push_back(reg);
 }
 
+void Host::removeRegistrationsForProfile(int64_t profileId)
+{
+    std::erase_if(registrations,
+        [profileId](const Registration& reg) { return reg.profileId == profileId; });
+}
+
 int Host::wakeup()
 {
     const Registration* reg = activeRegistration();
@@ -321,6 +328,13 @@ int Host::registerHost(int pin)
 
 bool Host::canAutoRegister() const
 {
+    /*
+     * Stated at the source rather than resting on "no token happens to be stored":
+     * auto-registration is OAuth, then a PSN device lookup, then holepunch, all before a
+     * packet reaches the console. Legacy registers by PIN.
+     */
+    if (settings->isLegacyProfileActive())
+        return false;
     if (settings->getPsnAccessToken().empty())
         return false;
     if (settings->getPsnAccountId(const_cast<Host*>(this)).empty())
@@ -332,6 +346,12 @@ bool Host::canAutoRegister() const
 
 bool Host::resolveRemoteDuid()
 {
+    if (settings->isLegacyProfileActive())
+    {
+        brls::Logger::info("Legacy profile: skipping PSN device lookup");
+        return false;
+    }
+
     std::string accessToken = settings->getPsnAccessToken();
     if (accessToken.empty())
         return false;
@@ -871,6 +891,16 @@ ChiakiErrorCode Host::initHolepunchSession()
     {
         brls::Logger::warning("Holepunch session already initialized");
         return CHIAKI_ERR_SUCCESS;
+    }
+
+    /*
+     * chiaki's holepunch has its own curl and never passes through httpPerform, so the
+     * Sony gate there does not cover it. Guard the call sites instead.
+     */
+    if (settings->isLegacyProfileActive())
+    {
+        brls::Logger::error("Legacy profile: holepunch is not available");
+        return CHIAKI_ERR_INVALID_DATA;
     }
 
     std::string accessToken = settings->getPsnAccessToken();

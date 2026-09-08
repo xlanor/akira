@@ -282,6 +282,21 @@ public:
     int64_t addProfile(const Profile& profile);
     void removeProfile(int64_t id);
 
+    /*
+     * Legacy is a property of the active profile, not of the install: a household can
+     * hold one of each. Everything PSN already reads through getActiveProfile(), so this
+     * is the grain the rest of the code already has.
+     */
+    bool isLegacyProfileActive() const;
+
+
+    /*
+     * Mirrors isLegacyProfileActive() into the HTTP layer. Must be called after anything
+     * that changes which profile is active or what credentials it holds - not only on a
+     * profile switch - or the gate goes stale in either direction.
+     */
+    void refreshLegacyGate();
+
     std::string getConsolePIN(Host* host);
     void setConsolePIN(Host* host, const std::string& pin);
 

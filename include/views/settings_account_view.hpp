@@ -48,6 +48,8 @@ private:
     bool credentialsRevealed = false;
 
     void initAuthSection();
+    void applyLegacyVisibility();
+    static bool validAccountId(const std::string& accountId);
     void updateCredentialsDisplay();
     std::string censorString(const std::string& str);
 };

@@ -33,9 +33,12 @@ struct Profile {
     int trophyLevel = 0;
     bool trophiesEnabled = true;
 
+    bool legacy = false;
+
     std::vector<cloud::Game> cloudShortcuts;
 
     bool isRemote() const { return !refreshToken.empty(); }
+    bool isLegacy() const { return legacy; }
     bool hasIdentity() const { return !accountId.empty() || !onlineId.empty(); }
 
     std::string label() const {

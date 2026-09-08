@@ -1,6 +1,7 @@
 #include "views/profile_switcher_view.hpp"
 #include "views/host_list_tab.hpp"
 #include "views/pair_view.hpp"
+#include "views/profile_setup_view.hpp"
 #include "ui/theme.hpp"
 #include "ui/motion.hpp"
 #include "core/trophy_manager.hpp"
@@ -25,6 +26,19 @@ const char* ICON_DELETE      = "";
 const char* ICON_ADD         = "";
 
 NVGcolor transparent() { return nvgRGBA(0, 0, 0, 0); }
+
+/*
+ * popActivity only erases from the stack in its hide-animation callback, so a
+ * while (size > 1) loop never terminates. Chain through the callback, one frame apart.
+ */
+void popToHome() {
+    if (brls::Application::getActivitiesStack().size() <= 1)
+        return;
+
+    brls::Application::popActivity(brls::TransitionAnimation::FADE, []() {
+        brls::sync([]() { popToHome(); });
+    });
+}
 }
 
 ProfileSwitcherView::ProfileSwitcherView() {
@@ -202,7 +216,14 @@ brls::Box* ProfileSwitcherView::makeProfileRow(const Profile& profile, bool isAc
 
     row->addView(main);
 
-    if (!isActive) {
+    /*
+     * Deleting and re-pairing is the only way to change a profile's mode, and offering
+     * the trash only on inactive rows meant a lone profile - the common case - could
+     * never be removed at all.
+     */
+    const bool onlyProfile = settings->getProfiles().size() == 1;
+
+    if (!isActive || onlyProfile) {
         auto* trash = new brls::Box(brls::Axis::ROW);
         trash->setWidth(56.0f);
         trash->setHeight(ROW_H);
@@ -288,7 +309,10 @@ void ProfileSwitcherView::selectProfile(int64_t id) {
 }
 
 void ProfileSwitcherView::confirmRemoveProfile(int64_t id, const std::string& label) {
-    auto* dialog = new brls::Dialog(brls::getStr("akira/settings/remove_profile_named", label));
+    const bool last = settings->getProfiles().size() == 1;
+    auto* dialog = new brls::Dialog(last
+        ? "akira/settings/remove_last_profile"_i18n
+        : brls::getStr("akira/settings/remove_profile_named", label));
     dialog->addButton("akira/common/cancel"_i18n, [dialog]() { dialog->close(); });
     dialog->addButton("akira/settings/remove_profile"_i18n, [this, id, dialog]() {
         dialog->close();
@@ -296,6 +320,20 @@ void ProfileSwitcherView::confirmRemoveProfile(int64_t id, const std::string& la
         settings->writeFile();
         TrophyManager::getInstance()->onActiveProfileChanged();
         HostListTab::notifyActiveProfileChanged();
+
+        /*
+         * Removing the last profile leaves nothing to configure, and the settings frame
+         * would sit on an Account tab with no account. Onboarding owns that state.
+         */
+        if (settings->getProfiles().empty()) {
+            brls::Application::notify("akira/settings/profile_removed"_i18n);
+            /*
+             * With no profile there is nothing to configure and nothing to connect to,
+             * so the only coherent place to be is the home screen in its starting state.
+             */
+            brls::sync([]() { popToHome(); });
+            return;
+        }
 
         if (card)
             card->refresh();
@@ -316,5 +354,5 @@ void ProfileSwitcherView::confirmRemoveProfile(int64_t id, const std::string& la
 
 void ProfileSwitcherView::addProfileFlow() {
     setExpanded(false);
-    brls::Application::pushActivity(new brls::Activity(new PairView(true)));
+    brls::Application::pushActivity(new brls::Activity(new ProfileSetupView(true)));
 }

@@ -37,6 +37,15 @@ struct HttpRequest {
 
 void httpMarkConnectionsStale();
 
+/*
+ * Legacy profiles hold nothing but a base64 account ID, so no request of ours has any
+ * business reaching Sony. httpPerform is akira's only curl_easy_perform - HttpSession,
+ * httpGet and the cloud transport bridge all funnel through it - so one gate here covers
+ * trophies, OAuth, npsso validation, the cloud catalog and avatar downloads.
+ */
+void httpSetSonyBlocked(bool blocked);
+bool httpSonyBlocked();
+
 HttpResponse httpPerform(const HttpRequest& request);
 
 HttpResponse httpGet(const std::string& url, const std::string& bearer, long timeoutSec = 15);
