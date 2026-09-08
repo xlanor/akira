@@ -18,6 +18,9 @@
 
 #include <json-c/json.h>
 
+#include <chiaki/base64.h>
+#include <chiaki/regist.h>
+
 namespace akira::pair {
 
 namespace {
@@ -90,9 +93,26 @@ bool parsePayload(const std::vector<uint8_t>& plaintext, PairedCredentials& out)
     out.hasMobile = !out.mobileAccessToken.empty();
 
     json_object_put(root);
+
     return !out.accessToken.empty() || !out.duid.empty();
 }
 
+}  // namespace
+
+bool validAccountId(const std::string& accountId)
+{
+    /*
+     * chiaki decodes this straight into a fixed CHIAKI_PSN_ACCOUNT_ID_SIZE buffer, so a
+     * wrong-length value produces garbage that only fails later at registration, with an
+     * error that names nothing useful. People routinely paste the hex form, the decimal
+     * user id, or their online id here.
+     */
+    uint8_t decoded[CHIAKI_PSN_ACCOUNT_ID_SIZE];
+    size_t size = sizeof(decoded);
+    if (chiaki_base64_decode(accountId.c_str(), accountId.length(), decoded, &size)
+        != CHIAKI_ERR_SUCCESS)
+        return false;
+    return size == CHIAKI_PSN_ACCOUNT_ID_SIZE;
 }
 
 PairListener::~PairListener() {
@@ -242,7 +262,9 @@ void PairListener::run(int port, std::string code) {
         OpenResult result = openSealed(hello, switchPriv, buf.data(), buf.size(), code, plaintext);
 
         PairedCredentials creds;
-        bool imported = (result == OpenResult::Ok) && parsePayload(plaintext, creds);
+        bool parsed = (result == OpenResult::Ok) && parsePayload(plaintext, creds);
+
+        bool imported = parsed;
 
         uint8_t ack = 0x02;
         if (imported)

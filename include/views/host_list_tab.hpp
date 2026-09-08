@@ -48,6 +48,7 @@ private:
     brls::Box* emptyActionCard = nullptr;
 
     void initFindRemoteButton();
+    void applyProfileMode();
 
     static void connectToHost(Host* host);
 

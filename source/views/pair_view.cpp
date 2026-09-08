@@ -3,6 +3,7 @@
 #include "cloud/service.hpp"
 #include "core/settings_manager.hpp"
 #include "core/trophy_manager.hpp"
+#include "ui/theme.hpp"
 #include "views/host_list_tab.hpp"
 
 #include <borealis/core/i18n.hpp>
@@ -73,14 +74,15 @@ PairView::PairView(bool createProfile) : createProfile(createProfile) {
     setFocusable(true);
 
     listenPort = SettingsManager::getInstance()->getCompanionPort();
+    const auto& palette = akira::ui::active();
     std::string ip = PairListener::localIpv4();
     if (addrIpLabel) {
         addrIpLabel->setText(ip.empty() ? "-" : ip);
-        addrIpLabel->setTextColor(nvgRGB(0x5c, 0xc8, 0xff));
+        addrIpLabel->setTextColor(palette.accent);
     }
     if (addrPortLabel) {
         addrPortLabel->setText(brls::getStr("akira/pair/port_fmt", listenPort));
-        addrPortLabel->setTextColor(nvgRGB(0xf2, 0xb0, 0x4a));
+        addrPortLabel->setTextColor(palette.warning);
     }
 
     advertiser.start(listenPort);
@@ -170,15 +172,42 @@ void PairView::onEvent(ListenerEvent event) {
 void PairView::applyCredentials(const PairedCredentials& creds, bool createProfile) {
     SettingsManager* settings = SettingsManager::getInstance();
 
-    if (createProfile) {
-        int64_t id = settings->addProfile(Profile{});
+    if (createProfile || !settings->getActiveProfile()) {
+        Profile fresh;
+        int64_t id = settings->addProfile(fresh);
         settings->setActiveProfileId(id);
+    }
+
+    Profile* profile = settings->getActiveProfile();
+
+    /*
+     * Switching an existing profile between modes is not supported: delete it and add a
+     * new one. Halfway states - legacy with tokens, or a token-less profile still marked
+     * normal - are the ones that would silently leak requests or silently block them.
+     */
+    if (profile && profile->legacy) {
+        brls::Logger::warning("Rejecting pair: profile {} is legacy", profile->id);
+        brls::Application::notify("akira/pair/mode_mismatch"_i18n);
+        return;
+    }
+
+    /*
+     * A legacy account id is typed by hand, so it can be well-formed and still belong to
+     * someone else. Registrations already on this profile were minted against the old
+     * one, and their rp keys are bound to that account - the console rejects the session
+     * later with nothing that names the cause.
+     */
+    if (profile && !creds.accountId.empty() && !profile->accountId.empty()
+        && profile->accountId != creds.accountId) {
+        brls::Logger::warning("Pair changes the account id on profile {}", profile->id);
+        brls::Application::notify("akira/pair/account_changed"_i18n);
     }
 
     if (!creds.onlineId.empty())
         settings->setPsnOnlineId(nullptr, creds.onlineId);
     if (!creds.accountId.empty())
         settings->setPsnAccountId(nullptr, creds.accountId);
+
     if (!creds.accessToken.empty())
         settings->setPsnAccessToken(creds.accessToken);
     if (!creds.refreshToken.empty())
@@ -197,6 +226,7 @@ void PairView::applyCredentials(const PairedCredentials& creds, bool createProfi
             settings->setPsnMobileSsoExpiresAt(creds.mobileExpiresAt);
     }
 
+    settings->refreshLegacyGate();
     settings->writeFile();
     brls::Logger::info("Imported PSN credentials from pairing push");
 

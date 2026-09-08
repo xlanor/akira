@@ -1,11 +1,16 @@
 #include "views/settings_account_view.hpp"
 #include "views/host_list_tab.hpp"
 #include "views/pair_view.hpp"
+#include "views/profile_setup_view.hpp"
 #include "ui/theme.hpp"
 #include "core/discovery_manager.hpp"
 #include "core/trophy_manager.hpp"
 #include "psn/auth.hpp"
 #include "psn/token_refresher.hpp"
+#include "views/settings_frame_view.hpp"
+
+#include <chiaki/base64.h>
+#include <chiaki/regist.h>
 
 #include <borealis/core/i18n.hpp>
 #include <format>
@@ -56,6 +61,12 @@ SettingsAccountView::SettingsAccountView() {
     profileSwitcher->onProfileChanged = [this]() {
         updateCredentialsDisplay();
         trophiesEnabledCell->setOn(settings->getActiveProfileTrophiesEnabled(), false);
+        /*
+         * A legacy <-> normal switch changes which screens exist, and this frame built
+         * its menu bar once in its constructor.
+         */
+        if (SettingsFrameView::currentInstance)
+            SettingsFrameView::currentInstance->onActiveProfileChanged();
     };
     profileCardSlot->addView(profileSwitcher);
 
@@ -66,6 +77,8 @@ SettingsAccountView::SettingsAccountView() {
             settings->setActiveProfileTrophiesEnabled(isOn);
             settings->writeFile();
         });
+
+    applyLegacyVisibility();
 
     revealCredentialsBtn->registerClickAction([this](brls::View*) {
         credentialsRevealed = !credentialsRevealed;
@@ -104,6 +117,15 @@ void SettingsAccountView::initAuthSection() {
             std::string current = settings->getPsnAccountId(nullptr);
             if (text == current || text == settings->maskAccountName(current))
                 return;
+            /*
+             * chiaki decodes this into a fixed 8-byte buffer, so a wrong-length value
+             * only fails much later, at registration, with an error that names nothing.
+             */
+            if (!text.empty() && !validAccountId(text)) {
+                brls::Application::notify("akira/settings/psn_account_id_invalid"_i18n);
+                psnAccountIdInput->setValue(current);
+                return;
+            }
             settings->setPsnAccountId(nullptr, text);
             settings->writeFile();
             if (profileSwitcher) profileSwitcher->refresh();
@@ -153,7 +175,7 @@ void SettingsAccountView::initAuthSection() {
     pairBtn->setStyle(&brls::BUTTONSTYLE_PRIMARY);
 
     pairBtn->registerClickAction([](brls::View*) {
-        brls::Application::pushActivity(new brls::Activity(new PairView()));
+        brls::Application::pushActivity(new brls::Activity(new ProfileSetupView()));
         return true;
     });
 
@@ -215,6 +237,45 @@ void SettingsAccountView::initAuthSection() {
         dialog->open();
         return true;
     });
+}
+
+void SettingsAccountView::applyLegacyVisibility() {
+    if (!settings->isLegacyProfileActive())
+        return;
+
+    /*
+     * A legacy profile holds an account id and nothing else, so every credential row
+     * would read "Not set" forever and both actions would be no-ops. What stays is the
+     * identity, the companion port and Pair - the things that still do something.
+     */
+    auto hide = [](brls::View* view) {
+        if (view)
+            view->setVisibility(brls::Visibility::GONE);
+    };
+
+    if (trophiesEnabledCell)
+        hide(trophiesEnabledCell->getParent());
+
+    hide(revealCredentialsBtn);
+    hide(refreshTokenBtn);
+    hide(clearPsnBtn);
+    hide(credAccessTokenCell);
+    hide(credRefreshTokenCell);
+    hide(credTokenExpiryCell);
+    hide(credNpssoCell);
+    hide(credSsoAccessTokenCell);
+    hide(credSsoRefreshTokenCell);
+    hide(credSsoExpiryCell);
+    hide(credDuidCell);
+}
+
+bool SettingsAccountView::validAccountId(const std::string& accountId) {
+    uint8_t decoded[CHIAKI_PSN_ACCOUNT_ID_SIZE];
+    size_t size = sizeof(decoded);
+    if (chiaki_base64_decode(accountId.c_str(), accountId.length(), decoded, &size)
+        != CHIAKI_ERR_SUCCESS)
+        return false;
+    return size == CHIAKI_PSN_ACCOUNT_ID_SIZE;
 }
 
 std::string SettingsAccountView::censorString(const std::string& str) {

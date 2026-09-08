@@ -72,6 +72,24 @@ void ProfileChipView::refresh() {
         name = settings->maskAccountName(p->label());
     nameLabel->setText(name);
 
+    /*
+     * Legacy has no cloud and no PSN-brokered remote, so the tag and the cloud line have
+     * nothing to say. The chip collapses to the profile name.
+     */
+    const bool legacy = p && p->legacy;
+
+    if (legacy) {
+        tagLabel->setVisibility(brls::Visibility::GONE);
+        cloudLabel->setVisibility(brls::Visibility::GONE);
+        dot->setVisibility(brls::Visibility::GONE);
+        plusBadge->setVisibility(brls::Visibility::GONE);
+        return;
+    }
+
+    tagLabel->setVisibility(brls::Visibility::VISIBLE);
+    cloudLabel->setVisibility(brls::Visibility::VISIBLE);
+    dot->setVisibility(brls::Visibility::VISIBLE);
+
     tagLabel->setText(p && p->isRemote()
         ? "akira/settings/profile_remote"_i18n
         : "akira/settings/profile_local"_i18n);

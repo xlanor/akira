@@ -20,12 +20,25 @@ SettingsPictureView::SettingsPictureView() {
     initVpnResolutionSelector();
     initVpnFpsSelector();
     initVpnBitrateSlider();
-    initCloudResolutionSelector(true, pscloudResolutionSelector,
-        "akira/settings/pscloud_resolution"_i18n);
-    initCloudBitrateSlider(true, pscloudBitrateSlider);
-    initCloudResolutionSelector(false, psnowResolutionSelector,
-        "akira/settings/psnow_resolution"_i18n);
-    initCloudBitrateSlider(false, psnowBitrateSlider);
+    /*
+     * Both of these are settings for something legacy cannot reach: cloud needs an npsso,
+     * and the remote profile only ever applies to HostType::Remote hosts, which are
+     * created solely by a PSN device lookup. A port-forwarded manual host deliberately
+     * keeps the local profile, so nothing here is left silently steering it.
+     */
+    if (settings->isLegacyProfileActive()) {
+        if (remoteHeader) remoteHeader->setVisibility(brls::Visibility::GONE);
+        if (remoteSection) remoteSection->setVisibility(brls::Visibility::GONE);
+        if (cloudHeader) cloudHeader->setVisibility(brls::Visibility::GONE);
+        if (cloudSection) cloudSection->setVisibility(brls::Visibility::GONE);
+    } else {
+        initCloudResolutionSelector(true, pscloudResolutionSelector,
+            "akira/settings/pscloud_resolution"_i18n);
+        initCloudBitrateSlider(true, pscloudBitrateSlider);
+        initCloudResolutionSelector(false, psnowResolutionSelector,
+            "akira/settings/psnow_resolution"_i18n);
+        initCloudBitrateSlider(false, psnowBitrateSlider);
+    }
     initEnableDitheringToggle();
     initDitheringStrengthSlider();
     initRcasEnabledToggle();

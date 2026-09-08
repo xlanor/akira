@@ -652,6 +652,12 @@ void DiscoveryManager::finishRemoteDeviceRefresh(const psn::AuthResult& result)
 
 void DiscoveryManager::fetchRemoteDevicesFromPsn()
 {
+    if (settings->isLegacyProfileActive())
+    {
+        brls::Logger::info("Legacy profile: skipping PSN remote device discovery");
+        return;
+    }
+
     std::string accessToken = settings->getPsnAccessToken();
     if (accessToken.empty())
     {

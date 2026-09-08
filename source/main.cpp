@@ -38,7 +38,7 @@
 #include "views/stream_view.hpp"
 #include "views/enter_pin_view.hpp"
 #include "views/settings_frame_view.hpp"
-#include "views/setup_account_view.hpp"
+#include "views/profile_setup_view.hpp"
 #include "stream/session.hpp"
 #include "core/settings_manager.hpp"
 #include "cloud/http_bridge.hpp"
@@ -281,6 +281,15 @@ void akiraOpenTrophies()
                            brls::Application::getActivitiesStack().size());
     }
 
+    /*
+     * Also guarded here, not only at registration: the action is registered once per view
+     * but the active profile can change under it.
+     */
+    if (SettingsManager::getInstance()->isLegacyProfileActive()) {
+        brls::Application::notify("akira/trophies/no_psn_token"_i18n);
+        return;
+    }
+
     if (!SettingsManager::getInstance()->getActiveProfileTrophiesEnabled()) {
         brls::Application::notify("akira/trophies/disabled_for_profile"_i18n);
         return;
@@ -298,7 +307,7 @@ void akiraOpenTrophies()
 void akiraOpenSettings()
 {
     if (SettingsManager::getInstance()->getProfiles().empty()) {
-        auto* setupFrame = new brls::AppletFrame(new SetupAccountView());
+        auto* setupFrame = new brls::AppletFrame(new ProfileSetupView(false, true));
         decorateAkiraHeader(setupFrame);
         brls::Application::pushActivity(new brls::Activity(setupFrame));
         return;
@@ -310,10 +319,17 @@ void akiraOpenSettings()
 
 void registerAkiraTabActions(brls::View* view)
 {
-    view->registerAction("akira/tabs/trophies"_i18n, brls::ControllerButton::BUTTON_LB, [](brls::View*) {
-        akiraOpenTrophies();
-        return true;
-    }, false);
+    /*
+     * Trophies need a PSN token, so in legacy the action is not registered at all rather
+     * than opening a screen that can only tell the user no.
+     */
+    if (!SettingsManager::getInstance()->isLegacyProfileActive())
+    {
+        view->registerAction("akira/tabs/trophies"_i18n, brls::ControllerButton::BUTTON_LB, [](brls::View*) {
+            akiraOpenTrophies();
+            return true;
+        }, false);
+    }
     view->registerAction("akira/tabs/settings"_i18n, brls::ControllerButton::BUTTON_RB, [](brls::View*) {
         akiraOpenSettings();
         return true;
