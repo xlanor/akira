@@ -4,6 +4,13 @@
 #include <cstdint>
 #include <cstddef>
 
+enum class StatsOverlayMode
+{
+    Off = 0,
+    Compact = 1,
+    Full = 2
+};
+
 struct StreamStats
 {
     // Requested profile (what user configured)
@@ -36,6 +43,24 @@ struct StreamStats
     size_t frames_recovered = 0;
 
     uint64_t stream_duration_seconds = 0;
+
+    float rtt_ms = 0.0f;
+    bool rtt_valid = false;
+    uint64_t console_loss = 0;
+    float upstream_loss = 0.0f;
+    uint32_t target_bitrate_kbps = 0;
+    bool console_quality_valid = false;
+
+    float decode_ms = 0.0f;
+    float present_ms = 0.0f;
+    float jitter_ms = 0.0f;
+    float source_fps = 0.0f;
+    uint64_t decoder_drops = 0;
+
+    float net_ms = 0.0f;
+    float visual_ms = 0.0f;
+    float total_ms = 0.0f;
+    bool latency_valid = false;
 
     bool analog_triggers_active = false;
     uint8_t analog_l2 = 0;

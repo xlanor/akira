@@ -161,6 +161,16 @@ void TokenRefresher::tick(HttpSession& session, bool force)
         return;
     }
 
+    const int64_t tickProfile = SettingsManager::getInstance()->getActiveProfileId();
+    Auth::instance().pinProfile(tickProfile);
+    Auth::mobile().pinProfile(tickProfile);
+    struct Unpin {
+        ~Unpin() {
+            Auth::instance().unpinProfile();
+            Auth::mobile().unpinProfile();
+        }
+    } unpin;
+
     Auth& remoteAuth = Auth::instance();
     if (remoteAuth.shouldValidateNpsso(NPSSO_RECHECK_SECONDS, force))
     {

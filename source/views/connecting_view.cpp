@@ -1,4 +1,5 @@
 #include "views/connecting_view.hpp"
+#include "views/stream_nav.hpp"
 
 #include <chrono>
 #include <ctime>
@@ -45,7 +46,10 @@ ConnectingView::ConnectingView(std::unique_ptr<ConnectTask> task)
 
     registerAction("akira/common/cancel"_i18n, brls::ControllerButton::BUTTON_B,
                    [this](brls::View*) {
-                       cancelFromUser();
+                       if (showFailure.load())
+                           dismissAfterFailure();
+                       else
+                           cancelFromUser();
                        return true;
                    }, false);
 }
@@ -102,7 +106,7 @@ void ConnectingView::cancelFromUser()
     wasCancelled.store(true);
     task->cancel();
 
-    brls::sync([]() { brls::Application::popActivity(); });
+    brls::sync([]() { stream_nav::unwindToBase(); });
 }
 
 void ConnectingView::addLogLine(const std::string& line)
@@ -232,7 +236,14 @@ void ConnectingView::failed(const std::string& error)
     if (SettingsManager::getInstance()->getConnectionShowStages()) {
         const auto stage = static_cast<ConnectionStage>(currentStage.load());
         failureText = brls::getStr(connectionFailureKeyForStage(stage));
+        settled.store(true);
         showFailure.store(true);
+
+        auto weak = weak_from_this();
+        brls::delay(kFailureLingerMs, [weak]() {
+            if (auto self = weak.lock())
+                self->dismissAfterFailure();
+        });
         return;
     }
 
@@ -241,10 +252,19 @@ void ConnectingView::failed(const std::string& error)
     brls::sync([error]() {
         auto* dialog = new brls::Dialog(brls::getStr("akira/connection/connection_failed", error));
         dialog->addButton("akira/common/ok"_i18n, []() {
-            brls::Application::popActivity();
+            stream_nav::unwindToBase();
         });
         dialog->open();
     });
+}
+
+void ConnectingView::dismissAfterFailure()
+{
+    if (dismissed.exchange(true))
+        return;
+
+    brls::Logger::info("Connection failure acknowledged, returning to hosts");
+    stream_nav::unwindToBase();
 }
 
 void ConnectingView::renderLogs(NVGcontext* vg, float x, float y, float width, float height)
@@ -334,6 +354,7 @@ void ConnectingView::draw(NVGcontext* vg, float x, float y, float width, float h
 void startConnecting(std::unique_ptr<ConnectTask> task)
 {
     auto view = SharedViewHolder::holdNew<ConnectingView>(std::move(task));
+    stream_nav::markBase();
     brls::Application::pushActivity(new brls::Activity(view.get()));
     view->setupAndStart();
 }

@@ -1,6 +1,8 @@
 #ifndef AKIRA_STREAM_VIEW_HPP
 #define AKIRA_STREAM_VIEW_HPP
 
+#include <vector>
+#include <cstdint>
 #include <borealis.hpp>
 #include <atomic>
 #include <chrono>
@@ -51,6 +53,15 @@ private:
     static constexpr int MAX_WAKE_RETRIES = 4;
 
     bool menuOpen = false;
+
+    std::vector<uint8_t> pausedFrameRGBA;
+    int pausedFrameW = 0;
+    int pausedFrameH = 0;
+    int pausedFrameImage = -1;
+
+    void capturePausedFrame();
+    void releasePausedFrame(NVGcontext* vg);
+    bool drawPausedFrame(NVGcontext* vg, float x, float y, float width, float height);
     bool videoPipelineActive = false;
     bool intentionalDisconnect = false;
     bool reconnecting = false;

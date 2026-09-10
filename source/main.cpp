@@ -560,6 +560,9 @@ int main(int argc, char* argv[])
 
     brls::Application::createWindow("Akira");
 
+    if (!brls::Application::loadFontFromFile("mono", BRLS_ASSET("font/Cousine-Regular.ttf")))
+        brls::Logger::warning("Could not load mono font, stats overlay will fall back to the regular font");
+
     brls::Application::getPlatform()->exitToHomeMode(false);
 
     if (appletType == AppletType_Application)

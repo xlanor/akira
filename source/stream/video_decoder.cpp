@@ -1,4 +1,6 @@
 #include "stream/video_decoder.hpp"
+
+#include <chrono>
 #include "core/exception.hpp"
 #include "core/settings_manager.hpp"
 #include "util/av_wrappers.hpp"
@@ -114,8 +116,80 @@ bool VideoDecoder::initVideo(int video_width, int video_height)
     return true;
 }
 
+void VideoDecoder::noteDecodeSample(std::chrono::steady_clock::duration d)
+{
+    m_decode_us_accum += (double)std::chrono::duration_cast<std::chrono::microseconds>(d).count();
+    m_decode_sample_count++;
+}
+
+void VideoDecoder::notePacketArrival(std::chrono::steady_clock::time_point now)
+{
+    if (m_last_packet != std::chrono::steady_clock::time_point{})
+    {
+        double interval_us = (double)std::chrono::duration_cast<std::chrono::microseconds>(now - m_last_packet).count();
+        if (interval_us > 0.0 && interval_us < 1000000.0)
+        {
+            m_interval_us_accum += interval_us;
+            if (m_interval_mean_us > 0.0)
+            {
+                double dev = interval_us - m_interval_mean_us;
+                m_interval_dev_accum += dev < 0.0 ? -dev : dev;
+            }
+            m_interval_count++;
+        }
+    }
+    m_last_packet = now;
+}
+
+VideoDecoder::DecoderStats VideoDecoder::getStats() const
+{
+    std::lock_guard<std::mutex> lock(m_stats_mutex);
+    return m_stats;
+}
+
+void VideoDecoder::publishStats(std::chrono::steady_clock::time_point now)
+{
+    if (m_window_start == std::chrono::steady_clock::time_point{})
+    {
+        m_window_start = now;
+        return;
+    }
+
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_window_start).count();
+    if (elapsed_ms < 1000)
+        return;
+
+    if (m_interval_count > 0)
+        m_interval_mean_us = m_interval_us_accum / (double)m_interval_count;
+
+    {
+        std::lock_guard<std::mutex> lock(m_stats_mutex);
+        if (m_decode_sample_count > 0)
+            m_stats.decode_ms = (float)(m_decode_us_accum / (double)m_decode_sample_count / 1000.0);
+
+        m_stats.source_fps = (float)((double)m_frames_emitted * 1000.0 / (double)elapsed_ms);
+
+        if (m_interval_count > 0)
+            m_stats.jitter_ms = (float)(m_interval_dev_accum / (double)m_interval_count / 1000.0);
+
+        m_stats.decoder_drops = m_drops;
+    }
+
+    m_window_start = now;
+    m_decode_us_accum = 0.0;
+    m_decode_sample_count = 0;
+    m_frames_emitted = 0;
+    m_interval_us_accum = 0.0;
+    m_interval_dev_accum = 0.0;
+    m_interval_count = 0;
+}
+
 bool VideoDecoder::decode(uint8_t* buf, size_t buf_size)
 {
+    auto decode_entry = std::chrono::steady_clock::now();
+    notePacketArrival(decode_entry);
+    publishStats(decode_entry);
+
     bool has_idr = scanNALUnits(buf, buf_size);
 
     bool has_all_params = m_is_hevc ? (m_has_vps && m_has_sps && m_has_pps)
@@ -150,7 +224,7 @@ bool VideoDecoder::decode(uint8_t* buf, size_t buf_size)
     // Fully drain all frames the decoder has already produced.
     // FFmpeg may output multiple frames for one packet, and send_packet(EAGAIN)
     // means we must receive pending frames before retrying the send.
-    auto drain_frames = [this]() -> bool {
+    auto drain_frames = [this, decode_entry]() -> bool {
         while (true)
         {
             int receive_result = avcodec_receive_frame(m_codec_context, m_tmp_frame);
@@ -164,12 +238,16 @@ bool VideoDecoder::decode(uint8_t* buf, size_t buf_size)
                 }
 
                 av_frame_move_ref(queued_frame, m_tmp_frame);
+                m_last_emit = std::chrono::steady_clock::now();
+                noteDecodeSample(m_last_emit - decode_entry);
+                m_frames_emitted++;
                 if (m_frame_ready_callback)
                 {
                     m_frame_ready_callback(queued_frame);
                 }
                 else
                 {
+                    m_drops++;
                     av_frame_free(&queued_frame);
                 }
                 continue;

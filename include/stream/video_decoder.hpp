@@ -5,6 +5,8 @@
 #include <functional>
 #include <utility>
 #include <chiaki/log.h>
+#include <chrono>
+#include <mutex>
 
 extern "C"
 {
@@ -48,7 +50,36 @@ public:
     bool isHEVC() const { return m_is_hevc; }
     bool isHardwareAccelerated() const { return m_hw_accel_enabled; }
 
+    struct DecoderStats
+    {
+        float decode_ms = 0.0f;
+        float source_fps = 0.0f;
+        float jitter_ms = 0.0f;
+        uint64_t decoder_drops = 0;
+    };
+
+    DecoderStats getStats() const;
+    std::chrono::steady_clock::time_point lastEmitTime() const { return m_last_emit; }
+
 private:
+    void noteDecodeSample(std::chrono::steady_clock::duration d);
+    void notePacketArrival(std::chrono::steady_clock::time_point now);
+    void publishStats(std::chrono::steady_clock::time_point now);
+
+    mutable std::mutex m_stats_mutex;
+    DecoderStats m_stats;
+    uint64_t m_drops = 0;
+    std::chrono::steady_clock::time_point m_last_emit{};
+    std::chrono::steady_clock::time_point m_last_packet{};
+    std::chrono::steady_clock::time_point m_window_start{};
+    double m_decode_us_accum = 0.0;
+    uint64_t m_decode_sample_count = 0;
+    uint64_t m_frames_emitted = 0;
+    double m_interval_us_accum = 0.0;
+    double m_interval_dev_accum = 0.0;
+    uint64_t m_interval_count = 0;
+    double m_interval_mean_us = 0.0;
+
     ChiakiLog* m_log = nullptr;
 
     const AVCodec* m_codec = nullptr;

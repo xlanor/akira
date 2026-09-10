@@ -465,6 +465,11 @@ void SettingsManager::parseTomlFile() {
         if (auto val = config["picture"]["rcas_sharpness"].value<double>())
             rcasSharpness = static_cast<float>(*val);
 
+        if (auto val = config["overlay"]["stats_x"].value<double>())
+            statsOverlayX = static_cast<float>(*val);
+        if (auto val = config["overlay"]["stats_y"].value<double>())
+            statsOverlayY = static_cast<float>(*val);
+
         if (auto val = config["input"]["haptic"].value<int64_t>())
             globalHaptic = static_cast<HapticPreset>(*val);
         if (auto val = config["input"]["direct_rumble_in_stream"].value<bool>())
@@ -799,6 +804,7 @@ void SettingsManager::parseTomlFile() {
 
         brls::Logger::info("Loaded {} profile(s), {} console(s) from TOML config",
             profiles.size(), hosts.size());
+        logProfileCensus("load");
 
         refreshLegacyGate();
 
@@ -1040,6 +1046,14 @@ int SettingsManager::writeFile() {
         config.insert("picture", std::move(picture));
     }
 
+    if (statsOverlayX >= 0.0f && statsOverlayY >= 0.0f)
+    {
+        toml::table overlay;
+        overlay.insert("stats_x", static_cast<double>(statsOverlayX));
+        overlay.insert("stats_y", static_cast<double>(statsOverlayY));
+        config.insert("overlay", std::move(overlay));
+    }
+
     {
         toml::table cloud;
         if (!cloudDatacenterPscloud.empty()) cloud.insert("datacenter_pscloud", cloudDatacenterPscloud);
@@ -1196,6 +1210,7 @@ int SettingsManager::writeFile() {
     }
 
     {
+        std::lock_guard<std::recursive_mutex> profileLock(profileMutex);
         toml::array profilesArr;
         for (const Profile& p : profiles) {
             toml::table pt;
@@ -1219,10 +1234,10 @@ int SettingsManager::writeFile() {
         }
         if (!profilesArr.empty())
             config.insert("profiles", profilesArr);
-    }
 
-    if (activeProfileId > 0)
-        config.insert("active_profile_id", activeProfileId);
+        if (activeProfileId > 0)
+            config.insert("active_profile_id", activeProfileId);
+    }
 
     {
         toml::array consolesArr;
@@ -2028,8 +2043,25 @@ int64_t SettingsManager::getActiveProfileId() const {
 }
 
 void SettingsManager::setActiveProfileId(int64_t id) {
+    if (activeProfileId != id) {
+        const Profile* from = findProfile(activeProfileId);
+        const Profile* to = findProfile(id);
+        brls::Logger::info("Active profile {} ({}) -> {} ({})",
+            activeProfileId, from ? from->label() : std::string("<none>"),
+            id, to ? to->label() : std::string("<none>"));
+    }
     activeProfileId = id;
     refreshLegacyGate();
+}
+
+void SettingsManager::logProfileCensus(const char* stage) {
+    brls::Logger::info("Profile census [{}]: active={} count={}",
+        stage, activeProfileId, profiles.size());
+    for (const Profile& p : profiles) {
+        brls::Logger::info("  profile id={} label='{}' npsso={} refresh={} account={} shortcuts={}",
+            p.id, p.label(), !p.npsso.empty(), !p.refreshToken.empty(),
+            !p.accountId.empty(), p.cloudShortcuts.size());
+    }
 }
 
 bool SettingsManager::getActiveProfileTrophiesEnabled() const {
@@ -2044,6 +2076,7 @@ void SettingsManager::setActiveProfileTrophiesEnabled(bool enabled) {
 }
 
 int64_t SettingsManager::addProfile(const Profile& profile) {
+    std::lock_guard<std::recursive_mutex> lock(profileMutex);
     Profile copy = profile;
     copy.id = nextProfileId++;
     profiles.push_back(copy);
@@ -2051,6 +2084,7 @@ int64_t SettingsManager::addProfile(const Profile& profile) {
 }
 
 void SettingsManager::removeProfile(int64_t id) {
+    std::lock_guard<std::recursive_mutex> lock(profileMutex);
     std::erase_if(profiles, [id](const Profile& p) { return p.id == id; });
     if (activeProfileId == id)
         activeProfileId = profiles.empty() ? 0 : profiles.front().id;
@@ -2075,6 +2109,26 @@ bool SettingsManager::isLegacyProfileActive() const {
 
 void SettingsManager::refreshLegacyGate() {
     httpSetSonyBlocked(isLegacyProfileActive());
+}
+
+bool SettingsManager::readProfile(int64_t id,
+                                  const std::function<void(const Profile&)>& fn) const {
+    std::lock_guard<std::recursive_mutex> lock(profileMutex);
+    const Profile* p = findProfile(id);
+    if (!p)
+        return false;
+    fn(*p);
+    return true;
+}
+
+bool SettingsManager::updateProfile(int64_t id,
+                                    const std::function<void(Profile&)>& fn) {
+    std::lock_guard<std::recursive_mutex> lock(profileMutex);
+    Profile* p = findProfile(id);
+    if (!p)
+        return false;
+    fn(*p);
+    return true;
 }
 
 bool SettingsManager::getHolepunchRetry() const {
@@ -2418,6 +2472,19 @@ float SettingsManager::getDitheringStrength() const {
 
 void SettingsManager::setDitheringStrength(float value) {
     ditheringStrength = std::max(1.0f, std::min(10.0f, value));
+}
+
+float SettingsManager::getStatsOverlayX() const {
+    return statsOverlayX;
+}
+
+float SettingsManager::getStatsOverlayY() const {
+    return statsOverlayY;
+}
+
+void SettingsManager::setStatsOverlayPosition(float x, float y) {
+    statsOverlayX = std::max(0.0f, std::min(1.0f, x));
+    statsOverlayY = std::max(0.0f, std::min(1.0f, y));
 }
 
 std::string SettingsManager::getDebugLocale() const {
