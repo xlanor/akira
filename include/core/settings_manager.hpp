@@ -4,6 +4,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <functional>
 #include <mutex>
 #include <set>
 #include <string>
@@ -65,6 +66,7 @@ private:
     std::vector<Profile> profiles;
     int64_t activeProfileId = 0;
     int64_t nextProfileId = 1;
+    mutable std::recursive_mutex profileMutex;
     int64_t nextConsoleId = 1;
     HapticPreset globalHaptic = HapticPreset::Disabled;
     bool  directRumbleInStream  = false;
@@ -155,6 +157,8 @@ private:
     // Picture adjustments
     bool enableDithering = false;
     float ditheringStrength = 3.0f;
+    float statsOverlayX = -1.0f;
+    float statsOverlayY = -1.0f;
 
     bool localFsrEnabled = false;
     bool remoteFsrEnabled = false;
@@ -289,6 +293,9 @@ public:
     Profile* ensureActiveProfile();
     int64_t getActiveProfileId() const;
     void setActiveProfileId(int64_t id);
+    void logProfileCensus(const char* stage);
+    bool readProfile(int64_t id, const std::function<void(const Profile&)>& fn) const;
+    bool updateProfile(int64_t id, const std::function<void(Profile&)>& fn);
     bool getActiveProfileTrophiesEnabled() const;
     void setActiveProfileTrophiesEnabled(bool enabled);
     int64_t addProfile(const Profile& profile);
@@ -472,6 +479,10 @@ public:
 
     float getDitheringStrength() const;
     void setDitheringStrength(float value);
+
+    float getStatsOverlayX() const;
+    float getStatsOverlayY() const;
+    void setStatsOverlayPosition(float x, float y);
 
     std::string getDebugLocale() const;
     void setDebugLocale(const std::string& locale);

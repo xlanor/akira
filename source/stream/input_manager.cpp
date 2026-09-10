@@ -1,5 +1,6 @@
 #include "stream/input_manager.hpp"
 #include "stream/session.hpp"
+#include "stream/video_renderer.hpp"
 #include "core/settings_manager.hpp"
 #include "core/swipe_direction.hpp"
 #include "input/ps_output.hpp"
@@ -43,6 +44,13 @@ bool InputManager::init()
 
     m_extended.initializeOptional();
 
+    if (m_bound_npad != kNoNpad)
+    {
+        HidNpadIdType wanted = m_bound_npad;
+        m_bound_npad = kNoNpad;
+        selectNpad(wanted);
+    }
+
     return true;
 }
 
@@ -60,6 +68,7 @@ void InputManager::cleanup()
     }
 
     m_path.reset();
+    m_overlay_drag_finger = -1;
 }
 
 void InputManager::setPath(std::unique_ptr<akira::input::PadPath> path)
@@ -430,6 +439,29 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
     const float trackpadMaxX = m_is_ps5 ? 1919.0f : 1920.0f;
     const float trackpadMaxY = m_is_ps5 ? 1079.0f : 942.0f;
 
+    IVideoRenderer* renderer = Session::GetInstance()->getVideoRenderer();
+    if (m_overlay_drag_finger >= 0)
+    {
+        bool still_down = false;
+        for (int i = 0; i < sw_state.count; i++)
+        {
+            if ((int64_t)sw_state.touches[i].finger_id == m_overlay_drag_finger)
+            {
+                still_down = true;
+                break;
+            }
+        }
+        if (!still_down)
+        {
+            if (renderer)
+                renderer->overlayTouchEnd();
+            m_overlay_drag_finger = -1;
+        }
+    }
+
+    const float screenScaleX = (float)brls::Application::windowWidth / (float)SWITCH_TOUCHSCREEN_MAX_X;
+    const float screenScaleY = (float)brls::Application::windowHeight / (float)SWITCH_TOUCHSCREEN_MAX_Y;
+
     for (int i = 0; i < sw_state.count; i++)
     {
         uint16_t x = sw_state.touches[i].x * (trackpadMaxX / (float)SWITCH_TOUCHSCREEN_MAX_X);
@@ -446,8 +478,23 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         auto pt = m_pending_border_taps.find(sw_state.touches[i].finger_id);
         bool isPending = pt != m_pending_border_taps.end();
 
+        if ((int64_t)sw_state.touches[i].finger_id == m_overlay_drag_finger)
+        {
+            if (renderer)
+                renderer->overlayTouchMove(rawX * screenScaleX, rawY * screenScaleY);
+            ret = true;
+            continue;
+        }
+
         if (!isTracked && !isPending)
         {
+            if (renderer && renderer->overlayTouchBegin(rawX * screenScaleX, rawY * screenScaleY))
+            {
+                m_overlay_drag_finger = (int64_t)sw_state.touches[i].finger_id;
+                ret = true;
+                continue;
+            }
+
             if (isBorder)
             {
                 m_pending_border_taps[sw_state.touches[i].finger_id] =

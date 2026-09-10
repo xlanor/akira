@@ -71,6 +71,8 @@ private:
     std::atomic<bool> settled{false};
     std::atomic<bool> wasCancelled{false};
     std::atomic<bool> showFailure{false};
+    std::atomic<bool> dismissed{false};
+    static constexpr int kFailureLingerMs = 4000;
     std::string failureText;
 
     brls::Event<brls::Logger::TimePoint, brls::LogLevel, std::string>::Subscription logSubscription;
@@ -83,6 +85,7 @@ private:
     void switchToConnectionLog();
     void restoreMainLog();
     void cancelFromUser();
+    void dismissAfterFailure();
 };
 
 /*

@@ -310,11 +310,12 @@ bool Session::MainLoop()
 {
     if (m_video_renderer && m_video_renderer->isInitialized() && m_video_decoder)
     {
-        m_video_renderer->setShowStatsOverlay(m_show_stats_overlay);
-        if (m_show_stats_overlay)
+        m_video_renderer->setStatsOverlayMode(m_stats_overlay_mode);
+        if (m_stats_overlay_mode != StatsOverlayMode::Off)
         {
             m_video_renderer->setStreamStats(getStreamStats());
         }
+        m_video_renderer->updateOverlayTexture();
     }
 
     return !this->quit;
@@ -341,6 +342,23 @@ void Session::presentDecodedFrame(AVFrame* frame)
                 m_ipc_service->Start();
             }
             m_ipc_service->SetStreamActive(true);
+        }
+    }
+
+    if (m_video_decoder)
+    {
+        auto emit = m_video_decoder->lastEmitTime();
+        if (emit != std::chrono::steady_clock::time_point{})
+        {
+            auto gap = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - emit).count();
+            if (gap >= 0 && gap < 500000)
+            {
+                double ms = (double)gap / 1000.0;
+                float prev = m_present_ms.load(std::memory_order_relaxed);
+                m_present_ms.store(prev > 0.0f ? (float)(prev * 0.9 + ms * 0.1) : (float)ms,
+                                   std::memory_order_relaxed);
+            }
         }
     }
 
@@ -373,6 +391,13 @@ StreamStats Session::getStreamStats()
         stats.video_height = m_video_decoder->getVideoHeight();
         stats.is_hevc = m_video_decoder->isHEVC();
         stats.is_hardware_decoder = m_video_decoder->isHardwareAccelerated();
+
+        auto ds = m_video_decoder->getStats();
+        stats.decode_ms = ds.decode_ms;
+        stats.source_fps = ds.source_fps;
+        stats.jitter_ms = ds.jitter_ms;
+        stats.decoder_drops = ds.decoder_drops;
+        stats.present_ms = m_present_ms.load(std::memory_order_relaxed);
     }
 
     stats.renderer_name = "Deko3d";
@@ -386,6 +411,22 @@ StreamStats Session::getStreamStats()
         if (received + lost > 0)
             stats.packet_loss_percent = static_cast<float>(lost) / static_cast<float>(received + lost) * 100.0f;
         stats.measured_bitrate_mbps = static_cast<float>(m_session->stream_connection.measured_bitrate);
+
+        const auto &sc = m_session->stream_connection;
+        stats.rtt_ms = static_cast<float>(sc.rtt_ms);
+        stats.rtt_valid = sc.rtt_sample_count > 0;
+        stats.console_loss = sc.console_loss;
+        stats.upstream_loss = sc.upstream_loss;
+        stats.target_bitrate_kbps = sc.target_bitrate;
+        stats.console_quality_valid = sc.console_quality_valid;
+    }
+
+    stats.visual_ms = stats.decode_ms + stats.present_ms;
+    if (stats.rtt_valid)
+    {
+        stats.net_ms = stats.rtt_ms * 0.5f + stats.jitter_ms;
+        stats.total_ms = stats.net_ms + stats.visual_ms;
+        stats.latency_valid = true;
     }
 
     stats.network_frames_lost = m_network_frames_lost;
@@ -412,6 +453,7 @@ void Session::setVideoPaused(bool paused)
     if (m_video_renderer)
         m_video_renderer->setPaused(paused);
 }
+
 
 void Session::triggerBorderFlash()
 {

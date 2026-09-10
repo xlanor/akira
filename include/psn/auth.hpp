@@ -1,6 +1,7 @@
 #ifndef AKIRA_PSN_AUTH_HPP
 #define AKIRA_PSN_AUTH_HPP
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -79,6 +80,9 @@ public:
 
     void clearTokens(const std::string& reason);
 
+    void pinProfile(int64_t profileId);
+    void unpinProfile();
+
     ActionStatus refreshStatus() const;
 
 private:
@@ -95,6 +99,7 @@ private:
     void storeTokens(const std::string& access, const std::string& refresh, int expiresIn);
     void clearStoredTokens();
     const char* label() const;
+    int64_t targetProfile() const;
 
     AuthResult performRefresh(HttpSession& session);
     AuthResult performNpssoValidation(HttpSession& session);
@@ -107,6 +112,7 @@ private:
 
     Credential credential = Credential::RemotePlay;
     SettingsManager* settings = nullptr;
+    std::atomic<int64_t> pinnedProfileId{0};
     StateObserver stateObserver;
 
     mutable std::mutex mutex;

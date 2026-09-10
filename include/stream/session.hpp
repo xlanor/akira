@@ -40,7 +40,8 @@ private:
     std::unique_ptr<IVideoRenderer> m_video_renderer;
     std::unique_ptr<IpcStatsService> m_ipc_service;
 
-    bool m_show_stats_overlay = false;
+    StatsOverlayMode m_stats_overlay_mode = StatsOverlayMode::Off;
+    std::atomic<float> m_present_ms{0.0f};
 
     std::atomic<bool> m_first_frame_received = false;
 
@@ -103,8 +104,8 @@ public:
     ChiakiLog* GetLogger() { return this->log; }
 
     StreamStats getStreamStats();
-    bool getShowStatsOverlay() const { return m_show_stats_overlay; }
-    void setShowStatsOverlay(bool show) { m_show_stats_overlay = show; }
+    StatsOverlayMode getStatsOverlayMode() const { return m_stats_overlay_mode; }
+    void setStatsOverlayMode(StatsOverlayMode mode) { m_stats_overlay_mode = mode; }
     void setVideoPaused(bool paused);
     void triggerBorderFlash();
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);

@@ -1,8 +1,10 @@
 #include "views/stream_view.hpp"
+#include "views/stream_nav.hpp"
 #include "views/controller_picker_view.hpp"
 #include "input/extended_input_manager.hpp"
 #include "input/pad_path.hpp"
 #include "views/stream_menu.hpp"
+#include "views/connecting_view.hpp"
 #include "ui/theme.hpp"
 #include "views/connection_stage.hpp"
 #include "stream/video_renderer.hpp"
@@ -20,6 +22,8 @@
 #include <chrono>
 #include <borealis/core/i18n.hpp>
 using namespace brls::literals;
+
+
 
 StreamView::StreamView(Host* host, std::shared_ptr<Host> hostOwner)
     : host(host)
@@ -400,7 +404,7 @@ void StreamView::startStream()
         brls::sync([errorMsg]() {
             auto* dialog = new brls::Dialog(brls::getStr("akira/stream/connection_failed", errorMsg));
             dialog->addButton("OK", []() {
-                brls::Application::popActivity();
+                akira::views::stream_nav::unwindToBase();
             });
             dialog->open();
             brls::Application::forceUnblockInputs();
@@ -419,6 +423,7 @@ void StreamView::stopStream()
 
     brls::Application::forceUnblockInputs();
     brls::Application::setRenderSuspended(false);
+    if (session)
     brls::Application::setSuspendedRenderCallback(nullptr);
     brls::Application::setLimitedFPS(0);
     brls::Application::setSwapInterval(1);
@@ -434,7 +439,63 @@ void StreamView::stopStream()
     session->FreeController();
     session->FreeVideo();
 
+    controllerReady = false;
+
     sessionStarted = false;
+}
+
+void StreamView::capturePausedFrame()
+{
+    pausedFrameRGBA.clear();
+    pausedFrameW = 0;
+    pausedFrameH = 0;
+
+    if (!session)
+        return;
+
+    IVideoRenderer* renderer = session->getVideoRenderer();
+    if (!renderer)
+        return;
+
+    if (!renderer->captureLastFrame(pausedFrameRGBA, pausedFrameW, pausedFrameH))
+    {
+        pausedFrameRGBA.clear();
+        pausedFrameW = 0;
+        pausedFrameH = 0;
+    }
+}
+
+void StreamView::releasePausedFrame(NVGcontext* vg)
+{
+    if (pausedFrameImage >= 0 && vg)
+        nvgDeleteImage(vg, pausedFrameImage);
+    pausedFrameImage = -1;
+    pausedFrameRGBA.clear();
+    pausedFrameRGBA.shrink_to_fit();
+    pausedFrameW = 0;
+    pausedFrameH = 0;
+}
+
+bool StreamView::drawPausedFrame(NVGcontext* vg, float x, float y, float width, float height)
+{
+    if (pausedFrameImage < 0 && !pausedFrameRGBA.empty() && pausedFrameW > 0 && pausedFrameH > 0)
+    {
+        pausedFrameImage = nvgCreateImageRGBA(vg, pausedFrameW, pausedFrameH, 0, pausedFrameRGBA.data());
+        if (pausedFrameImage < 0)
+            brls::Logger::warning("StreamView: failed to create paused frame image");
+        pausedFrameRGBA.clear();
+        pausedFrameRGBA.shrink_to_fit();
+    }
+
+    if (pausedFrameImage < 0)
+        return false;
+
+    NVGpaint paint = nvgImagePattern(vg, x, y, width, height, 0.0f, pausedFrameImage, 1.0f);
+    nvgBeginPath(vg);
+    nvgRect(vg, x, y, width, height);
+    nvgFillPaint(vg, paint);
+    nvgFill(vg);
+    return true;
 }
 
 void StreamView::draw(NVGcontext* vg, float x, float y, float width, float height,
@@ -480,18 +541,22 @@ void StreamView::draw(NVGcontext* vg, float x, float y, float width, float heigh
     if (menuOpen)
     {
         wasMenuOpen = true;
-        nvgBeginPath(vg);
-        nvgRect(vg, x, y, width, height);
-        nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
-        nvgFill(vg);
+        if (!drawPausedFrame(vg, x, y, width, height))
+        {
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, width, height);
+            nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
+            nvgFill(vg);
+        }
         return;
     }
 
     if (wasMenuOpen)
     {
         brls::Logger::info("StreamView::draw: resuming after menu close, stats_overlay={}",
-            session->getShowStatsOverlay());
+            (int)session->getStatsOverlayMode());
         wasMenuOpen = false;
+        releasePausedFrame(vg);
 
         nvgBeginPath(vg);
         nvgRect(vg, x, y, width, height);
@@ -582,7 +647,7 @@ void StreamView::streamingTick()
         intentionalDisconnect = true;
         brls::sync([this]() {
             stopStream();
-            brls::Application::popActivity();
+            akira::views::stream_nav::unwindToBase();
         });
     }
 }
@@ -703,7 +768,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
 
         if (reason == CHIAKI_QUIT_REASON_STOPPED) {
             brls::Application::notify(reasonStr);
-            brls::Application::popActivity();
+            akira::views::stream_nav::unwindToBase();
         } else {
             std::string body = duringConnect
                 ? brls::getStr("akira/connection/connect_failed_title",
@@ -713,10 +778,10 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
                 : brls::getStr("akira/stream/session_ended", reasonStr);
             auto* dialog = new brls::Dialog(body);
             dialog->setCloseCallback([]() {
-                brls::Application::popActivity();
+                akira::views::stream_nav::unwindToBase();
             });
             dialog->addButton("OK", []() {
-                brls::Application::popActivity();
+                akira::views::stream_nav::unwindToBase();
             });
             brls::Application::forceUnblockInputs();
             dialog->open();
@@ -818,6 +883,14 @@ void StreamView::checkMenuTrigger()
 void StreamView::showDisconnectMenu()
 {
     brls::Logger::info("showDisconnectMenu: entering");
+    capturePausedFrame();
+
+    if (session)
+    {
+        IVideoRenderer* renderer = session->getVideoRenderer();
+        if (renderer && renderer->takeOverlayPositionDirty())
+            SettingsManager::getInstance()->writeFile();
+    }
     menuOpen = true;
     session->setVideoPaused(true);
     session->CleanUpHaptic();
@@ -826,17 +899,16 @@ void StreamView::showDisconnectMenu()
     auto* menu = new StreamMenu();
     menu->setSleepAvailable(!host->isCloud());
 
-    menu->setStatsEnabled(session->getShowStatsOverlay());
+    menu->setConsoleName(host->getHostName());
+    menu->setConsoleIsPs5(host->isPS5());
+    menu->setStatsMode(session->getStatsOverlayMode());
 
     auto weak = weak_from_this();
 
-    menu->setOnStatsToggle([weak](bool enabled) {
+    menu->setOnStatsToggle([weak](StatsOverlayMode mode) {
         if (auto self = weak.lock()) {
-            brls::Logger::info("Stats overlay toggled: {}", enabled);
-            self->session->setShowStatsOverlay(enabled);
-            self->session->setVideoPaused(false);
-            self->menuOpen = false;
-            brls::Application::blockInputs(true);
+            brls::Logger::info("Stats overlay mode: {}", (int)mode);
+            self->session->setStatsOverlayMode(mode);
         }
     });
 
@@ -846,9 +918,6 @@ void StreamView::showDisconnectMenu()
             if (self->session->getInputManager()) {
                 self->session->getInputManager()->resetMotionControls();
             }
-            self->session->setVideoPaused(false);
-            self->menuOpen = false;
-            brls::Application::blockInputs(true);
         }
     });
 
@@ -894,10 +963,10 @@ void StreamView::abandonBeforeStart()
 
     SharedViewHolder::release(this);
 
-    brls::Application::popActivity(brls::TransitionAnimation::NONE, []() {
-        brls::Application::popActivity();
-    });
+    akira::views::stream_nav::unwindToBase();
 }
+
+
 
 void StreamView::disconnectWithSleep(bool sleep)
 {
@@ -915,6 +984,8 @@ void StreamView::disconnectWithSleep(bool sleep)
     // This ensures any pending brls::sync tasks from chiaki callbacks
     // will fail weak.lock() and not access this object
     SharedViewHolder::release(this);
+
+    brls::sync([]() { akira::views::stream_nav::unwindToBase(); });
 }
 
 void StreamView::renderLogs(NVGcontext* vg, float x, float y, float width, float height)
@@ -958,7 +1029,7 @@ void StreamView::retryWithWake()
             SharedViewHolder::release(this);
             auto* dialog = new brls::Dialog("akira/stream/wake_failed"_i18n);
             dialog->addButton("OK", []() {
-                brls::Application::popActivity();
+                akira::views::stream_nav::unwindToBase();
             });
             brls::Application::forceUnblockInputs();
             dialog->open();
@@ -996,7 +1067,7 @@ void StreamView::retryWithWake()
             std::string errorMsg = e.what();
             auto* dialog = new brls::Dialog(brls::getStr("akira/stream/connection_failed_attempts", MAX_WAKE_RETRIES, errorMsg));
             dialog->addButton("OK", []() {
-                brls::Application::popActivity();
+                akira::views::stream_nav::unwindToBase();
             });
             brls::Application::forceUnblockInputs();
             dialog->open();
@@ -1027,7 +1098,7 @@ void StreamView::onFocusChanged(bool focused)
             if (auto self = weak.lock()) {
                 SharedViewHolder::release(self.get());
             }
-            brls::Application::popActivity();
+            akira::views::stream_nav::unwindToBase();
         });
         dialog->addButton("akira/stream/yes"_i18n, [weak]() {
             if (auto self = weak.lock()) {

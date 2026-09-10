@@ -1,12 +1,16 @@
 #ifdef BOREALIS_USE_DEKO3D
 
 #include "stream/deko3d_renderer.hpp"
-#include "stream/bitmap_font.hpp"
+
+#include <borealis/core/assets.hpp>
+#include <nanovg_dk.h>
 #include "core/wireguard_manager.hpp"
 #include "core/settings_manager.hpp"
+#include "ui/theme.hpp"
 #include "crypto/libnx/gmac.h"
 #include <borealis.hpp>
 #include <borealis/platforms/switch/switch_platform.hpp>
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -17,10 +21,18 @@ extern "C"
 {
 #include <libavutil/pixfmt.h>
 #include <libavutil/hwcontext_nvtegra.h>
+#include <libswscale/swscale.h>
 }
 
 namespace
 {
+    float ovlSize(float px)
+    {
+        if (px > 1.0f && px < 200.0f)
+            return px;
+        return px <= 1.0f ? 8.0f : 24.0f;
+    }
+
     static constexpr unsigned StaticCmdSize = 0x10000;
 
     struct Vertex
@@ -30,12 +42,6 @@ namespace
     };
 
     // Text vertex with color
-    struct TextVertex
-    {
-        float position[3];
-        float uv[2];
-        float color[4];
-    };
 
     constexpr std::array VertexAttribState =
     {
@@ -49,17 +55,7 @@ namespace
     };
 
     // Text vertex attributes
-    constexpr std::array TextVertexAttribState =
-    {
-        DkVtxAttribState{ 0, 0, offsetof(TextVertex, position), DkVtxAttribSize_3x32, DkVtxAttribType_Float, 0 },
-        DkVtxAttribState{ 0, 0, offsetof(TextVertex, uv), DkVtxAttribSize_2x32, DkVtxAttribType_Float, 0 },
-        DkVtxAttribState{ 0, 0, offsetof(TextVertex, color), DkVtxAttribSize_4x32, DkVtxAttribType_Float, 0 },
-    };
 
-    constexpr std::array TextVertexBufferState =
-    {
-        DkVtxBufferState{ sizeof(TextVertex), 0 },
-    };
 
     // Full-screen quad vertices (NDC coordinates)
     constexpr std::array QuadVertexData =
@@ -154,12 +150,6 @@ Deko3dRenderer::~Deko3dRenderer()
 {
     cleanup();
 
-    if (m_font_memblock) {
-        dkMemBlockDestroy(m_font_memblock);
-        m_font_memblock = nullptr;
-    }
-    m_text_vertex_buffer.destroy();
-
     m_vertex_shader.destroy();
     for (auto& variant : m_fragment_shader_cache)
         variant->shader.destroy();
@@ -168,8 +158,6 @@ Deko3dRenderer::~Deko3dRenderer()
     m_fsr_easu_shader = nullptr;
     m_fsr_rcas_shader = nullptr;
     m_fsr_pass_shader = nullptr;
-    m_text_vertex_shader.destroy();
-    m_text_fragment_shader.destroy();
 
     if (m_uam_initialized)
     {
@@ -212,7 +200,16 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
     m_update_cmdmem = m_pool_data->allocate(UpdateCmdSliceSize * brls::FRAMEBUFFERS_COUNT, DK_CMDMEM_ALIGNMENT);
 
     m_overlay_cmdbuf = dk::CmdBufMaker{m_device}.create();
-    m_overlay_cmdmem = m_pool_data->allocate(OverlayCmdSize);
+    m_overlay_cmdmem.emplace();
+    m_overlay_cmdmem->allocate(*m_pool_data, OverlayCmdSliceSize);
+
+    float saved_x = SettingsManager::getInstance()->getStatsOverlayX();
+    float saved_y = SettingsManager::getInstance()->getStatsOverlayY();
+    if (saved_x >= 0.0f && saved_y >= 0.0f)
+    {
+        m_overlay_norm_x.store(saved_x, std::memory_order_relaxed);
+        m_overlay_norm_y.store(saved_y, std::memory_order_relaxed);
+    }
 
     bool dithering = SettingsManager::getInstance()->getEnableDithering();
     if (!compileVideoShaders(dithering))
@@ -224,9 +221,11 @@ bool Deko3dRenderer::initialize(int frame_width, int frame_height, ChiakiLog* lo
     m_vertex_buffer = m_pool_data->allocate(sizeof(QuadVertexData), alignof(Vertex));
     memcpy(m_vertex_buffer.getCpuAddr(), QuadVertexData.data(), m_vertex_buffer.getSize());
 
+    if (!ensureOverlayShaders())
+        brls::Logger::warning("Deko3dRenderer: overlay blit shaders unavailable");
+
     brls::Logger::info("Deko3dRenderer: shaders and vertex buffer initialized");
 
-    initTextRendering();
 
     m_initialized = true;
     return true;
@@ -668,7 +667,7 @@ void Deko3dRenderer::draw(AVFrame* frame)
             return;
     }
 
-    if (m_paused)
+    if (m_paused.load(std::memory_order_relaxed))
         return;
 
     AVFrame* new_ref = av_frame_alloc();
@@ -689,7 +688,7 @@ void Deko3dRenderer::presentFrame(AVFrame* frame)
 {
     draw(frame);
 
-    if (!m_frame_bound || m_paused)
+    if (!m_frame_bound || m_paused.load(std::memory_order_relaxed))
         return;
 
     VideoContext* videoContext = brls::Application::getPlatform()->getVideoContext();
@@ -815,10 +814,7 @@ void Deko3dRenderer::renderVideo()
     }
     m_queue.flush();
 
-    if (m_show_stats || m_border_flash_frames > 0)
-        m_queue.waitIdle();
-
-    renderStatsOverlay();
+    compositeOverlay();
 
     if (m_border_flash_frames > 0)
         renderBorderFlash();
@@ -833,7 +829,7 @@ void Deko3dRenderer::registerCallback()
         if (m_tick_callback)
             m_tick_callback();
 
-        if (m_frame_bound && !m_paused)
+        if (m_frame_bound && !m_paused.load(std::memory_order_relaxed))
         {
             renderVideo();
         }
@@ -929,6 +925,9 @@ void Deko3dRenderer::updateFrameBindings(AVFrame* frame)
 
 void Deko3dRenderer::cleanup()
 {
+    destroyOverlayTarget();
+    destroyOverlayContext();
+
     if (!m_initialized)
         return;
 
@@ -949,7 +948,6 @@ void Deko3dRenderer::cleanup()
     m_frame_ring_index = 0;
 
     cleanupFsr();
-    cleanupTextRendering();
 
     m_vertex_buffer.destroy();
 
@@ -967,7 +965,7 @@ void Deko3dRenderer::cleanup()
 
     m_video_cmdlist = 0;
     m_update_cmdmem.destroy();
-    m_overlay_cmdmem.destroy();
+    m_overlay_cmdmem.reset();
 
     m_luma_layout = dk::ImageLayout{};
     m_chroma_layout = dk::ImageLayout{};
@@ -986,513 +984,1065 @@ void Deko3dRenderer::waitIdle()
     }
 }
 
-void Deko3dRenderer::initTextRendering()
+
+
+void Deko3dRenderer::warmFontAtlas(NVGcontext* vg)
 {
-    if (m_text_initialized)
+    if (m_font_atlas_warm)
         return;
 
-    brls::Logger::info("Deko3dRenderer: initializing text rendering for stats overlay");
+    static const char* charset =
+        "0123456789.,:/%+-x ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-    // Load text shaders with error handling
-    brls::Logger::info("Loading text vertex shader from romfs:/shaders/text_vsh.dksh");
-    if (!m_text_vertex_shader.load(*m_pool_code, "romfs:/shaders/text_vsh.dksh"))
+    nvgFontFaceId(vg, m_overlay_font);
+    nvgFillColor(vg, nvgRGBA(0, 0, 0, 0));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+
+    for (float size : { 9.5f, 10.0f, 10.5f, 11.5f, 12.0f, 12.5f, 13.0f, 14.0f })
     {
-        brls::Logger::error("Failed to load text vertex shader - file may not exist in romfs");
-        brls::Logger::warning("Stats overlay will be disabled");
-        return;
+        nvgFontSize(vg, ovlSize(size * m_overlay_scale));
+        nvgText(vg, -4096.0f, -4096.0f, charset, nullptr);
     }
-    brls::Logger::info("Text vertex shader loaded successfully");
 
-    brls::Logger::info("Loading text fragment shader from romfs:/shaders/text_fsh.dksh");
-    if (!m_text_fragment_shader.load(*m_pool_code, "romfs:/shaders/text_fsh.dksh"))
-    {
-        brls::Logger::error("Failed to load text fragment shader - file may not exist in romfs");
-        brls::Logger::warning("Stats overlay will be disabled");
-        return;
-    }
-    brls::Logger::info("Text fragment shader loaded successfully");
-
-    // Create font texture from embedded data
-    brls::Logger::info("Creating font texture...");
-    uint8_t* fontAtlas = nullptr;
-
-    try
-    {
-        brls::Logger::info("Generating font atlas ({}x{})...", BitmapFont::ATLAS_WIDTH, BitmapFont::ATLAS_HEIGHT);
-        fontAtlas = BitmapFont::generateAtlasTexture();
-        brls::Logger::info("Font atlas generated");
-
-        brls::Logger::info("Creating font image layout...");
-        dk::ImageLayoutMaker{m_device}
-            .setType(DkImageType_2D)
-            .setFormat(DkImageFormat_R8_Unorm)
-            .setDimensions(BitmapFont::ATLAS_WIDTH, BitmapFont::ATLAS_HEIGHT, 1)
-            .setFlags(DkImageFlags_Usage2DEngine)
-            .initialize(m_font_layout);
-        brls::Logger::info("Font image layout created");
-
-        size_t fontSize = m_font_layout.getSize();
-        size_t fontAlign = m_font_layout.getAlignment();
-        // Memory blocks must be page-aligned (DK_MEMBLOCK_ALIGNMENT = 0x1000)
-        size_t alignedSize = (fontSize + 0xFFF) & ~0xFFF;
-        brls::Logger::info("Creating font memory block: size={}, alignedSize={}, align={}", fontSize, alignedSize, fontAlign);
-
-        m_font_memblock = dk::MemBlockMaker{m_device, alignedSize}
-            .setFlags(DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image)
-            .create();
-
-        if (!m_font_memblock)
-        {
-            brls::Logger::error("Failed to create font memory block!");
-            if (fontAtlas) delete[] fontAtlas;
-            return;
-        }
-        brls::Logger::info("Font memory block created");
-
-        // Initialize font image
-        brls::Logger::info("Initializing font image...");
-        m_font_image.initialize(m_font_layout, m_font_memblock, 0);
-        brls::Logger::info("Font image initialized");
-
-        // Copy font data to staging and upload
-        // Create a staging buffer
-        size_t atlasSize = BitmapFont::ATLAS_WIDTH * BitmapFont::ATLAS_HEIGHT;
-        brls::Logger::info("Allocating staging buffer: size={}", atlasSize);
-        CMemPool::Handle stagingBuffer = m_pool_data->allocate(atlasSize, 1);
-        if (!stagingBuffer)
-        {
-            brls::Logger::error("Failed to allocate staging buffer!");
-            if (fontAtlas) delete[] fontAtlas;
-            return;
-        }
-        brls::Logger::info("Copying font data to staging buffer...");
-        memcpy(stagingBuffer.getCpuAddr(), fontAtlas, atlasSize);
-        brls::Logger::info("Font data copied");
-
-        // Build command to copy from staging to texture
-        brls::Logger::info("Building copy command...");
-        m_cmdbuf.clear();
-
-        // Create image view for copy destination
-        dk::ImageView dstView{m_font_image};
-
-        // Copy from buffer to image
-        m_cmdbuf.copyBufferToImage(
-            { stagingBuffer.getGpuAddr(), BitmapFont::ATLAS_WIDTH, BitmapFont::ATLAS_HEIGHT },
-            dstView,
-            { 0, 0, 0, BitmapFont::ATLAS_WIDTH, BitmapFont::ATLAS_HEIGHT, 1 }
-        );
-        brls::Logger::info("Copy command built");
-
-        // Submit and wait
-        brls::Logger::info("Submitting copy command...");
-        DkCmdList list = m_cmdbuf.finishList();
-        if (list)
-        {
-            m_queue.submitCommands(list);
-            m_queue.waitIdle();
-        }
-        brls::Logger::info("Copy command completed");
-
-        // Free staging buffer
-        stagingBuffer.destroy();
-
-        // Create image descriptor for font
-        m_font_desc.initialize(m_font_image);
-
-        // Allocate texture ID
-        m_font_texture_id = m_vctx->allocateImageIndex();
-
-        // Update descriptor
-        m_cmdbuf.clear();
-        if (!m_vctx->updateImageDescriptor(m_cmdbuf, m_font_texture_id, m_font_desc))
-            brls::Logger::error("Deko3dRenderer: failed to bind font descriptor (id={})", m_font_texture_id);
-        m_vctx->invalidateImageDescriptors(m_cmdbuf);
-        list = m_cmdbuf.finishList();
-        if (list)
-        {
-            m_queue.submitCommands(list);
-            m_queue.waitIdle();
-        }
-
-        // Allocate text vertex buffer
-        m_text_vertex_buffer = m_pool_data->allocate(MAX_TEXT_VERTICES * sizeof(TextVertex), alignof(TextVertex));
-
-        // Free the generated atlas data
-        delete[] fontAtlas;
-        fontAtlas = nullptr;
-
-        m_text_initialized = true;
-        brls::Logger::info("Deko3dRenderer: text rendering initialized, font texture ID={}", m_font_texture_id);
-    }
-    catch (const std::exception& e)
-    {
-        brls::Logger::error("Failed to initialize font texture: {}", e.what());
-        if (fontAtlas) delete[] fontAtlas;
-        return;
-    }
-    catch (...)
-    {
-        brls::Logger::error("Failed to initialize font texture: unknown error");
-        if (fontAtlas) delete[] fontAtlas;
-        return;
-    }
+    m_font_atlas_warm = true;
 }
 
-void Deko3dRenderer::cleanupTextRendering()
+void Deko3dRenderer::rebuildOverlayText()
 {
-    if (!m_text_initialized)
-        return;
-
-    if (m_font_texture_id) {
-        m_vctx->freeImageIndex(m_font_texture_id);
-        m_font_texture_id = 0;
-    }
-    m_text_initialized = false;
-}
-
-void Deko3dRenderer::renderStatsOverlay()
-{
-    static uint32_t call_count = 0;
-    ++call_count;
-    if (SettingsManager::getInstance()->getDebugRenderLog() && call_count % 60 == 1)
-        brls::Logger::info("renderStatsOverlay #{}: show={}, text_init={}, font_id={}",
-            call_count, m_show_stats, m_text_initialized, m_font_texture_id);
-
-    if (!m_show_stats)
-        return;
-
-    if (!m_text_initialized)
-    {
-        // Text rendering failed to initialize - log once and disable stats
-        static bool warned = false;
-        if (!warned)
-        {
-            brls::Logger::warning("Stats overlay requested but text rendering not initialized - disabling");
-            warned = true;
-        }
-        m_show_stats = false;
-        return;
-    }
+    const StreamStats m_stats = readStreamStats();
 
     uint64_t mins = m_stats.stream_duration_seconds / 60;
     uint64_t secs = m_stats.stream_duration_seconds % 60;
 
-    const char* ghashMode = (chiaki_libnx_get_ghash_mode() == CHIAKI_LIBNX_GHASH_PMULL) ? "PMULL" : "TABLE";
-
     auto& wg = WireGuardManager::instance();
-    std::string vpnStatus = wg.isConnected() ? wg.getTunnelIP() : "Off";
 
-    std::string renderedSection = std::format(
-        "=== Rendered ===\n"
-        "{}x{} @ {:.0f}fps\n"
-        "Decoder: {} ({})\n",
-        m_stats.video_width,
-        m_stats.video_height,
-        m_render_fps,
-        m_stats.is_hevc ? "HEVC" : "H.264",
-        m_stats.is_hardware_decoder ? "NVTEGRA" : "SW");
+    m_ov.fps = std::format("{:.1f}", m_render_fps);
+    m_ov.rate = std::format("{:.1f}", m_stats.measured_bitrate_mbps);
+    m_ov.loss = std::format("{:.1f}", m_stats.packet_loss_percent);
+    m_ov.rtt = m_stats.rtt_valid ? std::format("{:.0f}", m_stats.rtt_ms) : std::string("--");
+    m_ov.uptime = std::format("{}m{:02}s", mins, secs);
 
-    std::string triggerSection;
-    if (m_stats.analog_triggers_active) {
-        triggerSection = std::format(
-            "Analog: ON\n"
-            "L2: {:3}%  R2: {:3}%",
-            (static_cast<int>(m_stats.analog_l2) * 100 + 127) / 255,
-            (static_cast<int>(m_stats.analog_r2) * 100 + 127) / 255);
-    } else {
-        triggerSection = "Analog: off (digital)";
+    m_ov.req_res = std::format("{}x{}", m_stats.requested_width, m_stats.requested_height);
+    m_ov.req_fps = std::format("{}", m_stats.requested_fps);
+    m_ov.req_rate = std::format("{:.1f}", m_stats.requested_bitrate / 1000.0f);
+    m_ov.req_codec = m_stats.requested_hevc ? "HEVC" : "H.264";
+
+    m_ov.out_res = std::format("{}x{}", m_stats.video_width, m_stats.video_height);
+    m_ov.out_codec = m_stats.is_hevc ? "HEVC" : "H.264";
+    m_ov.out_path = m_stats.is_hardware_decoder ? "NVTEGRA" : "SW";
+
+    m_ov.lost = std::format("{}", m_stats.network_frames_lost);
+    m_ov.recovered = std::format("{}", m_stats.frames_recovered);
+
+    m_ov.ghash = (chiaki_libnx_get_ghash_mode() == CHIAKI_LIBNX_GHASH_PMULL) ? "PMULL" : "TABLE";
+    m_ov.vpn = wg.isConnected() ? wg.getTunnelIP() : "Off";
+
+    m_ov.context = std::format("{} \xc2\xb7 {}",
+        m_stats.is_hevc ? "PS5" : "PS4",
+        wg.isConnected() ? "VPN" : "Direct");
+
+    m_ov.lat_valid = m_stats.latency_valid;
+    m_ov.lat_net_ms = m_stats.net_ms;
+    m_ov.lat_visual_ms = m_stats.visual_ms;
+    m_ov.lat_total_ms = m_stats.total_ms;
+
+    m_ov.lat_net = m_stats.latency_valid ? std::format("{:.0f}", m_stats.net_ms) : std::string("--");
+    m_ov.lat_visual = std::format("{:.1f}", m_stats.visual_ms);
+    m_ov.lat_total = m_stats.latency_valid ? std::format("{:.0f}", m_stats.total_ms) : std::string("--");
+    m_ov.lat_jitter = std::format("{:.1f}", m_stats.jitter_ms);
+    m_ov.lat_decode = std::format("{:.1f}", m_stats.decode_ms);
+    m_ov.src_fps = std::format("{:.1f}", m_stats.source_fps);
+}
+
+namespace
+{
+    NVGcolor ovl(NVGcolor c, unsigned char a)
+    {
+        return akira::ui::withAlpha(c, a);
+    }
+}
+
+Deko3dRenderer::Tone Deko3dRenderer::toneFps() const
+{
+    if (m_stats.requested_fps <= 0)
+        return Tone::Good;
+    float r = m_render_fps / (float)m_stats.requested_fps;
+    return r >= 0.92f ? Tone::Good : (r >= 0.75f ? Tone::Warn : Tone::Bad);
+}
+
+Deko3dRenderer::Tone Deko3dRenderer::toneLoss() const
+{
+    float l = m_stats.packet_loss_percent;
+    return l < 0.5f ? Tone::Good : (l < 2.0f ? Tone::Warn : Tone::Bad);
+}
+
+Deko3dRenderer::Tone Deko3dRenderer::toneRate() const
+{
+    if (m_stats.requested_bitrate <= 0)
+        return Tone::Good;
+    float r = m_stats.measured_bitrate_mbps / (m_stats.requested_bitrate / 1000.0f);
+    return r >= 0.7f ? Tone::Good : (r >= 0.4f ? Tone::Warn : Tone::Bad);
+}
+
+Deko3dRenderer::Tone Deko3dRenderer::toneRtt() const
+{
+    if (!m_stats.rtt_valid)
+        return Tone::Good;
+    float v = m_stats.rtt_ms;
+    return v < 40.0f ? Tone::Good : (v < 80.0f ? Tone::Warn : Tone::Bad);
+}
+
+Deko3dRenderer::Tone Deko3dRenderer::toneLost() const
+{
+    size_t v = m_stats.network_frames_lost;
+    return v == 0 ? Tone::Good : (v <= 20 ? Tone::Warn : Tone::Bad);
+}
+
+Deko3dRenderer::Tone Deko3dRenderer::toneLatency() const
+{
+    if (!m_stats.latency_valid)
+        return Tone::Good;
+    float v = m_stats.total_ms;
+    return v < 50.0f ? Tone::Good : (v < 100.0f ? Tone::Warn : Tone::Bad);
+}
+
+NVGcolor Deko3dRenderer::toneColor(Tone tone) const
+{
+    switch (tone)
+    {
+        case Tone::Warn: return akira::ui::active().warning;
+        case Tone::Bad:  return akira::ui::active().danger;
+        default:         return ovl(akira::ui::active().text, 242);
+    }
+}
+
+void Deko3dRenderer::drawOverlayPanel(NVGcontext* vg, float x, float y, float w, float h)
+{
+    float s = m_overlay_scale;
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x, y, w, h, 10.0f * s);
+    nvgFillColor(vg, ovl(akira::ui::active().backgroundDeep, 148));
+    nvgFill(vg);
+    nvgStrokeWidth(vg, 1.0f);
+    nvgStrokeColor(vg, ovl(akira::ui::active().text, 38));
+    nvgStroke(vg);
+}
+
+void Deko3dRenderer::drawLatencyStrip(NVGcontext* vg, float x, float y, float w, float h)
+{
+    float s = m_overlay_scale;
+    const akira::ui::Palette& p = akira::ui::active();
+    (void)h;
+
+    nvgFontSize(vg, ovlSize(9.5f * s));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, ovl(p.text, 87));
+    nvgText(vg, x, y + 9.0f * s, "LATENCY", nullptr);
+
+    nvgFontSize(vg, ovlSize(10.0f * s));
+    nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, ovl(p.text, 117));
+    nvgText(vg, x + w, y + 9.0f * s, "ms", nullptr);
+    float tright = x + w - nvgTextBounds(vg, 0, 0, "ms", nullptr, nullptr) - 3.0f * s;
+
+    nvgFontSize(vg, ovlSize(13.0f * s));
+    nvgFillColor(vg, toneColor(toneLatency()));
+    nvgText(vg, tright, y + 9.0f * s, m_ov.lat_total.c_str(), nullptr);
+
+    float barY = y + 19.0f * s;
+    float barH = 7.0f * s;
+    float radius = barH * 0.5f;
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x, barY, w, barH, radius);
+    nvgFillColor(vg, ovl(p.text, 20));
+    nvgFill(vg);
+
+    const float reference_ms = 120.0f;
+    float total = m_ov.lat_valid ? m_ov.lat_total_ms : m_ov.lat_visual_ms;
+    float fill = std::clamp(total / reference_ms, 0.0f, 1.0f) * w;
+
+    if (fill > 1.0f)
+    {
+        float netW = 0.0f;
+        if (m_ov.lat_valid && total > 0.0f)
+            netW = fill * std::clamp(m_ov.lat_net_ms / total, 0.0f, 1.0f);
+
+        nvgSave(vg);
+        nvgScissor(vg, x, barY, fill, barH);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x, barY, fill, barH, radius);
+        nvgFillColor(vg, ovl(p.media, 224));
+        nvgFill(vg);
+
+        if (netW > 0.0f)
+        {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, x, barY, netW, barH, radius);
+            nvgFillColor(vg, ovl(p.accent, 235));
+            nvgFill(vg);
+        }
+
+        nvgRestore(vg);
     }
 
-    std::string statsText = std::format(
-        "=== Requested ===\n"
-        "{}x{} @ {}fps\n"
-        "Target: {} kbps\n"
-        "Codec: {}\n"
-        "\n"
-        "{}"
-        "\n"
-        "=== Network ===\n"
-        "Packet Loss (Live): {:.1f}%\n"
-        "Reported: {:.1f} Mbps\n"
-        "Frame Loss: {} (Rec: {})\n"
-        "Duration: {}m{:02}s\n"
-        "GHASH: {}\n"
-        "VPN: {}\n"
-        "\n"
-        "=== Triggers ===\n"
-        "{}",
-        m_stats.requested_width,
-        m_stats.requested_height,
-        m_stats.requested_fps,
-        m_stats.requested_bitrate,
-        m_stats.requested_hevc ? "HEVC" : "H.264",
-        renderedSection,
-        m_stats.packet_loss_percent,
-        m_stats.measured_bitrate_mbps,
-        m_stats.network_frames_lost,
-        m_stats.frames_recovered,
-        mins,
-        secs,
-        ghashMode,
-        vpnStatus,
-        triggerSection
-    );
+    struct Legend { const char* key; const std::string& value; NVGcolor dot; bool dotted; };
+    Legend legend[] = {
+        { "Net",    m_ov.lat_net,    p.accent, true  },
+        { "Visual", m_ov.lat_visual, p.media,  true  },
+        { "Decode", m_ov.lat_decode, p.text,   false },
+        { "Jitter", m_ov.lat_jitter, p.text,   false },
+    };
 
-    // Calculate overlay dimensions
-    constexpr float MARGIN = 10.0f;
-    constexpr float PADDING = 8.0f;
-    constexpr float CHAR_SCALE = 2.0f;  // Scale up the 8x8 font
-    float charW = BitmapFont::CHAR_WIDTH * CHAR_SCALE;
-    float charH = BitmapFont::CHAR_HEIGHT * CHAR_SCALE;
-
-    // Count lines and max line width
-    int numLines = 1;
-    int maxLineLen = 0;
-    int currentLineLen = 0;
-    for (const char* p = statsText.c_str(); *p; p++)
+    float lx = x;
+    float ly = y + 36.0f * s;
+    for (const Legend& l : legend)
     {
-        if (*p == '\n')
+        if (l.dotted)
         {
-            numLines++;
-            if (currentLineLen > maxLineLen)
-                maxLineLen = currentLineLen;
-            currentLineLen = 0;
+            nvgBeginPath(vg);
+            nvgCircle(vg, lx + 3.0f * s, ly, 3.0f * s);
+            nvgFillColor(vg, l.dot);
+            nvgFill(vg);
+            lx += 10.0f * s;
         }
-        else
-        {
-            currentLineLen++;
-        }
+
+        nvgFontSize(vg, ovlSize(9.5f * s));
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, ovl(p.text, 100));
+        nvgText(vg, lx, ly, l.key, nullptr);
+        lx += nvgTextBounds(vg, 0, 0, l.key, nullptr, nullptr) + 5.0f * s;
+
+        nvgFontSize(vg, ovlSize(10.5f * s));
+        nvgFillColor(vg, ovl(p.text, 200));
+        nvgText(vg, lx, ly, l.value.c_str(), nullptr);
+        lx += nvgTextBounds(vg, 0, 0, l.value.c_str(), nullptr, nullptr) + 16.0f * s;
     }
-    if (currentLineLen > maxLineLen)
-        maxLineLen = currentLineLen;
+}
 
-    float boxWidth = maxLineLen * charW + PADDING * 2;
-    float boxHeight = numLines * charH + PADDING * 2;
+void Deko3dRenderer::drawStatRow(NVGcontext* vg, float x, float y, float w,
+                                 const char* label, const std::string& value,
+                                 const char* unit, Tone tone)
+{
+    float s = m_overlay_scale;
 
-    // Build vertex buffer
-    std::vector<TextVertex> vertices;
-    vertices.reserve(6 + 6 * statsText.size());  // Background quad + text quads
+    nvgFontSize(vg, ovlSize(11.5f * s));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, ovl(akira::ui::active().text, 117));
+    nvgText(vg, x, y, label, nullptr);
 
-    // Background color (semi-transparent black)
-    float bgR = 0.0f, bgG = 0.0f, bgB = 0.0f, bgA = 0.7f;
-
-    // Text color (green)
-    float txR = 0.0f, txG = 1.0f, txB = 0.0f, txA = 1.0f;
-
-    // Background quad (NDC coordinates)
-    float bgX1 = MARGIN;
-    float bgY1 = MARGIN;
-    float bgX2 = MARGIN + boxWidth;
-    float bgY2 = MARGIN + boxHeight;
-
-    unsigned screenW = brls::Application::windowWidth;
-    unsigned screenH = brls::Application::windowHeight;
-
-    float ndcX1, ndcY1, ndcX2, ndcY2;
-    pixelToNDC(bgX1, bgY1, screenW, screenH, ndcX1, ndcY1);
-    pixelToNDC(bgX2, bgY2, screenW, screenH, ndcX2, ndcY2);
-
-    // Background quad (two triangles) - use UV outside font range for solid color
-    vertices.push_back({{ ndcX1, ndcY1, 0.0f }, { -1.0f, -1.0f }, { bgR, bgG, bgB, bgA }});
-    vertices.push_back({{ ndcX2, ndcY1, 0.0f }, { -1.0f, -1.0f }, { bgR, bgG, bgB, bgA }});
-    vertices.push_back({{ ndcX1, ndcY2, 0.0f }, { -1.0f, -1.0f }, { bgR, bgG, bgB, bgA }});
-
-    vertices.push_back({{ ndcX2, ndcY1, 0.0f }, { -1.0f, -1.0f }, { bgR, bgG, bgB, bgA }});
-    vertices.push_back({{ ndcX2, ndcY2, 0.0f }, { -1.0f, -1.0f }, { bgR, bgG, bgB, bgA }});
-    vertices.push_back({{ ndcX1, ndcY2, 0.0f }, { -1.0f, -1.0f }, { bgR, bgG, bgB, bgA }});
-
-    // Text characters
-    float cursorX = MARGIN + PADDING;
-    float cursorY = MARGIN + PADDING;
-
-    for (const char* p = statsText.c_str(); *p; p++)
+    float right = x + w;
+    if (unit && *unit)
     {
-        if (*p == '\n')
-        {
-            cursorX = MARGIN + PADDING;
-            cursorY += charH;
-            continue;
-        }
-
-        // Get UV coordinates for this character
-        float u1, v1, u2, v2;
-        BitmapFont::getCharUV(*p, u1, v1, u2, v2);
-
-        // Character quad corners
-        float cx1 = cursorX;
-        float cy1 = cursorY;
-        float cx2 = cursorX + charW;
-        float cy2 = cursorY + charH;
-
-        pixelToNDC(cx1, cy1, screenW, screenH, ndcX1, ndcY1);
-        pixelToNDC(cx2, cy2, screenW, screenH, ndcX2, ndcY2);
-
-        // Two triangles for the character quad
-        vertices.push_back({{ ndcX1, ndcY1, 0.0f }, { u1, v1 }, { txR, txG, txB, txA }});
-        vertices.push_back({{ ndcX2, ndcY1, 0.0f }, { u2, v1 }, { txR, txG, txB, txA }});
-        vertices.push_back({{ ndcX1, ndcY2, 0.0f }, { u1, v2 }, { txR, txG, txB, txA }});
-
-        vertices.push_back({{ ndcX2, ndcY1, 0.0f }, { u2, v1 }, { txR, txG, txB, txA }});
-        vertices.push_back({{ ndcX2, ndcY2, 0.0f }, { u2, v2 }, { txR, txG, txB, txA }});
-        vertices.push_back({{ ndcX1, ndcY2, 0.0f }, { u1, v2 }, { txR, txG, txB, txA }});
-
-        cursorX += charW;
+        nvgFontSize(vg, ovlSize(10.0f * s));
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, ovl(akira::ui::active().text, 117));
+        nvgText(vg, right, y, unit, nullptr);
+        right -= nvgTextBounds(vg, 0, 0, unit, nullptr, nullptr) + 3.0f * s;
     }
 
-    // Check if we exceed max vertices
-    if (vertices.size() > MAX_TEXT_VERTICES)
+    nvgFontSize(vg, ovlSize(12.5f * s));
+    nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, toneColor(tone));
+    nvgText(vg, right, y, value.c_str(), nullptr);
+}
+
+void Deko3dRenderer::drawCompactCell(NVGcontext* vg, float& cursorX, float centerY,
+                                     const char* label, const std::string& value,
+                                     const char* unit, Tone tone, bool first)
+{
+    float s = m_overlay_scale;
+    float pad = 14.0f * s;
+
+    if (!first)
     {
-        brls::Logger::warning("Stats overlay exceeded max vertices: {}", vertices.size());
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, cursorX, centerY - 10.0f * s);
+        nvgLineTo(vg, cursorX, centerY + 10.0f * s);
+        nvgStrokeWidth(vg, 1.0f);
+        nvgStrokeColor(vg, ovl(akira::ui::active().text, 26));
+        nvgStroke(vg);
+        cursorX += pad;
+    }
+
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+
+    nvgFontSize(vg, ovlSize(10.0f * s));
+    nvgFillColor(vg, ovl(akira::ui::active().text, 117));
+    nvgText(vg, cursorX, centerY, label, nullptr);
+    cursorX += nvgTextBounds(vg, 0, 0, label, nullptr, nullptr) + 7.0f * s;
+
+    nvgFontSize(vg, ovlSize(14.0f * s));
+    nvgFillColor(vg, toneColor(tone));
+    nvgText(vg, cursorX, centerY, value.c_str(), nullptr);
+    cursorX += nvgTextBounds(vg, 0, 0, value.c_str(), nullptr, nullptr);
+
+    if (unit && *unit)
+    {
+        cursorX += 3.0f * s;
+        nvgFontSize(vg, ovlSize(10.5f * s));
+        nvgFillColor(vg, ovl(akira::ui::active().text, 117));
+        nvgText(vg, cursorX, centerY, unit, nullptr);
+        cursorX += nvgTextBounds(vg, 0, 0, unit, nullptr, nullptr);
+    }
+
+    cursorX += pad;
+}
+
+void Deko3dRenderer::overlayOrigin(float w, float h, float& ox, float& oy)
+{
+    m_overlay_w.store(w, std::memory_order_relaxed);
+    m_overlay_h.store(h, std::memory_order_relaxed);
+    updateOverlayPlacement();
+
+    ox = m_overlay_to_texture ? 0.0f : m_overlay_x.load(std::memory_order_relaxed);
+    oy = m_overlay_to_texture ? 0.0f : m_overlay_y.load(std::memory_order_relaxed);
+}
+
+void Deko3dRenderer::updateOverlayPlacement()
+{
+    const float w = m_overlay_w.load(std::memory_order_relaxed);
+    const float h = m_overlay_h.load(std::memory_order_relaxed);
+    if (w <= 0.0f || h <= 0.0f)
         return;
+
+    const float sw = (float)brls::Application::windowWidth;
+    const float sh = (float)brls::Application::windowHeight;
+    const float margin = 24.0f * m_overlay_scale;
+
+    const float nx = m_overlay_norm_x.load(std::memory_order_relaxed);
+    const float ny = m_overlay_norm_y.load(std::memory_order_relaxed);
+
+    float sx = nx < 0.0f ? margin : nx * sw;
+    float sy = ny < 0.0f ? margin : ny * sh;
+
+    sx = std::clamp(sx, margin, std::max(margin, sw - w - margin));
+    sy = std::clamp(sy, margin, std::max(margin, sh - h - margin));
+
+    m_overlay_x.store(sx, std::memory_order_relaxed);
+    m_overlay_y.store(sy, std::memory_order_relaxed);
+}
+
+bool Deko3dRenderer::overlayTouchBegin(float x, float y)
+{
+    if (m_stats_mode.load(std::memory_order_relaxed) == StatsOverlayMode::Off)
+        return false;
+
+    float ox = m_overlay_x.load(std::memory_order_relaxed);
+    float oy = m_overlay_y.load(std::memory_order_relaxed);
+    float w = m_overlay_w.load(std::memory_order_relaxed);
+    float h = m_overlay_h.load(std::memory_order_relaxed);
+    if (w <= 0.0f || h <= 0.0f)
+        return false;
+
+    float slop = 12.0f * m_overlay_scale;
+    if (x < ox - slop || x > ox + w + slop || y < oy - slop || y > oy + h + slop)
+    {
+        return false;
     }
 
-    // log vertex count periodically
-    static uint32_t draw_count = 0;
-    ++draw_count;
-    if (SettingsManager::getInstance()->getDebugRenderLog() && draw_count % 60 == 1)
-        brls::Logger::info("Stats overlay drawing {} vertices (bg=6, text={})",
-            vertices.size(), vertices.size() - 6);
+    m_overlay_grab_dx = x - ox;
+    m_overlay_grab_dy = y - oy;
+    m_overlay_drag = true;
+    return true;
+}
 
-    // Copy to GPU buffer
-    memcpy(m_text_vertex_buffer.getCpuAddr(), vertices.data(), vertices.size() * sizeof(TextVertex));
+void Deko3dRenderer::overlayTouchMove(float x, float y)
+{
+    if (!m_overlay_drag)
+        return;
 
-    // Get current framebuffer
+    float sw = (float)brls::Application::windowWidth;
+    float sh = (float)brls::Application::windowHeight;
+    if (sw <= 0.0f || sh <= 0.0f)
+        return;
+
+    m_overlay_norm_x.store((x - m_overlay_grab_dx) / sw, std::memory_order_relaxed);
+    m_overlay_norm_y.store((y - m_overlay_grab_dy) / sh, std::memory_order_relaxed);
+}
+
+void Deko3dRenderer::overlayTouchEnd()
+{
+    if (!m_overlay_drag)
+        return;
+    m_overlay_drag = false;
+
+    float sw = (float)brls::Application::windowWidth;
+    float sh = (float)brls::Application::windowHeight;
+    if (sw <= 0.0f || sh <= 0.0f)
+        return;
+
+    SettingsManager::getInstance()->setStatsOverlayPosition(
+        m_overlay_x.load(std::memory_order_relaxed) / sw,
+        m_overlay_y.load(std::memory_order_relaxed) / sh);
+    m_overlay_pos_dirty.store(true, std::memory_order_relaxed);
+}
+
+bool Deko3dRenderer::takeOverlayPositionDirty()
+{
+    return m_overlay_pos_dirty.exchange(false, std::memory_order_relaxed);
+}
+
+void Deko3dRenderer::drawCompactOverlay(NVGcontext* vg)
+{
+    float s = m_overlay_scale;
+    float margin = 24.0f * s;
+    float height = 36.0f * s;
+
+    Tone overall = Tone::Good;
+    for (Tone t : { toneFps(), toneRate(), toneLoss(), toneRtt(), toneLost(), toneLatency() })
+        if (t > overall) overall = t;
+
+    float probe = margin + 14.0f * s;
+    float startX = probe;
+    drawCompactCell(vg, probe, -10000.0f, "FPS", m_ov.fps, nullptr, Tone::Good, true);
+    drawCompactCell(vg, probe, -10000.0f, "RATE", m_ov.rate, "Mbps", Tone::Good, false);
+    drawCompactCell(vg, probe, -10000.0f, "LOSS", m_ov.loss, "%", Tone::Good, false);
+    drawCompactCell(vg, probe, -10000.0f, "RTT", m_ov.rtt, "ms", Tone::Good, false);
+    drawCompactCell(vg, probe, -10000.0f, "LAT", m_ov.lat_total, "ms", Tone::Good, false);
+    drawCompactCell(vg, probe, -10000.0f, "UP", m_ov.uptime, nullptr, Tone::Good, false);
+    float width = (probe - startX) + 34.0f * s + 13.0f * s;
+
+    float ox, oy;
+    overlayOrigin(width, height, ox, oy);
+
+    drawOverlayPanel(vg, ox, oy, width, height);
+
+    float centerY = oy + height * 0.5f;
+    float dotX = ox + 14.0f * s + 3.5f * s;
+    nvgBeginPath(vg);
+    nvgCircle(vg, dotX, centerY, 3.5f * s);
+    nvgFillColor(vg, overall == Tone::Good ? akira::ui::active().success : toneColor(overall));
+    nvgFill(vg);
+
+    float cursorX = ox + 14.0f * s + 20.0f * s;
+    drawCompactCell(vg, cursorX, centerY, "FPS", m_ov.fps, nullptr, toneFps(), true);
+    drawCompactCell(vg, cursorX, centerY, "RATE", m_ov.rate, "Mbps", toneRate(), false);
+    drawCompactCell(vg, cursorX, centerY, "LOSS", m_ov.loss, "%", toneLoss(), false);
+    drawCompactCell(vg, cursorX, centerY, "RTT", m_ov.rtt, "ms", toneRtt(), false);
+    drawCompactCell(vg, cursorX, centerY, "LAT", m_ov.lat_total, "ms", toneLatency(), false);
+    drawCompactCell(vg, cursorX, centerY, "UP", m_ov.uptime, nullptr, Tone::Good, false);
+}
+
+void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
+{
+    float s = m_overlay_scale;
+    float width = 452.0f * s;
+    float padX = 16.0f * s;
+    float headH = 34.0f * s;
+    float rowH = 20.0f * s;
+    float footH = 28.0f * s;
+    float latH = 48.0f * s;
+    float height = headH + 22.0f * s + rowH * 4.0f + 10.0f * s + latH + footH;
+
+    float ox, oy;
+    overlayOrigin(width, height, ox, oy);
+    float colTop = oy + headH + 22.0f * s;
+
+    drawOverlayPanel(vg, ox, oy, width, height);
+
+    nvgFontSize(vg, ovlSize(12.5f * s));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, akira::ui::active().accent);
+    nvgText(vg, ox + padX, oy + headH * 0.5f, "AKIRA", nullptr);
+    float bx = ox + padX + nvgTextBounds(vg, 0, 0, "AKIRA", nullptr, nullptr) + 9.0f * s;
+    nvgFillColor(vg, ovl(akira::ui::active().text, 56));
+    nvgText(vg, bx, oy + headH * 0.5f, "/", nullptr);
+    nvgFillColor(vg, ovl(akira::ui::active().text, 184));
+    nvgText(vg, bx + 12.0f * s, oy + headH * 0.5f, m_ov.context.c_str(), nullptr);
+
+    nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgFontSize(vg, ovlSize(12.0f * s));
+    nvgFillColor(vg, ovl(akira::ui::active().text, 117));
+    nvgText(vg, ox + width - padX, oy + headH * 0.5f, m_ov.uptime.c_str(), nullptr);
+
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, ox, oy + headH);
+    nvgLineTo(vg, ox + width, oy + headH);
+    nvgStrokeWidth(vg, 1.0f);
+    nvgStrokeColor(vg, ovl(akira::ui::active().text, 26));
+    nvgStroke(vg);
+
+    float colW = (width - padX * 2.0f - 28.0f * s) / 3.0f;
+    const char* headers[3] = { "REQUESTED", "DECODE", "LINK" };
+
+    for (int c = 0; c < 3; c++)
+    {
+        float cx = ox + padX + (colW + 14.0f * s) * c;
+
+        if (c > 0)
+        {
+            nvgBeginPath(vg);
+            nvgMoveTo(vg, cx - 7.0f * s, colTop - 14.0f * s);
+            nvgLineTo(vg, cx - 7.0f * s, colTop + rowH * 4.0f - 4.0f * s);
+            nvgStrokeWidth(vg, 1.0f);
+            nvgStrokeColor(vg, ovl(akira::ui::active().text, 26));
+            nvgStroke(vg);
+        }
+
+        nvgFontSize(vg, ovlSize(9.5f * s));
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, ovl(akira::ui::active().text, 87));
+        nvgText(vg, cx, colTop - 14.0f * s, headers[c], nullptr);
+
+        for (int r = 0; r < 4; r++)
+        {
+            float ry = colTop + rowH * r + rowH * 0.5f;
+            if (c == 0)
+            {
+                if (r == 0) drawStatRow(vg, cx, ry, colW, "Res", m_ov.req_res, nullptr, Tone::Good);
+                if (r == 1) drawStatRow(vg, cx, ry, colW, "FPS", m_ov.req_fps, nullptr, Tone::Good);
+                if (r == 2) drawStatRow(vg, cx, ry, colW, "Rate", m_ov.req_rate, "Mb", Tone::Good);
+                if (r == 3) drawStatRow(vg, cx, ry, colW, "Codec", m_ov.req_codec, nullptr, Tone::Good);
+            }
+            else if (c == 1)
+            {
+                if (r == 0) drawStatRow(vg, cx, ry, colW, "Res", m_ov.out_res, nullptr, Tone::Good);
+                if (r == 1) drawStatRow(vg, cx, ry, colW, "FPS", m_ov.fps, nullptr, toneFps());
+                if (r == 2) drawStatRow(vg, cx, ry, colW, "Path", m_ov.out_path, nullptr, Tone::Good);
+                if (r == 3) drawStatRow(vg, cx, ry, colW, "Codec", m_ov.out_codec, nullptr, Tone::Good);
+            }
+            else
+            {
+                if (r == 0) drawStatRow(vg, cx, ry, colW, "RTT", m_ov.rtt, "ms", toneRtt());
+                if (r == 1) drawStatRow(vg, cx, ry, colW, "Rate", m_ov.rate, "Mb", toneRate());
+                if (r == 2) drawStatRow(vg, cx, ry, colW, "Loss", m_ov.loss, "%", toneLoss());
+                if (r == 3) drawStatRow(vg, cx, ry, colW, "Lost", m_ov.lost, nullptr, toneLost());
+            }
+        }
+    }
+
+    float latY = colTop + rowH * 4.0f + 10.0f * s;
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, ox, latY);
+    nvgLineTo(vg, ox + width, latY);
+    nvgStrokeWidth(vg, 1.0f);
+    nvgStrokeColor(vg, ovl(akira::ui::active().text, 26));
+    nvgStroke(vg);
+
+    drawLatencyStrip(vg, ox + padX, latY + 6.0f * s, width - padX * 2.0f, latH);
+
+    float footY = oy + height - footH;
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, ox, footY);
+    nvgLineTo(vg, ox + width, footY);
+    nvgStrokeWidth(vg, 1.0f);
+    nvgStrokeColor(vg, ovl(akira::ui::active().text, 26));
+    nvgStroke(vg);
+
+    nvgFontSize(vg, ovlSize(10.5f * s));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    float fx = ox + padX;
+    float fy = footY + footH * 0.5f;
+
+    struct { const char* k; const std::string& v; } foot[] = {
+        { "SRC", m_ov.src_fps },
+        { "GHASH", m_ov.ghash },
+        { "VPN", m_ov.vpn },
+        { "REC", m_ov.recovered },
+    };
+
+    for (const auto& f : foot)
+    {
+        nvgFillColor(vg, ovl(akira::ui::active().text, 117));
+        nvgText(vg, fx, fy, f.k, nullptr);
+        fx += nvgTextBounds(vg, 0, 0, f.k, nullptr, nullptr) + 6.0f * s;
+        nvgFillColor(vg, ovl(akira::ui::active().text, 189));
+        nvgText(vg, fx, fy, f.v.c_str(), nullptr);
+        fx += nvgTextBounds(vg, 0, 0, f.v.c_str(), nullptr, nullptr) + 18.0f * s;
+    }
+}
+
+void Deko3dRenderer::updateOverlayTexture()
+{
+    if (m_stats_mode.load(std::memory_order_relaxed) == StatsOverlayMode::Off)
+        return;
+
+    unsigned screenH = brls::Application::windowHeight;
+    if (screenH == 0)
+        return;
+
+    float scale = (float)screenH / 720.0f;
+    if (!(scale > 0.1f && scale < 8.0f))
+        scale = 1.0f;
+
+    if (scale != m_overlay_scale)
+    {
+        m_overlay_scale = scale;
+        m_ovl_dirty = true;
+    }
+
+    if (!ensureOverlayTarget())
+        return;
+
+    auto now = std::chrono::steady_clock::now();
+    if (m_ov_last_rebuild == std::chrono::steady_clock::time_point{} ||
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - m_ov_last_rebuild).count() >= 250)
+    {
+        rebuildOverlayText();
+        m_ov_last_rebuild = now;
+        m_ovl_dirty = true;
+    }
+
+    updateOverlayPlacement();
+
+    if (!m_ovl_dirty)
+        return;
+
+    const int front = m_ovl_front.load(std::memory_order_relaxed);
+    const int back = (front == 0) ? 1 : 0;
+
+    m_ovl_rt_cmdmem->begin(m_ovl_rt_cmdbuf);
+    dk::ImageView rtView{m_ovl_rt_image[back]};
+    dk::ImageView dsView{m_ovl_ds_image};
+    m_ovl_rt_cmdbuf.bindRenderTargets(&rtView, &dsView);
+    m_ovl_rt_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)m_ovl_rt_w, (float)m_ovl_rt_h, 0.0f, 1.0f }});
+    m_ovl_rt_cmdbuf.setScissors(0, {{ 0, 0, m_ovl_rt_w, m_ovl_rt_h }});
+    m_ovl_rt_cmdbuf.clearColor(0, DkColorMask_RGBA, 0.0f, 0.0f, 0.0f, 0.0f);
+    m_ovl_rt_cmdbuf.clearDepthStencil(true, 1.0f, 0xFF, 0);
+    DkCmdList prep = m_ovl_rt_cmdmem->end(m_ovl_rt_cmdbuf);
+    if (prep)
+        m_ovl_queue.submitCommands(prep);
+
+    m_overlay_to_texture = true;
+    nvgBeginFrame(m_ovl_vg, (float)m_ovl_rt_w, (float)m_ovl_rt_h, 1.0f);
+    nvgFontFaceId(m_ovl_vg, m_overlay_font);
+    warmFontAtlas(m_ovl_vg);
+
+    if (m_stats_mode.load(std::memory_order_relaxed) == StatsOverlayMode::Compact)
+        drawCompactOverlay(m_ovl_vg);
+    else
+        drawFullOverlay(m_ovl_vg);
+
+    nvgEndFrame(m_ovl_vg);
+    m_overlay_to_texture = false;
+
+    m_ovl_queue.flush();
+    m_ovl_queue.waitIdle();
+
+    m_ovl_panel_w.store(m_overlay_w.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    m_ovl_panel_h.store(m_overlay_h.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    m_ovl_dirty = false;
+    m_ovl_front.store(back, std::memory_order_release);
+}
+
+bool Deko3dRenderer::ensureOverlayShaders()
+{
+    if (m_ovl_shaders_ready)
+        return true;
+
+    if (!m_pool_data)
+        return false;
+
+    std::string vsh = loadShaderSource("romfs:/shaders/overlay_vsh.glsl");
+    std::string fsh = loadShaderSource("romfs:/shaders/overlay_fsh.glsl");
+    std::string bsh = loadShaderSource("romfs:/shaders/border_fsh.glsl");
+    if (vsh.empty() || fsh.empty() || bsh.empty())
+    {
+        brls::Logger::error("overlay: blit shader sources missing");
+        return false;
+    }
+    if (!compileShaderFromSource(m_ovl_vertex_shader, vsh, true) ||
+        !compileShaderFromSource(m_ovl_fragment_shader, fsh, false) ||
+        !compileShaderFromSource(m_border_fragment_shader, bsh, false))
+    {
+        brls::Logger::error("overlay: blit shader compilation failed");
+        return false;
+    }
+
+    m_ovl_cmdbuf = dk::CmdBufMaker{m_device}.create();
+    m_ovl_cmdmem.emplace();
+    m_ovl_cmdmem->allocate(*m_pool_data, 8 * 1024);
+    m_ovl_uniform = m_pool_data->allocate(6 * 256, DK_UNIFORM_BUF_ALIGNMENT);
+
+    m_ovl_desc_cmdbuf = dk::CmdBufMaker{m_device}.create();
+    m_ovl_desc_cmdmem = m_pool_data->allocate(0x1000, DK_CMDMEM_ALIGNMENT);
+
+    m_ovl_shaders_ready = true;
+    return true;
+}
+
+bool Deko3dRenderer::ensureOverlayContext()
+{
+    if (m_ovl_ctx_ready)
+        return true;
+
+    m_ovl_queue = dk::QueueMaker{m_device}
+        .setFlags(DkQueueFlags_Graphics | DkQueueFlags_DisableZcull)
+        .create();
+
+    m_ovl_images_pool.emplace(m_device, DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image, 8 * 1024 * 1024);
+    m_ovl_code_pool.emplace(m_device, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached | DkMemBlockFlags_Code, 128 * 1024);
+    m_ovl_data_pool.emplace(m_device, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached, 2 * 1024 * 1024);
+
+    m_ovl_renderer.emplace(1024u, 512u, m_device, dk::Queue{m_ovl_queue},
+                           *m_ovl_images_pool, *m_ovl_code_pool, *m_ovl_data_pool);
+
+    m_ovl_vg = nvgCreateDk(&*m_ovl_renderer, NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+    if (!m_ovl_vg)
+    {
+        brls::Logger::error("overlay: private nanovg context creation failed");
+        return false;
+    }
+
+    m_overlay_font = nvgCreateFont(m_ovl_vg, "mono", BRLS_ASSET("font/Cousine-Regular.ttf"));
+    if (m_overlay_font < 0)
+    {
+        brls::Logger::error("overlay: private context could not load the mono font");
+        return false;
+    }
+
+    m_ovl_rt_cmdbuf = dk::CmdBufMaker{m_device}.create();
+    m_ovl_rt_cmdmem.emplace();
+    m_ovl_rt_cmdmem->allocate(*m_ovl_data_pool, 8 * 1024);
+
+    m_ovl_ctx_ready = true;
+    brls::Logger::info("overlay: private queue and nanovg context ready");
+    return true;
+}
+
+void Deko3dRenderer::destroyOverlayContext()
+{
+    if (!m_ovl_ctx_ready)
+        return;
+
+    m_ovl_queue.waitIdle();
+
+    if (m_ovl_vg)
+    {
+        nvgDeleteDk(m_ovl_vg);
+        m_ovl_vg = nullptr;
+    }
+    m_ovl_renderer.reset();
+    m_ovl_rt_cmdmem.reset();
+    m_ovl_rt_cmdbuf = nullptr;
+    m_ovl_queue = nullptr;
+    m_ovl_images_pool.reset();
+    m_ovl_code_pool.reset();
+    m_ovl_data_pool.reset();
+    m_overlay_font = -1;
+    m_ovl_ctx_ready = false;
+}
+
+bool Deko3dRenderer::ensureOverlayTarget()
+{
+    const float s = m_overlay_scale;
+    const unsigned wantW = (unsigned)(620.0f * s) + 4;
+    const unsigned wantH = (unsigned)(240.0f * s) + 4;
+
+    if (m_ovl_rt_texture_id[0] && m_ovl_rt_w == wantW && m_ovl_rt_h == wantH)
+        return true;
+
+    if (!ensureOverlayShaders())
+        return false;
+    if (!ensureOverlayContext())
+        return false;
+
+    destroyOverlayTarget();
+
+    dk::ImageLayoutMaker{m_device}
+        .setType(DkImageType_2D)
+        .setFormat(DkImageFormat_RGBA8_Unorm)
+        .setDimensions(wantW, wantH, 1)
+        .setFlags(DkImageFlags_UsageRender | DkImageFlags_UsageLoadStore | DkImageFlags_Usage2DEngine)
+        .initialize(m_ovl_rt_layout);
+
+    dk::ImageLayoutMaker{m_device}
+        .setType(DkImageType_2D)
+        .setFormat(DkImageFormat_S8)
+        .setDimensions(wantW, wantH, 1)
+        .setFlags(DkImageFlags_UsageRender | DkImageFlags_HwCompression)
+        .initialize(m_ovl_ds_layout);
+
+    m_ovl_ds_handle = m_ovl_images_pool->allocate(m_ovl_ds_layout.getSize(), m_ovl_ds_layout.getAlignment());
+    if (!m_ovl_ds_handle)
+    {
+        brls::Logger::error("overlay: could not allocate depth target");
+        return false;
+    }
+    m_ovl_ds_image.initialize(m_ovl_ds_layout, m_ovl_ds_handle.getMemBlock(), m_ovl_ds_handle.getOffset());
+
+    m_ovl_desc_cmdbuf.clear();
+    m_ovl_desc_cmdbuf.addMemory(m_ovl_desc_cmdmem.getMemBlock(), m_ovl_desc_cmdmem.getOffset(), m_ovl_desc_cmdmem.getSize());
+
+    for (int i = 0; i < 2; ++i)
+    {
+        m_ovl_rt_handle[i] = m_ovl_images_pool->allocate(m_ovl_rt_layout.getSize(), m_ovl_rt_layout.getAlignment());
+        if (!m_ovl_rt_handle[i])
+        {
+            brls::Logger::error("overlay: could not allocate {}x{} render target", wantW, wantH);
+            destroyOverlayTarget();
+            return false;
+        }
+        m_ovl_rt_image[i].initialize(m_ovl_rt_layout, m_ovl_rt_handle[i].getMemBlock(), m_ovl_rt_handle[i].getOffset());
+        m_ovl_rt_desc[i].initialize(m_ovl_rt_image[i], true);
+        m_ovl_rt_texture_id[i] = m_vctx->allocateImageIndex();
+
+        if (!m_vctx->updateImageDescriptor(m_ovl_desc_cmdbuf, m_ovl_rt_texture_id[i], m_ovl_rt_desc[i]))
+        {
+            brls::Logger::error("overlay: failed to bind render target descriptor");
+            destroyOverlayTarget();
+            return false;
+        }
+    }
+
+    m_vctx->invalidateImageDescriptors(m_ovl_desc_cmdbuf);
+    m_ovl_desc_list = m_ovl_desc_cmdbuf.finishList();
+    m_ovl_desc_live = false;
+    m_ovl_desc_pending.store(true, std::memory_order_release);
+
+    m_ovl_renderer->UpdateViewBounds(wantW, wantH);
+
+    m_ovl_rt_w = wantW;
+    m_ovl_rt_h = wantH;
+    m_ovl_rt_scale = s;
+    m_ovl_dirty = true;
+
+    brls::Logger::info("overlay: render targets {}x{} ready (tex={},{})",
+                       wantW, wantH, m_ovl_rt_texture_id[0], m_ovl_rt_texture_id[1]);
+    return true;
+}
+
+void Deko3dRenderer::destroyOverlayTarget()
+{
+    m_ovl_front.store(-1, std::memory_order_release);
+    m_ovl_desc_pending.store(false, std::memory_order_release);
+    m_ovl_desc_live = false;
+
+    if (m_ovl_ctx_ready)
+        m_ovl_queue.waitIdle();
+
+    for (int i = 0; i < 2; ++i)
+    {
+        if (m_ovl_rt_texture_id[i])
+        {
+            m_vctx->freeImageIndex(m_ovl_rt_texture_id[i]);
+            m_ovl_rt_texture_id[i] = 0;
+        }
+        m_ovl_rt_handle[i].destroy();
+        m_ovl_rt_image[i] = dk::Image{};
+    }
+    m_ovl_ds_handle.destroy();
+    m_ovl_ds_image = dk::Image{};
+    m_ovl_rt_w = 0;
+    m_ovl_rt_h = 0;
+}
+
+void Deko3dRenderer::compositeOverlay()
+{
+    if (m_ovl_desc_pending.exchange(false, std::memory_order_acquire))
+    {
+        if (m_ovl_desc_list)
+            m_queue.submitCommands(m_ovl_desc_list);
+        m_ovl_desc_live = true;
+    }
+
+    if (!m_ovl_desc_live)
+        return;
+
+    const int front = m_ovl_front.load(std::memory_order_acquire);
+    if (front < 0 || !m_ovl_rt_texture_id[front])
+        return;
+
     dk::Image* framebuffer = m_vctx->getFramebuffer();
     if (!framebuffer)
         return;
 
-    m_overlay_cmdbuf.clear();
-    m_overlay_cmdbuf.addMemory(m_overlay_cmdmem.getMemBlock(), m_overlay_cmdmem.getOffset(), m_overlay_cmdmem.getSize());
+    const float sw = (float)brls::Application::windowWidth;
+    const float sh = (float)brls::Application::windowHeight;
+    if (sw <= 0.0f || sh <= 0.0f)
+        return;
+
+    const float panelW = m_ovl_panel_w.load(std::memory_order_relaxed);
+    const float panelH = m_ovl_panel_h.load(std::memory_order_relaxed);
+    if (panelW <= 0.0f || panelH <= 0.0f)
+        return;
+
+    float ox = m_overlay_x.load(std::memory_order_relaxed);
+    float oy = m_overlay_y.load(std::memory_order_relaxed);
+
+    float uniforms[8] = {
+        (ox / sw) * 2.0f - 1.0f,
+        1.0f - (oy / sh) * 2.0f,
+        ((ox + panelW) / sw) * 2.0f - 1.0f,
+        1.0f - ((oy + panelH) / sh) * 2.0f,
+        panelW / (float)m_ovl_rt_w,
+        panelH / (float)m_ovl_rt_h,
+        0.0f,
+        0.0f,
+    };
+
+    m_ovl_uniform_slot ^= 1u;
+    const unsigned off = m_ovl_uniform_slot * 256;
+    memcpy((uint8_t*)m_ovl_uniform.getCpuAddr() + off, uniforms, sizeof(uniforms));
+
+    m_ovl_cmdmem->begin(m_ovl_cmdbuf);
 
     dk::ImageView colorTarget{*framebuffer};
-    m_overlay_cmdbuf.bindRenderTargets(&colorTarget);
-
-    m_overlay_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
-    m_overlay_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
-
-    m_overlay_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
-    m_overlay_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
+    m_ovl_cmdbuf.bindRenderTargets(&colorTarget);
+    m_ovl_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, sw, sh, 0.0f, 1.0f }});
+    m_ovl_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)sw, (uint32_t)sh }});
+    m_ovl_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
+    m_ovl_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
         .setDepthTestEnable(false)
         .setDepthWriteEnable(false)
         .setStencilTestEnable(false));
-    m_overlay_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
-    m_overlay_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
+    m_ovl_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
+    m_ovl_cmdbuf.bindBlendStates(0, dk::BlendState{}.setFactors(
+        DkBlendFactor_One, DkBlendFactor_InvSrcAlpha,
+        DkBlendFactor_One, DkBlendFactor_InvSrcAlpha));
+    m_ovl_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
 
-    m_overlay_cmdbuf.bindBlendStates(0, dk::BlendState{}
-        .setColorBlendOp(DkBlendOp_Add)
-        .setSrcColorBlendFactor(DkBlendFactor_SrcAlpha)
-        .setDstColorBlendFactor(DkBlendFactor_InvSrcAlpha)
-        .setAlphaBlendOp(DkBlendOp_Add)
-        .setSrcAlphaBlendFactor(DkBlendFactor_One)
-        .setDstAlphaBlendFactor(DkBlendFactor_InvSrcAlpha));
+    m_ovl_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_ovl_vertex_shader, m_ovl_fragment_shader });
+    m_ovl_cmdbuf.bindUniformBuffer(DkStage_Vertex, 0, m_ovl_uniform.getGpuAddr() + off, 256);
+    m_ovl_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_ovl_rt_texture_id[front], 0));
+    m_ovl_cmdbuf.bindVtxBuffer(0, m_vertex_buffer.getGpuAddr(), m_vertex_buffer.getSize());
+    m_ovl_cmdbuf.bindVtxAttribState(VertexAttribState);
+    m_ovl_cmdbuf.bindVtxBufferState(VertexBufferState);
+    m_ovl_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
 
-    m_overlay_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
-
-    m_overlay_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
-
-    m_overlay_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
-    m_overlay_cmdbuf.bindVtxAttribState(TextVertexAttribState);
-    m_overlay_cmdbuf.bindVtxBufferState(TextVertexBufferState);
-
-    m_overlay_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
-
-    DkCmdList list = m_overlay_cmdbuf.finishList();
+    DkCmdList list = m_ovl_cmdmem->end(m_ovl_cmdbuf);
     if (list)
-    {
         m_queue.submitCommands(list);
-        m_queue.flush();
-    }
+    m_queue.flush();
 }
 
 void Deko3dRenderer::renderBorderFlash()
 {
-    if (m_border_flash_frames <= 0 || !m_text_initialized)
+    if (m_border_flash_frames <= 0)
         return;
 
     m_border_flash_frames--;
 
-    float fade = (float)m_border_flash_frames / (float)BORDER_FLASH_DURATION;
-    float edgeAlpha = fade * 0.25f;
-    float innerAlpha = 0.0f;
-
-    unsigned screenW = brls::Application::windowWidth;
-    unsigned screenH = brls::Application::windowHeight;
-
-    constexpr float T = 64.0f;
-    float r = 0.6f, g = 0.85f, b = 1.0f;
-
-    std::vector<TextVertex> vertices;
-    vertices.reserve(48);
-
-    auto addGradientQuad = [&](float x1, float y1, float x2, float y2,
-                               float x3, float y3, float x4, float y4,
-                               float a1, float a2) {
-        float nx1, ny1, nx2, ny2, nx3, ny3, nx4, ny4;
-        pixelToNDC(x1, y1, screenW, screenH, nx1, ny1);
-        pixelToNDC(x2, y2, screenW, screenH, nx2, ny2);
-        pixelToNDC(x3, y3, screenW, screenH, nx3, ny3);
-        pixelToNDC(x4, y4, screenW, screenH, nx4, ny4);
-
-        vertices.push_back({{ nx1, ny1, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a1 }});
-        vertices.push_back({{ nx2, ny2, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a1 }});
-        vertices.push_back({{ nx3, ny3, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a2 }});
-
-        vertices.push_back({{ nx2, ny2, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a1 }});
-        vertices.push_back({{ nx4, ny4, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a2 }});
-        vertices.push_back({{ nx3, ny3, 0.0f }, { -1.0f, -1.0f }, { r, g, b, a2 }});
-    };
-
-    float sw = (float)screenW, sh = (float)screenH;
-
-    addGradientQuad(0, 0,    sw, 0,     0, T,    sw, T,    edgeAlpha, innerAlpha);
-    addGradientQuad(0, sh-T, sw, sh-T,  0, sh,   sw, sh,   innerAlpha, edgeAlpha);
-    addGradientQuad(0, 0,    0, sh,     T, 0,    T, sh,    edgeAlpha, innerAlpha);
-    addGradientQuad(sw-T, 0, sw-T, sh,  sw, 0,   sw, sh,   innerAlpha, edgeAlpha);
-
-    memcpy(m_text_vertex_buffer.getCpuAddr(), vertices.data(), vertices.size() * sizeof(TextVertex));
+    if (!m_ovl_shaders_ready)
+        return;
 
     dk::Image* framebuffer = m_vctx->getFramebuffer();
     if (!framebuffer)
         return;
 
-    m_overlay_cmdbuf.clear();
-    m_overlay_cmdbuf.addMemory(m_overlay_cmdmem.getMemBlock(), m_overlay_cmdmem.getOffset(), m_overlay_cmdmem.getSize());
+    const float sw = (float)brls::Application::windowWidth;
+    const float sh = (float)brls::Application::windowHeight;
+    if (sw <= 0.0f || sh <= 0.0f)
+        return;
+
+    const float fade = (float)m_border_flash_frames / (float)BORDER_FLASH_DURATION;
+    const float alpha = fade * 0.25f;
+    if (alpha <= 0.002f)
+        return;
+
+    NVGcolor accent = ovl(akira::ui::active().accent, 255);
+
+    float uniforms[8] = {
+        accent.r, accent.g, accent.b, alpha,
+        sw, sh, 64.0f, 0.0f,
+    };
+
+    m_border_uniform_slot ^= 1u;
+    const unsigned off = (3 + m_border_uniform_slot) * 256;
+    memcpy((uint8_t*)m_ovl_uniform.getCpuAddr() + off, uniforms, sizeof(uniforms));
+
+    float rect[8] = { -1.0f, 1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f };
+    memcpy((uint8_t*)m_ovl_uniform.getCpuAddr() + 2 * 256, rect, sizeof(rect));
+
+    m_ovl_cmdmem->begin(m_ovl_cmdbuf);
 
     dk::ImageView colorTarget{*framebuffer};
-    m_overlay_cmdbuf.bindRenderTargets(&colorTarget);
-    m_overlay_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, (float)screenW, (float)screenH, 0.0f, 1.0f }});
-    m_overlay_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)screenW, (uint32_t)screenH }});
-
-    m_overlay_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
-    m_overlay_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
+    m_ovl_cmdbuf.bindRenderTargets(&colorTarget);
+    m_ovl_cmdbuf.setViewports(0, {{ 0.0f, 0.0f, sw, sh, 0.0f, 1.0f }});
+    m_ovl_cmdbuf.setScissors(0, {{ 0, 0, (uint32_t)sw, (uint32_t)sh }});
+    m_ovl_cmdbuf.bindRasterizerState(dk::RasterizerState{}.setCullMode(DkFace_None));
+    m_ovl_cmdbuf.bindDepthStencilState(dk::DepthStencilState{}
         .setDepthTestEnable(false)
         .setDepthWriteEnable(false)
         .setStencilTestEnable(false));
-    m_overlay_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
-    m_overlay_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
-    m_overlay_cmdbuf.bindBlendStates(0, dk::BlendState{}
-        .setColorBlendOp(DkBlendOp_Add)
-        .setSrcColorBlendFactor(DkBlendFactor_SrcAlpha)
-        .setDstColorBlendFactor(DkBlendFactor_InvSrcAlpha)
-        .setAlphaBlendOp(DkBlendOp_Add)
-        .setSrcAlphaBlendFactor(DkBlendFactor_One)
-        .setDstAlphaBlendFactor(DkBlendFactor_InvSrcAlpha));
+    m_ovl_cmdbuf.bindColorState(dk::ColorState{}.setBlendEnable(0, true));
+    m_ovl_cmdbuf.bindBlendStates(0, dk::BlendState{}.setFactors(
+        DkBlendFactor_One, DkBlendFactor_InvSrcAlpha,
+        DkBlendFactor_One, DkBlendFactor_InvSrcAlpha));
+    m_ovl_cmdbuf.bindColorWriteState(dk::ColorWriteState{});
 
-    m_overlay_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_text_vertex_shader, m_text_fragment_shader });
-    m_overlay_cmdbuf.bindTextures(DkStage_Fragment, 0, dkMakeTextureHandle(m_font_texture_id, 2));
-    m_overlay_cmdbuf.bindVtxBuffer(0, m_text_vertex_buffer.getGpuAddr(), vertices.size() * sizeof(TextVertex));
-    m_overlay_cmdbuf.bindVtxAttribState(TextVertexAttribState);
-    m_overlay_cmdbuf.bindVtxBufferState(TextVertexBufferState);
+    m_ovl_cmdbuf.bindShaders(DkStageFlag_GraphicsMask, { m_ovl_vertex_shader, m_border_fragment_shader });
+    m_ovl_cmdbuf.bindUniformBuffer(DkStage_Vertex, 0, m_ovl_uniform.getGpuAddr() + 2 * 256, 256);
+    m_ovl_cmdbuf.bindUniformBuffer(DkStage_Fragment, 0, m_ovl_uniform.getGpuAddr() + off, 256);
+    m_ovl_cmdbuf.bindVtxBuffer(0, m_vertex_buffer.getGpuAddr(), m_vertex_buffer.getSize());
+    m_ovl_cmdbuf.bindVtxAttribState(VertexAttribState);
+    m_ovl_cmdbuf.bindVtxBufferState(VertexBufferState);
+    m_ovl_cmdbuf.draw(DkPrimitive_Quads, QuadVertexData.size(), 1, 0, 0);
 
-    m_overlay_cmdbuf.draw(DkPrimitive_Triangles, vertices.size(), 1, 0, 0);
-
-    DkCmdList list = m_overlay_cmdbuf.finishList();
+    DkCmdList list = m_ovl_cmdmem->end(m_ovl_cmdbuf);
     if (list)
-    {
         m_queue.submitCommands(list);
-        m_queue.flush();
+    m_queue.flush();
+}
+
+bool Deko3dRenderer::captureLastFrame(std::vector<uint8_t>& rgba, int& width, int& height)
+{
+    if (!m_initialized)
+        return false;
+
+    int newest = (m_frame_ring_index - 1 + FRAME_RING_SIZE) % FRAME_RING_SIZE;
+    AVFrame* src = m_frame_ring[newest];
+    if (!src || src->width <= 0 || src->height <= 0)
+        return false;
+
+    AVFrame* sw = av_frame_alloc();
+    if (!sw)
+        return false;
+
+    bool owns_sw = true;
+    if (src->hw_frames_ctx)
+    {
+        if (av_hwframe_transfer_data(sw, src, 0) < 0)
+        {
+            av_frame_free(&sw);
+            return false;
+        }
+        sw->width = src->width;
+        sw->height = src->height;
     }
+    else
+    {
+        av_frame_free(&sw);
+        sw = src;
+        owns_sw = false;
+    }
+
+    int dstW = CAPTURE_WIDTH;
+    int dstH = (int)((int64_t)dstW * src->height / src->width) & ~1;
+    if (dstH <= 0)
+        dstH = CAPTURE_WIDTH * 9 / 16;
+
+    SwsContext* sws = sws_getContext(
+        sw->width, sw->height, (AVPixelFormat)sw->format,
+        dstW, dstH, AV_PIX_FMT_RGBA,
+        SWS_BILINEAR, nullptr, nullptr, nullptr);
+    if (!sws)
+    {
+        if (owns_sw) av_frame_free(&sw);
+        return false;
+    }
+
+    rgba.assign((size_t)dstW * dstH * 4, 0);
+    uint8_t* dstData[4] = { rgba.data(), nullptr, nullptr, nullptr };
+    int dstLinesize[4] = { dstW * 4, 0, 0, 0 };
+
+    int scaled = sws_scale(sws, sw->data, sw->linesize, 0, sw->height, dstData, dstLinesize);
+    sws_freeContext(sws);
+    if (owns_sw)
+        av_frame_free(&sw);
+
+    if (scaled <= 0)
+    {
+        rgba.clear();
+        return false;
+    }
+
+    width = dstW;
+    height = dstH;
+    return true;
 }
 
 #endif // BOREALIS_USE_DEKO3D
+

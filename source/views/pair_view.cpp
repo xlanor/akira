@@ -172,6 +172,12 @@ void PairView::onEvent(ListenerEvent event) {
 void PairView::applyCredentials(const PairedCredentials& creds, bool createProfile) {
     SettingsManager* settings = SettingsManager::getInstance();
 
+    brls::Logger::info("Pair push: create={} active={} onlineId={} accountId={} npsso={} refresh={} mobile={}",
+        createProfile, settings->getActiveProfileId(), !creds.onlineId.empty(),
+        !creds.accountId.empty(), !creds.npsso.empty(), !creds.refreshToken.empty(),
+        creds.hasMobile);
+    settings->logProfileCensus("pair-before");
+
     if (createProfile || !settings->getActiveProfile()) {
         Profile fresh;
         int64_t id = settings->addProfile(fresh);
@@ -229,6 +235,7 @@ void PairView::applyCredentials(const PairedCredentials& creds, bool createProfi
     settings->refreshLegacyGate();
     settings->writeFile();
     brls::Logger::info("Imported PSN credentials from pairing push");
+    settings->logProfileCensus("pair-after");
 
     TrophyManager::getInstance()->onActiveProfileChanged();
     /*

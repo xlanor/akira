@@ -221,40 +221,68 @@ const char* Auth::label() const
     return profileFor(credential).label;
 }
 
+void Auth::pinProfile(int64_t profileId)
+{
+    pinnedProfileId.store(profileId, std::memory_order_relaxed);
+}
+
+void Auth::unpinProfile()
+{
+    pinnedProfileId.store(0, std::memory_order_relaxed);
+}
+
+int64_t Auth::targetProfile() const
+{
+    int64_t pinned = pinnedProfileId.load(std::memory_order_relaxed);
+    return pinned != 0 ? pinned : settings->getActiveProfileId();
+}
+
 std::string Auth::storedAccessToken() const
 {
-    return credential == Credential::MobileSso
-        ? settings->getPsnMobileSsoAccessToken()
-        : settings->getPsnAccessToken();
+    std::string out;
+    settings->readProfile(targetProfile(), [&](const Profile& p) {
+        out = credential == Credential::MobileSso ? p.mobileSsoAccessToken : p.accessToken;
+    });
+    return out;
 }
 
 std::string Auth::storedRefreshToken() const
 {
-    return credential == Credential::MobileSso
-        ? settings->getPsnMobileSsoRefreshToken()
-        : settings->getPsnRefreshToken();
+    std::string out;
+    settings->readProfile(targetProfile(), [&](const Profile& p) {
+        out = credential == Credential::MobileSso ? p.mobileSsoRefreshToken : p.refreshToken;
+    });
+    return out;
 }
 
 int64_t Auth::storedExpiresAt() const
 {
-    return credential == Credential::MobileSso
-        ? settings->getPsnMobileSsoExpiresAt()
-        : settings->getPsnTokenExpiresAt();
+    int64_t out = 0;
+    settings->readProfile(targetProfile(), [&](const Profile& p) {
+        out = credential == Credential::MobileSso ? p.mobileSsoExpiresAt : p.tokenExpiresAt;
+    });
+    return out;
 }
 
 std::string Auth::storedNpsso() const
 {
-    return settings->getPsnNpsso();
+    std::string out;
+    settings->readProfile(targetProfile(), [&](const Profile& p) { out = p.npsso; });
+    return out;
 }
 
 int64_t Auth::storedNpssoLastCheckedAt() const
 {
-    return settings->getPsnNpssoLastCheckedAt();
+    int64_t out = 0;
+    settings->readProfile(targetProfile(), [&](const Profile& p) { out = p.npssoLastCheckedAt; });
+    return out;
 }
 
 bool Auth::storedNpssoValid() const
 {
-    return settings->getPsnNpssoValid();
+    bool out = false;
+    settings->readProfile(targetProfile(), [&](const Profile& p) { out = p.npssoValid; });
+    return out;
 }
 
 bool Auth::hasUsableNpsso() const
@@ -272,8 +300,16 @@ bool Auth::hasUsableNpsso() const
 
 void Auth::storeNpssoValidation(bool valid, int64_t checkedAt)
 {
-    settings->setPsnNpssoValid(valid);
-    settings->setPsnNpssoLastCheckedAt(checkedAt);
+    int64_t id = targetProfile();
+    if (!settings->updateProfile(id, [&](Profile& p) {
+            p.npssoValid = valid;
+            p.npssoLastCheckedAt = checkedAt;
+        }))
+    {
+        brls::Logger::warning("PSN {}: profile {} vanished, dropping NPSSO validation",
+            label(), id);
+        return;
+    }
     settings->writeFile();
 }
 
@@ -283,19 +319,28 @@ void Auth::storeTokens(const std::string& access, const std::string& refresh, in
         ? static_cast<int64_t>(std::time(nullptr)) + expiresIn
         : 0;
 
-    if (credential == Credential::MobileSso)
+    int64_t id = targetProfile();
+    bool mobile = credential == Credential::MobileSso;
+    if (!settings->updateProfile(id, [&](Profile& p) {
+            if (mobile)
+            {
+                p.mobileSsoAccessToken = access;
+                p.mobileSsoRefreshToken = refresh;
+                if (expiresAt > 0)
+                    p.mobileSsoExpiresAt = expiresAt;
+            }
+            else
+            {
+                p.accessToken = access;
+                p.refreshToken = refresh;
+                if (expiresAt > 0)
+                    p.tokenExpiresAt = expiresAt;
+            }
+        }))
     {
-        settings->setPsnMobileSsoAccessToken(access);
-        settings->setPsnMobileSsoRefreshToken(refresh);
-        if (expiresAt > 0)
-            settings->setPsnMobileSsoExpiresAt(expiresAt);
-    }
-    else
-    {
-        settings->setPsnAccessToken(access);
-        settings->setPsnRefreshToken(refresh);
-        if (expiresAt > 0)
-            settings->setPsnTokenExpiresAt(expiresAt);
+        brls::Logger::warning("PSN {}: profile {} vanished, dropping refreshed tokens",
+            label(), id);
+        return;
     }
 
     settings->writeFile();
@@ -303,10 +348,21 @@ void Auth::storeTokens(const std::string& access, const std::string& refresh, in
 
 void Auth::clearStoredTokens()
 {
-    if (credential == Credential::MobileSso)
-        settings->clearPsnMobileSsoData();
-    else
-        settings->clearPsnTokenData();
+    bool mobile = credential == Credential::MobileSso;
+    settings->updateProfile(targetProfile(), [&](Profile& p) {
+        if (mobile)
+        {
+            p.mobileSsoAccessToken.clear();
+            p.mobileSsoRefreshToken.clear();
+            p.mobileSsoExpiresAt = 0;
+        }
+        else
+        {
+            p.accessToken.clear();
+            p.refreshToken.clear();
+            p.tokenExpiresAt = 0;
+        }
+    });
 
     settings->writeFile();
 }
