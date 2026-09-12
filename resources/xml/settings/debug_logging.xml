@@ -60,7 +60,7 @@
                     marginRight="15"/>
 
 
-                <brls:BooleanCell
+                <brls:SelectorCell
                     id="settings/debugChiakiLog"
                     title="@i18n/akira/settings/chiaki_log"
                     marginLeft="15"

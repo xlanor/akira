@@ -23,6 +23,54 @@
 
 namespace {
 
+ChiakiLogVerbosity chiakiLogVerbosityFromString(const std::string& value)
+{
+    if (value == "info")
+        return ChiakiLogVerbosity::Info;
+    if (value == "debug")
+        return ChiakiLogVerbosity::Debug;
+    if (value == "trace")
+        return ChiakiLogVerbosity::Trace;
+    return ChiakiLogVerbosity::Normal;
+}
+
+const char* chiakiLogVerbosityToString(ChiakiLogVerbosity verbosity)
+{
+    switch (verbosity) {
+        case ChiakiLogVerbosity::Info:  return "info";
+        case ChiakiLogVerbosity::Debug: return "debug";
+        case ChiakiLogVerbosity::Trace: return "trace";
+        case ChiakiLogVerbosity::Normal:
+        default:                        return "normal";
+    }
+}
+
+uint32_t chiakiLogMask(ChiakiLogVerbosity verbosity, bool streaming)
+{
+    constexpr uint32_t warnings = CHIAKI_LOG_ERROR | CHIAKI_LOG_WARNING;
+    constexpr uint32_t info = warnings | CHIAKI_LOG_INFO;
+    constexpr uint32_t debug = info | CHIAKI_LOG_DEBUG;
+
+    switch (verbosity) {
+        case ChiakiLogVerbosity::Info:  return info;
+        case ChiakiLogVerbosity::Debug: return debug;
+        case ChiakiLogVerbosity::Trace: return CHIAKI_LOG_ALL;
+        case ChiakiLogVerbosity::Normal:
+        default:                        return streaming ? warnings : info;
+    }
+}
+
+brls::LogLevel borealisLogLevel(ChiakiLogVerbosity verbosity)
+{
+    switch (verbosity) {
+        case ChiakiLogVerbosity::Debug: return brls::LogLevel::LOG_DEBUG;
+        case ChiakiLogVerbosity::Trace: return brls::LogLevel::LOG_VERBOSE;
+        case ChiakiLogVerbosity::Normal:
+        case ChiakiLogVerbosity::Info:
+        default:                        return brls::LogLevel::LOG_INFO;
+    }
+}
+
 akira::input::RumbleSource sourceFromLegacyPreset(HapticPreset preset)
 {
     switch (preset) {
@@ -289,6 +337,7 @@ SettingsManager::SettingsManager() {
 
 void SettingsManager::setLogger(ChiakiLog* logger) {
     this->log = logger;
+    updateChiakiLogMask();
     for (auto& [name, host] : hosts) {
         host->setLogger(logger);
     }
@@ -655,8 +704,11 @@ void SettingsManager::parseTomlFile() {
             debugWireguardLog = *val;
         if (auto val = config["debug"]["render_log"].value<bool>())
             debugRenderLog = *val;
-        if (auto val = config["debug"]["chiaki_log"].value<bool>())
-            debugChiakiLog = *val;
+        if (auto val = config["debug"]["chiaki_log_level"].value<std::string>())
+            chiakiLogVerbosity = chiakiLogVerbosityFromString(*val);
+        else if (auto val = config["debug"]["chiaki_log"].value<bool>())
+            chiakiLogVerbosity = *val ? ChiakiLogVerbosity::Trace
+                                      : ChiakiLogVerbosity::Normal;
         if (auto val = config["debug"]["discovery_log"].value<bool>())
             debugDiscoveryLog = *val;
         if (auto val = config["debug"]["ffmpeg_log"].value<bool>())
@@ -1137,7 +1189,8 @@ int SettingsManager::writeFile() {
         if (debugLwipLog) debug.insert("lwip_log", true);
         if (debugWireguardLog) debug.insert("wireguard_log", true);
         if (debugRenderLog) debug.insert("render_log", true);
-        if (debugChiakiLog) debug.insert("chiaki_log", true);
+        if (chiakiLogVerbosity != ChiakiLogVerbosity::Normal)
+            debug.insert("chiaki_log_level", chiakiLogVerbosityToString(chiakiLogVerbosity));
         if (debugDiscoveryLog) debug.insert("discovery_log", true);
         if (debugFfmpegLog) debug.insert("ffmpeg_log", true);
         if (ipcStatsEnabled) debug.insert("ipc_stats", true);
@@ -2521,12 +2574,33 @@ void SettingsManager::setDebugRenderLog(bool enabled) {
     debugRenderLog = enabled;
 }
 
-bool SettingsManager::getDebugChiakiLog() const {
-    return debugChiakiLog;
+ChiakiLogVerbosity SettingsManager::getChiakiLogVerbosity() const {
+    return chiakiLogVerbosity;
 }
 
-void SettingsManager::setDebugChiakiLog(bool enabled) {
-    debugChiakiLog = enabled;
+void SettingsManager::setChiakiLogVerbosity(ChiakiLogVerbosity verbosity) {
+    chiakiLogVerbosity = verbosity;
+    applyChiakiLogVerbosity();
+}
+
+void SettingsManager::applyChiakiLogVerbosity() {
+    brls::Logger::setLogLevel(borealisLogLevel(chiakiLogVerbosity));
+    updateChiakiLogMask();
+}
+
+void SettingsManager::updateChiakiLogMask() {
+    if (!log)
+        return;
+#ifdef MUTE_CHIAKI_LOGS
+    chiaki_log_set_level(log, 0);
+#else
+    chiaki_log_set_level(log, chiakiLogMask(chiakiLogVerbosity, streamingActive));
+#endif
+}
+
+bool SettingsManager::getDebugChiakiLog() const {
+    return chiakiLogVerbosity == ChiakiLogVerbosity::Debug ||
+           chiakiLogVerbosity == ChiakiLogVerbosity::Trace;
 }
 
 bool SettingsManager::getDebugDiscoveryLog() const {
@@ -2551,6 +2625,7 @@ bool SettingsManager::isStreamingActive() const {
 
 void SettingsManager::setStreamingActive(bool active) {
     streamingActive = active;
+    updateChiakiLogMask();
 }
 
 bool SettingsManager::getTouchpadEnabled() const { return touchpadEnabled; }

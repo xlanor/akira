@@ -1,9 +1,9 @@
 {
-  "settings/enableFileLogging": { "title": "File logging", "body": "Write logs to /switch/akira/logs on the SD card. Required for retaining the subsystem logs below.", "image": "" },
+  "settings/enableFileLogging": { "title": "File logging", "body": "Write logs to /switch/akira/logs on the SD card. Logging detail selections are preserved when this is disabled.", "image": "" },
   "settings/debugLwipLog":      { "title": "lwIP log", "body": "Include detailed VPN relay network-stack messages in the log.", "image": "" },
   "settings/debugWireguardLog": { "title": "WireGuard log", "body": "Include detailed WireGuard tunnel messages in the log.", "image": "" },
   "settings/debugRenderLog":    { "title": "Render log", "body": "Periodically log stream-view and render-state information.", "image": "" },
-  "settings/debugChiakiLog":    { "title": "chiaki log", "body": "Include detailed core Remote Play library messages while streaming.", "image": "" },
+  "settings/debugChiakiLog":    { "title": "Chiaki log detail", "body": "Normal records connection information, then warnings and errors during play. Info keeps informational traffic; Debug adds diagnostics; Trace also includes very high-volume packet detail.", "image": "" },
   "settings/debugDiscoveryLog": { "title": "Discovery log", "body": "Capture console discovery, subnet sweep, response, and wake activity.", "image": "" },
   "settings/debugFfmpegLog":    { "title": "ffmpeg log", "body": "Include FFmpeg decoder messages in the log.", "image": "" },
   "settings/openDiscoveryLog":  { "title": "View discovery log", "body": "View captured discovery activity, including other-subnet /24 sweeps and console responses. Enable Discovery log above to capture it.", "image": "" }

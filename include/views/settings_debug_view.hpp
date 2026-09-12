@@ -3,6 +3,7 @@
 
 #include <borealis.hpp>
 #include <borealis/views/cells/cell_bool.hpp>
+#include <borealis/views/cells/cell_selector.hpp>
 
 #include "core/settings_manager.hpp"
 
@@ -15,7 +16,7 @@ private:
     BRLS_BIND(brls::BooleanCell, debugLwipLogToggle, "settings/debugLwipLog");
     BRLS_BIND(brls::BooleanCell, debugWireguardLogToggle, "settings/debugWireguardLog");
     BRLS_BIND(brls::BooleanCell, debugRenderLogToggle, "settings/debugRenderLog");
-    BRLS_BIND(brls::BooleanCell, debugChiakiLogToggle, "settings/debugChiakiLog");
+    BRLS_BIND(brls::SelectorCell, chiakiLogLevelSelector, "settings/debugChiakiLog");
     BRLS_BIND(brls::BooleanCell, debugDiscoveryLogToggle, "settings/debugDiscoveryLog");
     BRLS_BIND(brls::BooleanCell, debugFfmpegLogToggle, "settings/debugFfmpegLog");
     BRLS_BIND(brls::Button, openDiscoveryLogBtn, "settings/openDiscoveryLog");
@@ -26,7 +27,7 @@ private:
     void initDebugLwipLogToggle();
     void initDebugWireguardLogToggle();
     void initDebugRenderLogToggle();
-    void initDebugChiakiLogToggle();
+    void initChiakiLogLevelSelector();
     void initDebugDiscoveryLogToggle();
     void initDebugFfmpegLogToggle();
 };
