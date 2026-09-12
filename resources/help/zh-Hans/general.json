@@ -1,7 +1,17 @@
 {
   "settings/language": {
     "title": "语言",
-    "body": "界面语言。“系统”将跟随主机设置。",
+    "body": "选择界面语言。“系统”将跟随主机设置。更改后需重启 Akira 才能生效。",
+    "image": ""
+  },
+  "settings/connectionShowStages": {
+    "title": "连接进度",
+    "body": "会话启动时显示详细的连接阶段，而不只显示标准加载界面。",
+    "image": ""
+  },
+  "settings/theme": {
+    "title": "主题",
+    "body": "选择界面配色主题。更改后 Akira 会退出；重新启动即可应用新主题。",
     "image": ""
   },
   "settings/version": {
@@ -11,22 +21,22 @@
   },
   "settings/enableThreadAffinity": {
     "title": "线程亲和性",
-    "body": "将串流线程绑定到特定 CPU 核心。重启后生效。",
+    "body": "将串流线程绑定到特定 CPU 核心。更改后需重启 Akira 才能生效。",
     "image": ""
   },
   "settings/holepunchRetry": {
     "title": "打洞重试",
-    "body": "首次 NAT 穿透失败时重试。",
+    "body": "NAT 穿透失败时最多尝试四次，而不是首次失败后立即停止。",
     "image": ""
   },
   "settings/requestIdrOnFecFailure": {
     "title": "FEC 失败时请求 IDR",
-    "body": "当纠错无法恢复某帧时，向主机请求新的关键帧。",
+    "body": "前向纠错（FEC）无法重建视频帧时，向主机请求新的关键帧。恢复过程可能会使视频短暂停顿。",
     "image": ""
   },
   "settings/packetLossMax": {
-    "title": "最大丢包率",
-    "body": "在串流降低画质以维持流畅前允许的丢包上限。",
+    "title": "上报丢包率上限",
+    "body": "限制上报给主机的丢包率百分比。较低数值可防止码率被大幅降低，但在网络状况不佳时可能导致卡顿或帧无法恢复。",
     "image": ""
   }
 }

@@ -1,7 +1,7 @@
 {
   "settings/updateChannel": {
     "title": "Update channel",
-    "body": "Stable receives finished releases. Release candidate receives pre-release builds for testing and is only available to power users. Dev builds never check for updates.",
+    "body": "Stable receives finished releases. Release candidate includes pre-release builds and is available only to power users. Dev builds skip automatic launch checks.",
     "image": ""
   },
   "settings/autoCheckUpdates": {

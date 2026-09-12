@@ -11,7 +11,7 @@
   },
   "settings/revealCredentials": {
     "title": "Reveal secrets",
-    "body": "Unmask the stored tokens below.",
+    "body": "Unmask the stored account identifiers and authentication tokens on this page.",
     "image": ""
   },
   "settings/psnAccountId": {
@@ -19,39 +19,19 @@
     "body": "Your PlayStation Network account identifier.",
     "image": ""
   },
-  "settings/credOnlineId": {
+  "settings/psnOnlineId": {
     "title": "Online ID",
     "body": "The PSN online ID linked to your credentials.",
     "image": ""
   },
-  "settings/credAccessToken": {
-    "title": "Access token",
-    "body": "Short-lived PSN access token.",
-    "image": ""
-  },
-  "settings/credRefreshToken": {
-    "title": "Refresh token",
-    "body": "Long-lived token used to renew access.",
-    "image": ""
-  },
-  "settings/credTokenExpiry": {
-    "title": "Token expiry",
-    "body": "When the current access token expires.",
-    "image": ""
-  },
-  "settings/credDuid": {
-    "title": "DUID",
-    "body": "Device identifier used for remote registration.",
-    "image": ""
-  },
   "settings/clearPsnBtn": {
     "title": "Clear credentials",
-    "body": "Remove all stored PSN token data.",
+    "body": "Remove access, refresh, SSO, and NPSSO tokens for the current profile. Account identifiers and console registrations remain.",
     "image": ""
   },
   "settings/refreshTokenBtn": {
     "title": "Refresh token",
-    "body": "Renew the access token using the refresh token.",
+    "body": "Renew PSN access credentials using the stored refresh token or NPSSO data.",
     "image": ""
   },
   "settings/trophiesEnabled": {

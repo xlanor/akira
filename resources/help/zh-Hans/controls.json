@@ -1,42 +1,17 @@
 {
-  "settings/haptic": {
-    "title": "触觉反馈",
-    "body": "根据 DualSense 触觉映射的振动强度。",
-    "image": ""
-  },
-  "settings/rumbleFreqLow": {
-    "title": "振动低频",
-    "body": "低频马达调节，以 5 Hz 为步进。",
-    "image": ""
-  },
-  "settings/rumbleFreqHigh": {
-    "title": "振动高频",
-    "body": "高频马达调节，以 5 Hz 为步进。",
-    "image": ""
-  },
-  "settings/rumbleEnvelopeAttack": {
-    "title": "振动起振",
-    "body": "振动增强的快慢，以 1% 为步进。",
-    "image": ""
-  },
-  "settings/rumbleEnvelopeDecay": {
-    "title": "振动保持",
-    "body": "振动在减弱前保持的时长，以 1% 为步进。",
-    "image": ""
-  },
-  "settings/gyroSource": {
-    "title": "陀螺仪来源",
-    "body": "驱动陀螺仪瞄准的运动来源。",
-    "image": ""
-  },
   "settings/sleepOnExit": {
     "title": "退出时休眠",
-    "body": "离开会话时让主机进入休眠。",
+    "body": "离开远程游玩会话时让 PlayStation 主机进入休眠模式。",
+    "image": ""
+  },
+  "settings/connectedControllers": {
+    "title": "已连接的手柄",
+    "body": "打开每个手柄的输出、灯条、触觉反馈和震动设置。请先唤醒手柄，以便 Akira 检测到它。",
     "image": ""
   },
   "settings/buttonMapping": {
     "title": "按键映射",
-    "body": "在专用界面上重新映射手柄按键。",
+    "body": "打开远程游玩控制的按键映射界面。",
     "image": ""
   }
 }

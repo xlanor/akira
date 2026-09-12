@@ -1,12 +1,12 @@
 {
   "settings/unlockBitrateMax": {
     "title": "解锁最大码率",
-    "body": "将码率上限提高到常规的每分辨率限制之上。",
+    "body": "提高各分辨率可选的码率范围。此设置不会强制主机提供所选码率。",
     "image": ""
   },
   "settings/ipcStats": {
     "title": "IPC 统计",
-    "body": "显示用于调试的进程间计时统计。",
+    "body": "通过 Akira 的 IPC 服务提供实时串流统计，供外部叠加层和调试工具使用。",
     "image": ""
   },
   "settings/portGuessing": {
@@ -26,12 +26,32 @@
   },
   "settings/autoReconnect": {
     "title": "自动重连",
-    "body": "在会话断开后自动重新建立连接。",
+    "body": "Akira 重新获得焦点时，询问是否重连已断开的直接远程游玩会话。云串流会话不适用。",
+    "image": ""
+  },
+  "settings/hideAccountName": {
+    "title": "隐藏账号名称",
+    "body": "在 Akira 各处遮盖 PSN 账号名称和标识符，使截图更适合分享。",
+    "image": ""
+  },
+  "settings/psnRequestBudget": {
+    "title": "PSN 请求配额",
+    "body": "在设定的请求时间窗口内允许发出的受控 PSN 请求数上限。数值越高，被服务器限流的风险越大。",
+    "image": ""
+  },
+  "settings/psnRequestWindow": {
+    "title": "PSN 请求时间窗口",
+    "body": "PSN 请求限流器使用的滚动时间窗口。更改后会重新配置奖杯和派对限流器。",
     "image": ""
   },
   "settings/runBenchmark": {
     "title": "运行基准测试",
-    "body": "测量此主机的 GHASH 加密吞吐量。",
+    "body": "测量此 Switch 的 GHASH 加密吞吐量。",
+    "image": ""
+  },
+  "settings/flushTrophyCache": {
+    "title": "清除奖杯缓存",
+    "body": "删除已缓存的奖杯摘要、列表和详情。Akira 会在需要时重新获取。",
     "image": ""
   }
 }

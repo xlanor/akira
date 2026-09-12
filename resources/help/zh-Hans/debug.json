@@ -1,42 +1,42 @@
 {
   "settings/enableFileLogging": {
     "title": "文件日志",
-    "body": "将日志写入 SD 卡。启用下方的各子系统日志。",
+    "body": "将日志写入 SD 卡上的 /switch/akira/logs。必须启用此项，才能保留下方各子系统的日志。",
     "image": ""
   },
   "settings/debugLwipLog": {
     "title": "lwIP 日志",
-    "body": "网络栈日志。",
+    "body": "在日志中包含 VPN 中继网络栈的详细信息。",
     "image": ""
   },
   "settings/debugWireguardLog": {
     "title": "WireGuard 日志",
-    "body": "VPN 隧道日志。",
+    "body": "在日志中包含 WireGuard 隧道的详细信息。",
     "image": ""
   },
   "settings/debugRenderLog": {
     "title": "渲染日志",
-    "body": "视频解码与渲染日志。",
+    "body": "定期记录串流视图和渲染状态信息。",
     "image": ""
   },
   "settings/debugChiakiLog": {
     "title": "chiaki 日志",
-    "body": "核心远程游玩库日志。",
+    "body": "串流时在日志中包含远程游玩核心库的详细信息。",
     "image": ""
   },
   "settings/debugDiscoveryLog": {
     "title": "发现日志",
-    "body": "主机发现与唤醒日志。",
+    "body": "捕获主机发现、子网扫描、响应和唤醒活动。",
     "image": ""
   },
   "settings/debugFfmpegLog": {
     "title": "ffmpeg 日志",
-    "body": "解码器（ffmpeg）日志。",
+    "body": "在日志中包含 FFmpeg 解码器信息。",
     "image": ""
   },
   "settings/openDiscoveryLog": {
     "title": "查看发现日志",
-    "body": "实时发现活动：向其他子网 /24 的单播扫描与主机响应。请在上方启用“发现日志”以捕获。",
+    "body": "查看已捕获的发现活动，包括其他子网的 /24 扫描和主机响应。请在上方启用“发现日志”以进行捕获。",
     "image": ""
   }
 }

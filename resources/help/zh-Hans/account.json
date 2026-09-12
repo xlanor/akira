@@ -11,7 +11,7 @@
   },
   "settings/revealCredentials": {
     "title": "显示密钥",
-    "body": "取消遮盖下方存储的令牌。",
+    "body": "取消遮盖此页面上存储的账号标识符和身份验证令牌。",
     "image": ""
   },
   "settings/psnAccountId": {
@@ -19,39 +19,19 @@
     "body": "你的 PlayStation Network 账号标识符。",
     "image": ""
   },
-  "settings/credOnlineId": {
+  "settings/psnOnlineId": {
     "title": "在线 ID",
     "body": "与你的凭据关联的 PSN 在线 ID。",
     "image": ""
   },
-  "settings/credAccessToken": {
-    "title": "访问令牌",
-    "body": "短期有效的 PSN 访问令牌。",
-    "image": ""
-  },
-  "settings/credRefreshToken": {
-    "title": "刷新令牌",
-    "body": "用于续期访问的长期令牌。",
-    "image": ""
-  },
-  "settings/credTokenExpiry": {
-    "title": "令牌过期",
-    "body": "当前访问令牌的过期时间。",
-    "image": ""
-  },
-  "settings/credDuid": {
-    "title": "DUID",
-    "body": "用于远程注册的设备标识符。",
-    "image": ""
-  },
   "settings/clearPsnBtn": {
     "title": "清除凭据",
-    "body": "移除所有存储的 PSN 令牌数据。",
+    "body": "移除当前配置的访问令牌、刷新令牌、SSO 和 NPSSO 数据。账号标识符和主机注册信息会保留。",
     "image": ""
   },
   "settings/refreshTokenBtn": {
     "title": "刷新令牌",
-    "body": "使用刷新令牌续期访问令牌。",
+    "body": "使用存储的刷新令牌或 NPSSO 数据续期 PSN 访问凭据。",
     "image": ""
   },
   "settings/trophiesEnabled": {

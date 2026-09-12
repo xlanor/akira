@@ -1,12 +1,27 @@
 {
   "settings/devFakeHosts": {
     "title": "Fake hosts",
-    "body": "Populate the host grid with 20 dummy PS5s to preview the layout. Display-only — never saved and never connectable.",
+    "body": "Persistently add 20 dummy PS5 cards to the host grid for layout testing. They do not represent real consoles.",
+    "image": ""
+  },
+  "settings/devForceWsNode": {
+    "title": "Force PSN push node",
+    "body": "Override the PSN-assigned WebSocket node used for party push updates. Changing it reconnects the push service immediately.",
+    "image": ""
+  },
+  "settings/devTakionVersion": {
+    "title": "Takion protocol version",
+    "body": "Override the Remote Play streaming protocol version. Leave this on Auto unless testing protocol compatibility; an incompatible version can prevent streaming.",
     "image": ""
   },
   "settings/simulateUpdate": {
     "title": "Simulate update",
-    "body": "Trigger the update prompt with a developer-simulated build to exercise the download / verify / install flow without a real release.",
+    "body": "Enter a development update server and open a simulated 9.9.9 update. Choosing Update downloads, verifies, and installs from that server.",
+    "image": ""
+  },
+  "settings/tlsVerifyProbe": {
+    "title": "TLS verification probe",
+    "body": "Test whether the HTTP service rejects expired, mismatched, self-signed, and untrusted TLS certificates. Results are written to the log.",
     "image": ""
   }
 }

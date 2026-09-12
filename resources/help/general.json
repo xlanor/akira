@@ -1,9 +1,11 @@
 {
-  "settings/language": { "title": "Language", "body": "Interface language. 'System' follows the console setting.", "image": "" },
+  "settings/language": { "title": "Language", "body": "Select the interface language. System follows the console setting. Restart Akira to apply a change.", "image": "" },
+  "settings/connectionShowStages": { "title": "Connection progress", "body": "Show detailed connection stages instead of only the standard loading view while a session starts.", "image": "" },
+  "settings/theme": { "title": "Theme", "body": "Choose the interface color theme. Akira exits after a change; relaunch it to apply the new theme.", "image": "" },
   "settings/version":  { "title": "App version", "body": "Current build. Tap seven times to unlock the Power User menu.", "image": "" },
 
-  "settings/enableThreadAffinity":   { "title": "Thread affinity", "body": "Pin stream threads to specific CPU cores. Applies after a restart.", "image": "" },
-  "settings/holepunchRetry":         { "title": "Holepunch retry", "body": "Retry NAT traversal when the first attempt fails.", "image": "" },
-  "settings/requestIdrOnFecFailure": { "title": "Request IDR on FEC failure", "body": "Ask the console for a fresh keyframe when error-correction can't recover a frame.", "image": "" },
-  "settings/packetLossMax":          { "title": "Max packet loss", "body": "Upper packet-loss bound before the stream lowers quality to keep up.", "image": "" }
+  "settings/enableThreadAffinity":   { "title": "Thread affinity", "body": "Pin streaming threads to specific CPU cores. Restart Akira to apply a change.", "image": "" },
+  "settings/holepunchRetry":         { "title": "Holepunch retry", "body": "Try NAT traversal up to four times instead of stopping after the first failed attempt.", "image": "" },
+  "settings/requestIdrOnFecFailure": { "title": "Request IDR on FEC failure", "body": "Request a fresh keyframe when forward error correction cannot reconstruct a video frame. Recovery may briefly pause video.", "image": "" },
+  "settings/packetLossMax":          { "title": "Reported packet-loss cap", "body": "Cap the packet-loss percentage reported to the console. Lower values may prevent aggressive bitrate reductions, but can cause freezes or unrecoverable frames on poor networks.", "image": "" }
 }
