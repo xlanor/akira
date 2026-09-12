@@ -82,6 +82,8 @@ private:
         std::string fps, rate, loss, rtt, uptime;
         std::string req_res, req_fps, req_rate, req_codec;
         std::string out_res, out_codec, out_path;
+        std::string fsr_path, fsr_detail, fsr_compact;
+        bool fsr_active = false;
         std::string lost, recovered;
         std::string ghash, vpn, context;
         std::string lat_net, lat_visual, lat_total, lat_jitter, lat_decode, src_fps;
@@ -119,9 +121,11 @@ private:
     void drawStatRow(NVGcontext* vg, float x, float y, float w,
                      const char* label, const std::string& value,
                      const char* unit, Tone tone);
+    void drawFsrRow(NVGcontext* vg, float x, float y, float w);
     void drawCompactCell(NVGcontext* vg, float& cursorX, float centerY,
                          const char* label, const std::string& value,
                          const char* unit, Tone tone, bool first);
+    void drawCompactFsrLine(NVGcontext* vg, float x, float centerY);
     void drawLatencyStrip(NVGcontext* vg, float x, float y, float w, float h);
     void drawCompactOverlay(NVGcontext* vg);
     void drawFullOverlay(NVGcontext* vg);
