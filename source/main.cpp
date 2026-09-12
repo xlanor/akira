@@ -11,6 +11,7 @@
 #include <borealis/views/widgets/wireless.hpp>
 #include <SDL2/SDL.h>
 #include <arpa/inet.h>
+#include <atomic>
 #include <array>
 #include <fstream>
 #include <string_view>
@@ -531,8 +532,17 @@ int main(int argc, char* argv[])
 
     brls::Logger::setAsyncLogging(true);
     brls::Application::getRunLoopEvent()->subscribe([]() {
+        using namespace std::chrono_literals;
+        static auto nextFlush = std::chrono::steady_clock::now();
+        static std::atomic<bool> flushInFlight{false};
+        const auto now = std::chrono::steady_clock::now();
+        if (now < nextFlush || flushInFlight.exchange(true, std::memory_order_acq_rel))
+            return;
+        nextFlush = now + 250ms;
+
         brls::async([]() {
             brls::Logger::flushAsyncLogs();
+            flushInFlight.store(false, std::memory_order_release);
         }, true);
     });
     brls::Logger::info("Async logging enabled via thread pool");
@@ -595,6 +605,8 @@ int main(int argc, char* argv[])
     SDL_Quit();
     curl_global_cleanup();
 
+    // Drain the final batch after all subsystems have reported shutdown.
+    brls::Logger::flushAsyncLogs();
     nvExit();
 
     return EXIT_SUCCESS;

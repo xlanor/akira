@@ -188,9 +188,17 @@ void StreamView::setupCallbacks()
         }
     });
 
-    // Subscribe to logs for display while waiting for first frame
+    startLogCapture();
+}
+
+void StreamView::startLogCapture()
+{
+    if (logSubscriptionActive)
+        return;
+
+    auto weak = weak_from_this();
     logSubscription = brls::Logger::subscribeToLog(
-        [weak](brls::Logger::TimePoint time, brls::LogLevel level, std::string msg) {
+        [weak](brls::Logger::TimePoint, brls::LogLevel, std::string msg) {
             if (auto self = weak.lock()) {
                 std::lock_guard<std::mutex> lock(self->logMutex);
                 self->logLines.push_back(msg);
@@ -201,13 +209,23 @@ void StreamView::setupCallbacks()
                     msg, static_cast<ConnectionStage>(self->currentStage.load())));
             }
         });
+    logSubscriptionActive = true;
+}
+
+void StreamView::stopLogCapture()
+{
+    if (!logSubscriptionActive)
+        return;
+
+    brls::Logger::unsubscribeFromLog(logSubscription);
+    logSubscriptionActive = false;
 }
 
 StreamView::~StreamView()
 {
     brls::Application::getExitEvent()->unsubscribe(exitSubscription);
     brls::Application::getWindowFocusChangedEvent()->unsubscribe(focusSubscription);
-    brls::Logger::unsubscribeFromLog(logSubscription);
+    stopLogCapture();
 
     stopStream();
 
@@ -381,6 +399,11 @@ void StreamView::startStream()
     {
         return;
     }
+
+    // The connection UI needs recent messages and stage matching. Once video
+    // starts, activateVideoPipeline() detaches this subscriber so packet-level
+    // diagnostics still reach the file without being copied and parsed here.
+    startLogCapture();
 
     if (beginPadChoice())
     {
@@ -684,6 +707,7 @@ void StreamView::activateVideoPipeline()
     if (videoPipelineActive)
         return;
 
+    stopLogCapture();
     prepareVideoPipelineTick();
     brls::Application::setRenderSuspended(true);
     videoPipelineActive = true;

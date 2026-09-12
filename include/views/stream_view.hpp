@@ -78,7 +78,10 @@ private:
     std::atomic<int> currentStage{0};
     std::mutex logMutex;
     brls::Event<brls::Logger::TimePoint, brls::LogLevel, std::string>::Subscription logSubscription;
+    bool logSubscriptionActive = false;
     static constexpr size_t MAX_LOG_LINES = 30;
+    void startLogCapture();
+    void stopLogCapture();
     void renderLogs(NVGcontext* vg, float x, float y, float width, float height);
 
     void onConnected();
