@@ -387,6 +387,7 @@
     "reset_gyro": "Reset Gyro (Debug)",
     "card_stats": "Stats",
     "card_pad": "Pad",
+    "card_players": "Players",
     "card_motion": "Motion",
     "card_power": "Power",
     "panel_stats_title": "Stats overlay",
@@ -419,7 +420,16 @@
     "login_prompt": "Enter your login PIN",
     "enter_pin": "Enter PIN",
     "digits_hint": "{} digits without spaces",
-    "press_a": "Press A to enter PIN"
+    "press_a": "Press A to enter PIN",
+    "couch_passcode_prompt": "Enter this player’s console login passcode",
+    "couch_passcode_error": "Passcode incorrect. Try again."
+  },
+  "couch": {
+    "join_failed_not_signed_in": "Player {} could not join. That account must be signed in to PSN on the console.",
+    "join_failed_status": "Player {} could not join (status {}).",
+    "controller_arrived": "Another controller was switched on. Add them as a player?",
+    "add_player": "Add player",
+    "not_now": "Not now"
   },
   "remap": {
     "title": "Button Mapping",

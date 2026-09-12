@@ -174,6 +174,11 @@ void StreamMenu::buildCards()
             onButtonMapping();
     }));
 
+    cards.push_back(std::make_unique<PlayersCard>([this]() {
+        if (onPlayers)
+            onPlayers();
+    }));
+
     cards.push_back(std::make_unique<MotionCard>([this]() {
         if (onGyroReset)
             onGyroReset();
@@ -342,6 +347,11 @@ void StreamMenu::setOnGyroReset(std::function<void()> callback)
 void StreamMenu::setOnButtonMapping(std::function<void()> callback)
 {
     onButtonMapping = std::move(callback);
+}
+
+void StreamMenu::setOnPlayers(std::function<void()> callback)
+{
+    onPlayers = std::move(callback);
 }
 
 void StreamMenu::setStatsMode(StatsOverlayMode mode)

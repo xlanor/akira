@@ -7,6 +7,7 @@
 #include <borealis.hpp>
 #include <chiaki/controller.h>
 #include <cmath>
+#include <cstring>
 #include <algorithm>
 #include <array>
 
@@ -131,12 +132,20 @@ void InputManager::retryPathIdentification()
         return;
     }
 
+    if (m_arrival_pending || m_couch_claim_active) {
+        m_identify_until = now + 10000;
+        m_identify_next  = now;
+        return;
+    }
+
     if (now < m_identify_next)
         return;
     m_identify_next = now + 1000;
 
     for (const auto& desc : describePads()) {
         if (desc.kind != akira::input::PadPathKind::McPsNative)
+            continue;
+        if (m_couch_roster.find(desc.npad) != m_couch_roster.end())
             continue;
         if (m_bound_npad != kNoNpad && desc.npad != m_bound_npad)
             continue;
@@ -190,31 +199,20 @@ void InputManager::reconcilePathDriver()
     }
 }
 
-void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
+void InputManager::applyPadInput(akira::input::PadPath* path, ChiakiControllerState* state)
 {
-    if (!m_path)
-    {
-        chiaki_controller_state_set_idle(state);
-        return;
-    }
-
-    retryPathIdentification();
-    reconcilePathDriver();
-
-    m_path->poll();
-
     state->buttons = 0;
     state->l2_state = 0x00;
     state->r2_state = 0x00;
 
-    const bool mapped = m_path->usesButtonMapping();
+    const bool mapped = path->usesButtonMapping();
 
-    u64 buttons = mapped ? m_path->heldButtons() : 0;
+    u64 buttons = mapped ? path->heldButtons() : 0;
     u64 consumedButtons = 0;
 
     if (!mapped) {
-        m_path->readButtons(state);
-        m_path->readTriggers(state);
+        path->readButtons(state);
+        path->readTriggers(state);
     } else {
     const ButtonMapping& mapping = SettingsManager::getInstance()->getButtonMapping();
     for (const auto& [chiakiBtn, combo] : mapping) {
@@ -277,11 +275,11 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
         }
     }
 
-    m_path->readTriggers(state);
+    path->readTriggers(state);
     }
 
-    HidAnalogStickState left = m_path->stickPos(0);
-    HidAnalogStickState right = m_path->stickPos(1);
+    HidAnalogStickState left = path->stickPos(0);
+    HidAnalogStickState right = path->stickPos(1);
 
     static constexpr u64 leftStickDirs = HidNpadButton_StickLUp | HidNpadButton_StickLDown
                                        | HidNpadButton_StickLLeft | HidNpadButton_StickLRight;
@@ -303,6 +301,343 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
         state->right_x = right.x;
         state->right_y = -right.y;
     }
+}
+
+uint8_t InputManager::couchJoin(HidNpadIdType npad)
+{
+    if (npad == m_bound_npad)
+        return kNoCouchSlot;
+    auto existing = m_couch_roster.find(npad);
+    if (existing != m_couch_roster.end())
+        return existing->second;
+    for (uint8_t slot = 1; slot < CHIAKI_COUCH_MAX_PADS; slot++)
+    {
+        bool taken = false;
+        for (const auto& entry : m_couch_roster)
+        {
+            if (entry.second == slot)
+            {
+                taken = true;
+                break;
+            }
+        }
+        if (!taken)
+        {
+            m_couch_roster[npad] = slot;
+            return slot;
+        }
+    }
+    return kNoCouchSlot;
+}
+
+uint64_t InputManager::couchNpadMask() const
+{
+    uint64_t mask = 0;
+    for (const auto& entry : m_couch_roster)
+        mask |= 1UL << (uint32_t)entry.first;
+    return mask;
+}
+
+void InputManager::couchLeave(HidNpadIdType npad)
+{
+    m_couch_roster.erase(npad);
+    m_secondary_paths.erase(npad);
+    m_secondary_missing_frames.erase(npad);
+}
+
+uint8_t InputManager::couchPadCount() const
+{
+    uint8_t count = 1;
+    for (const auto& entry : m_couch_roster)
+    {
+        if (entry.second + 1 > count)
+            count = (uint8_t)(entry.second + 1);
+    }
+    return count;
+}
+
+uint8_t InputManager::CouchPadIndexForController(HidNpadIdType npad)
+{
+    if (npad == m_bound_npad)
+        return 0;
+    auto it = m_couch_roster.find(npad);
+    if (it != m_couch_roster.end())
+        return it->second;
+    return kNoCouchSlot;
+}
+
+bool InputManager::couchSlotOutputTarget(uint8_t slot, uint8_t out_addr[6], uint16_t* vendor_id,
+                                         uint16_t* product_id)
+{
+    if (slot == 0 || slot == kNoCouchSlot)
+        return false;
+
+    HidNpadIdType npad = kNoNpad;
+    for (const auto& entry : m_couch_roster) {
+        if (entry.second == slot) {
+            npad = entry.first;
+            break;
+        }
+    }
+    if (npad == kNoNpad)
+        return false;
+
+    for (const auto& desc : describePads()) {
+        if (desc.npad != npad)
+            continue;
+        if (!desc.has_address)
+            return false;
+        if (out_addr)
+            std::memcpy(out_addr, desc.bt_addr, 6);
+        if (vendor_id)
+            *vendor_id = desc.vendor_id;
+        if (product_id)
+            *product_id = desc.product_id;
+        return true;
+    }
+    return false;
+}
+
+void InputManager::readSecondaryPads(ChiakiControllerState* states, uint8_t max_pads, uint8_t& count)
+{
+    auto pads = describePads();
+    std::vector<std::pair<HidNpadIdType, uint8_t>> disconnected;
+
+    for (const auto& entry : m_couch_roster)
+    {
+        HidNpadIdType npad = entry.first;
+        uint8_t slot = entry.second;
+        if (slot == 0 || slot >= max_pads)
+            continue;
+
+        // Never retain input from a controller that is no longer readable.
+        chiaki_controller_state_set_idle(&states[slot]);
+        if (slot + 1 > count)
+            count = (uint8_t)(slot + 1);
+
+        const akira::input::PadDescription* found = nullptr;
+        for (const auto& desc : pads)
+        {
+            if (desc.npad == npad)
+            {
+                found = &desc;
+                break;
+            }
+        }
+        if (!found)
+        {
+            uint8_t& misses = m_secondary_missing_frames[npad];
+            if (misses < kDisconnectGraceFrames)
+                misses++;
+            if (misses == 1)
+                brls::Logger::warning("Couch: slot {} npad {} disappeared; sending idle input",
+                                      (int)slot, (int)npad);
+            if (misses >= kDisconnectGraceFrames)
+                disconnected.emplace_back(npad, slot);
+            continue;
+        }
+
+        m_secondary_missing_frames.erase(npad);
+
+        auto& cached = m_secondary_paths[npad];
+        if (!cached)
+            cached = akira::input::MakePath(*found, m_extended);
+        if (!cached)
+            continue;
+        cached->poll();
+        applyPadInput(cached.get(), &states[slot]);
+    }
+
+    for (const auto& entry : disconnected)
+    {
+        brls::Logger::warning("Couch: removing disconnected slot {} npad {}",
+                              (int)entry.second, (int)entry.first);
+        couchLeave(entry.first);
+        if (m_on_couch_disconnected)
+            m_on_couch_disconnected(entry.first, entry.second);
+    }
+
+    count = couchPadCount();
+
+    for (auto it = m_secondary_paths.begin(); it != m_secondary_paths.end(); )
+    {
+        if (m_couch_roster.find(it->first) == m_couch_roster.end())
+            it = m_secondary_paths.erase(it);
+        else
+            ++it;
+    }
+}
+
+float InputManager::couchClaimProgress() const
+{
+    if (!m_couch_claim_active)
+        return 0.0f;
+
+    int best = 0;
+    for (const auto& entry : m_claim_hold)
+    {
+        if (entry.second > best)
+            best = entry.second;
+    }
+    if (best <= 0)
+        return 0.0f;
+    if (best >= kClaimHoldFrames)
+        return 1.0f;
+    return (float)best / (float)kClaimHoldFrames;
+}
+
+void InputManager::beginCouchJoin()
+{
+    m_couch_claim_active = true;
+    m_claim_hold.clear();
+}
+
+void InputManager::cancelCouchJoin()
+{
+    m_couch_claim_active = false;
+    m_arrival_pending = false;
+    m_claim_hold.clear();
+}
+
+void InputManager::promptControllerSetup()
+{
+    HidLaControllerSupportArg arg;
+    hidLaCreateControllerSupportArg(&arg);
+    arg.hdr.player_count_max = CHIAKI_COUCH_MAX_PADS;
+    arg.hdr.enable_single_mode = false;
+    HidLaControllerSupportResultInfo result;
+    hidLaShowControllerSupport(&result, &arg);
+}
+
+bool InputManager::isClaimableNpad(HidNpadIdType npad) const
+{
+    if (npad == m_bound_npad)
+        return false;
+    if ((uint32_t)npad >= 8)
+        return false;
+    return true;
+}
+
+void InputManager::pollPadArrivals()
+{
+    if ((m_arrival_tick++ % kArrivalPollFrames) != 0)
+        return;
+
+    static constexpr HidNpadIdType kArrivalScan[] = {
+        HidNpadIdType_No1,
+        HidNpadIdType_No2,
+        HidNpadIdType_No3,
+        HidNpadIdType_No4,
+    };
+
+    uint32_t mask = 0;
+    for (HidNpadIdType npad : kArrivalScan)
+    {
+        PadState probe{};
+        padInitializeWithMask(&probe, 1UL << (uint32_t)npad);
+        padUpdate(&probe);
+        if (padIsConnected(&probe))
+            mask |= 1UL << (uint32_t)npad;
+    }
+
+    const uint32_t previous = m_connected_mask;
+    m_connected_mask = mask;
+    m_announced_mask &= mask;
+
+    if (!m_arrival_primed)
+    {
+        m_arrival_primed = true;
+        m_announced_mask = mask;
+        return;
+    }
+
+    if (!m_on_pad_arrived)
+        return;
+
+    const uint32_t arrived = mask & ~previous & ~m_announced_mask;
+    if (!arrived)
+        return;
+
+    for (HidNpadIdType npad : kArrivalScan)
+    {
+        const uint32_t bit = 1UL << (uint32_t)npad;
+        if (!(arrived & bit))
+            continue;
+        if (npad == m_bound_npad)
+            continue;
+        if (m_couch_roster.find(npad) != m_couch_roster.end())
+            continue;
+
+        m_announced_mask |= bit;
+        m_arrival_pending = true;
+        brls::Logger::info("Couch: controller appeared on npad {}", (int)npad);
+        m_on_pad_arrived(npad);
+        return;
+    }
+}
+
+void InputManager::pollCouchClaim()
+{
+    if (!m_couch_claim_active)
+        return;
+
+    auto pads = describePads();
+    for (const auto& desc : pads)
+    {
+        HidNpadIdType npad = desc.npad;
+        if (!isClaimableNpad(npad))
+            continue;
+        if (m_couch_roster.find(npad) != m_couch_roster.end())
+            continue;
+
+        PadState pad;
+        padInitializeWithMask(&pad, 1UL << (uint32_t)npad);
+        padUpdate(&pad);
+        u64 btns = padGetButtons(&pad);
+        bool combo = (btns & HidNpadButton_ZL) && (btns & HidNpadButton_ZR);
+
+        int& hold = m_claim_hold[npad];
+        if (combo)
+        {
+            hold++;
+            if (hold >= kClaimHoldFrames)
+            {
+                uint8_t slot = couchJoin(npad);
+                m_claim_hold.clear();
+                m_couch_claim_active = false;
+                if (slot != kNoCouchSlot && m_on_couch_joined)
+                    m_on_couch_joined(npad, slot);
+                return;
+            }
+        }
+        else
+        {
+            hold = 0;
+        }
+    }
+}
+
+void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
+{
+    pollPadArrivals();
+    pollCouchClaim();
+
+    if (!m_path)
+    {
+        chiaki_controller_state_set_idle(state);
+        return;
+    }
+
+    retryPathIdentification();
+    reconcilePathDriver();
+
+    m_path->setExcludedNpads(couchNpadMask());
+
+    m_path->poll();
+
+    applyPadInput(m_path.get(), state);
+
+    u64 buttons = m_path->usesButtonMapping() ? m_path->heldButtons() : 0;
 
     if (!m_path->readTouchpad(state))
     {

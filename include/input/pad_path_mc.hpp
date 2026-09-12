@@ -41,7 +41,7 @@ protected:
 class McPsNativePath : public McGenericPath {
 public:
     McPsNativePath(HidNpadIdType npad, ExtendedInputManager& extended,
-                   const PsModel& model);
+                   const PsModel& model, const uint8_t* bt_addr);
 
     PadPathKind kind() const override { return PadPathKind::McPsNative; }
 

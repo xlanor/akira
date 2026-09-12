@@ -306,6 +306,14 @@ void Session::UpdateControllerState(ChiakiControllerState* state, std::map<uint3
     }
 }
 
+void Session::UpdateSecondaryPads(ChiakiControllerState* states, uint8_t* count)
+{
+    if (m_input_manager && count)
+    {
+        m_input_manager->readSecondaryPads(states, CHIAKI_COUCH_MAX_PADS, *count);
+    }
+}
+
 bool Session::MainLoop()
 {
     if (m_video_renderer && m_video_renderer->isInitialized() && m_video_decoder)

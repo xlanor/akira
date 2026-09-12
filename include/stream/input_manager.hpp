@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <vector>
+#include <functional>
 
 #define SDL_JOYSTICK_COUNT 2
 
@@ -59,6 +60,32 @@ public:
     void cleanup();
     void update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
 
+    void readSecondaryPads(ChiakiControllerState* states, uint8_t max_pads, uint8_t& count);
+
+    static constexpr uint8_t kNoCouchSlot = 0xff;
+
+    uint8_t couchJoin(HidNpadIdType npad);
+    void couchLeave(HidNpadIdType npad);
+    const std::map<HidNpadIdType, uint8_t>& couchRoster() const { return m_couch_roster; }
+    uint8_t couchPadCount() const;
+
+    uint8_t CouchPadIndexForController(HidNpadIdType npad);
+
+    bool couchSlotOutputTarget(uint8_t slot, uint8_t out_addr[6], uint16_t* vendor_id, uint16_t* product_id);
+
+    void beginCouchJoin();
+    void cancelCouchJoin();
+    void tickCouchClaim() { pollCouchClaim(); }
+    bool couchClaimActive() const { return m_couch_claim_active; }
+    float couchClaimProgress() const;
+    void setOnCouchJoined(std::function<void(HidNpadIdType, uint8_t)> cb) { m_on_couch_joined = std::move(cb); }
+    void setOnCouchDisconnected(std::function<void(HidNpadIdType, uint8_t)> cb) { m_on_couch_disconnected = std::move(cb); }
+    void setOnPadArrived(std::function<void(HidNpadIdType)> cb) { m_on_pad_arrived = std::move(cb); }
+    void promptControllerSetup();
+    bool isClaimableNpad(HidNpadIdType npad) const;
+    HidNpadIdType boundNpad() const { return m_bound_npad; }
+    void resolvePadArrival() { m_arrival_pending = false; }
+
     void setPath(std::unique_ptr<akira::input::PadPath> path);
     akira::input::PadPath* path() { return m_path.get(); }
 
@@ -72,6 +99,14 @@ private:
     void retryPathIdentification();
 
     void reconcilePathDriver();
+
+    void pollCouchClaim();
+
+    void pollPadArrivals();
+
+    uint64_t couchNpadMask() const;
+
+    void applyPadInput(akira::input::PadPath* path, ChiakiControllerState* state);
 
     bool readTouchScreen(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id);
     bool readSixAxis(ChiakiControllerState* state);
@@ -87,6 +122,22 @@ private:
 
     static constexpr HidNpadIdType kNoNpad = (HidNpadIdType)0xff;
     HidNpadIdType m_bound_npad     = kNoNpad;
+    std::map<HidNpadIdType, uint8_t> m_couch_roster;
+    std::map<HidNpadIdType, std::unique_ptr<akira::input::PadPath>> m_secondary_paths;
+    std::map<HidNpadIdType, uint8_t> m_secondary_missing_frames;
+    bool m_couch_claim_active = false;
+    std::map<HidNpadIdType, int> m_claim_hold;
+    std::function<void(HidNpadIdType, uint8_t)> m_on_couch_joined;
+    std::function<void(HidNpadIdType, uint8_t)> m_on_couch_disconnected;
+    std::function<void(HidNpadIdType)> m_on_pad_arrived;
+    uint32_t m_arrival_tick = 0;
+    uint32_t m_connected_mask = 0;
+    uint32_t m_announced_mask = 0;
+    bool     m_arrival_primed = false;
+    bool     m_arrival_pending = false;
+    static constexpr uint32_t kArrivalPollFrames = 30;
+    static constexpr int kClaimHoldFrames = 40;
+    static constexpr uint8_t kDisconnectGraceFrames = 30;
     bool          m_identify_done  = false;
     uint32_t      m_identify_next  = 0;
     uint32_t      m_identify_until = 0;

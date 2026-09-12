@@ -36,6 +36,8 @@ int EnterPinView::getMaxPinLength() const
             return 8;
         case PinViewType::Login:
             return 4;
+        case PinViewType::CouchPasscode:
+            return 4;
         default:
             return 8;
     }
@@ -57,6 +59,12 @@ std::string EnterPinView::getTitle() const
                 return "akira/pin/login_error"_i18n;
             }
             return "akira/pin/login_prompt"_i18n;
+        case PinViewType::CouchPasscode:
+            if (isError)
+            {
+                return "akira/pin/couch_passcode_error"_i18n;
+            }
+            return "akira/pin/couch_passcode_prompt"_i18n;
         default:
             return "akira/pin/enter_pin"_i18n;
     }

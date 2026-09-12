@@ -172,10 +172,27 @@ public:
 
     uint64_t heldButtons() const override { return m_buttons; }
 
+    void setExcludedNpads(uint64_t mask) override
+    {
+        if (mask == m_excluded)
+            return;
+        m_excluded = mask;
+
+        constexpr uint64_t base = (1UL << HidNpadIdType_No1) | (1UL << HidNpadIdType_Handheld);
+        uint64_t use = base & ~mask;
+        if (!use)
+            use = 1UL << HidNpadIdType_Handheld;
+
+        padInitializeWithMask(&m_pad, use);
+        padUpdate(&m_pad);
+        m_buttons = padGetButtons(&m_pad);
+    }
+
 private:
     ExtendedInputManager&  m_extended;
     PadState               m_pad{};
     uint64_t               m_buttons = 0;
+    uint64_t               m_excluded = 0;
     HidSixAxisSensorHandle m_sixaxis[4]{};
 };
 
@@ -213,6 +230,56 @@ std::vector<PadDescription> DescribePads()
 
 namespace {
 
+bool HidsysReady()
+{
+    static bool attempted = false;
+    static bool ready     = false;
+
+    if (!attempted) {
+        attempted = true;
+        const Result rc = hidsysInitialize();
+        ready = R_SUCCEEDED(rc);
+        if (!ready) {
+            brls::Logger::warning("pad path: hidsysInitialize failed (0x{:x}),"
+                                  " falling back to positional pad matching", rc);
+        }
+    }
+
+    return ready;
+}
+
+bool NpadBluetoothAddress(HidNpadIdType npad, uint8_t* out)
+{
+    if (!HidsysReady())
+        return false;
+
+    HidsysUniquePadId ids[2]{};
+    s32 total = 0;
+    if (R_FAILED(hidsysGetUniquePadsFromNpad(npad, ids, 2, &total)) || total <= 0)
+        return false;
+
+    for (s32 i = 0; i < total && i < 2; i++) {
+        BtdrvAddress addr{};
+        if (R_FAILED(hidsysGetUniquePadBluetoothAddress(ids[i], &addr)))
+            continue;
+
+        bool any = false;
+        for (size_t b = 0; b < sizeof(addr.address); b++) {
+            if (addr.address[b] != 0) {
+                any = true;
+                break;
+            }
+        }
+        if (!any)
+            continue;
+
+        std::memcpy(out, addr.address, 6);
+        return true;
+    }
+
+    return false;
+}
+
 std::vector<PadDescription> DescribeWith(const AkiraInputDeviceList& devices, bool haveDevices)
 {
     std::vector<PadDescription> out;
@@ -231,17 +298,35 @@ std::vector<PadDescription> DescribeWith(const AkiraInputDeviceList& devices, bo
 
         const AkiraInputDeviceInfo* mc = nullptr;
         if (haveDevices && (styleSet & HidNpadStyleTag_NpadFullKey) != 0) {
-            for (uint8_t i = 0; i < devices.count && i < AKIRA_INPUT_MAX_LISTED_DEVICES; i++) {
-                if (taken[i]) {
-                    continue;
+            uint8_t npad_addr[6]{};
+            const bool haveNpadAddr = NpadBluetoothAddress(npad, npad_addr);
+
+            if (haveNpadAddr) {
+                for (uint8_t i = 0; i < devices.count && i < AKIRA_INPUT_MAX_LISTED_DEVICES; i++) {
+                    const AkiraInputDeviceInfo& d = devices.devices[i];
+                    if ((d.flags & AkiraInputDevice_Identified) == 0)
+                        continue;
+                    if (std::memcmp(d.bt_addr, npad_addr, sizeof(npad_addr)) != 0)
+                        continue;
+                    mc       = &d;
+                    taken[i] = true;
+                    break;
                 }
-                const AkiraInputDeviceInfo& d = devices.devices[i];
-                if ((d.flags & AkiraInputDevice_Identified) == 0) {
-                    continue;
+            }
+
+            if (mc == nullptr) {
+                for (uint8_t i = 0; i < devices.count && i < AKIRA_INPUT_MAX_LISTED_DEVICES; i++) {
+                    if (taken[i]) {
+                        continue;
+                    }
+                    const AkiraInputDeviceInfo& d = devices.devices[i];
+                    if ((d.flags & AkiraInputDevice_Identified) == 0) {
+                        continue;
+                    }
+                    mc       = &d;
+                    taken[i] = true;
+                    break;
                 }
-                mc       = &d;
-                taken[i] = true;
-                break;
             }
         }
 
@@ -355,7 +440,8 @@ std::unique_ptr<PadPath> MakePath(const PadDescription& desc, ExtendedInputManag
                                                        desc.product_id);
             }
 
-            return std::make_unique<McPsNativePath>(desc.npad, extended, *model);
+            return std::make_unique<McPsNativePath>(desc.npad, extended, *model,
+                                                   desc.has_address ? desc.bt_addr : nullptr);
         }
         case PadPathKind::McGeneric:
             return std::make_unique<McGenericPath>(desc.npad, extended, desc.vendor_id,

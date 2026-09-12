@@ -93,10 +93,15 @@ void McGenericPath::readTriggers(ChiakiControllerState* state)
 }
 
 McPsNativePath::McPsNativePath(HidNpadIdType npad, ExtendedInputManager& extended,
-                               const PsModel& model)
+                               const PsModel& model, const uint8_t* bt_addr)
     : McGenericPath(npad, extended, model.vendor_id, model.product_id)
     , m_model(&model)
 {
+    if (bt_addr != nullptr) {
+        std::memcpy(m_address, bt_addr, sizeof(m_address));
+        m_have_address = true;
+    }
+
     m_label = model.name;
     m_extended.setRawWanted(true);
 
@@ -136,10 +141,14 @@ bool McPsNativePath::poll()
     AkiraInputRawReport raw{};
     m_report_valid = false;
 
-    if (m_extended.readRawReport(&raw)) {
-        if (raw.vendor_id == m_vendor_id && raw.product_id == m_product_id) {
-            m_report_valid = ParsePsReport(*m_model, raw.data, raw.length, &m_report);
+    const bool got_raw = m_have_address
+        ? m_extended.readRawReportFor(m_address, &raw)
+        : m_extended.readRawReport(&raw);
 
+    if (got_raw && raw.vendor_id == m_vendor_id && raw.product_id == m_product_id) {
+        m_report_valid = ParsePsReport(*m_model, raw.data, raw.length, &m_report);
+
+        if (!m_have_address) {
             std::memcpy(m_address, raw.bt_addr, sizeof(m_address));
             m_have_address = true;
         }

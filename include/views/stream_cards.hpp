@@ -62,6 +62,21 @@ private:
     std::function<void()> reset;
 };
 
+class PlayersCard : public StreamCard
+{
+public:
+    explicit PlayersCard(std::function<void()> open) : open(std::move(open)) {}
+
+    const char* id() const override { return "players"; }
+    std::string label() const override;
+    CardGlyph glyph() const override { return CardGlyph::Party; }
+    bool isInstant() const override { return true; }
+    void activate() override { if (open) open(); }
+
+private:
+    std::function<void()> open;
+};
+
 class PowerCard : public StreamCard
 {
 public:

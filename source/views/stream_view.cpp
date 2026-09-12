@@ -1,6 +1,7 @@
 #include "views/stream_view.hpp"
 #include "views/stream_nav.hpp"
 #include "views/controller_picker_view.hpp"
+#include "views/players_panel_view.hpp"
 #include "input/extended_input_manager.hpp"
 #include "input/pad_path.hpp"
 #include "views/stream_menu.hpp"
@@ -51,9 +52,9 @@ void StreamView::setupCallbacks()
         }
     });
 
-    host->setOnRumble([weak](uint8_t left, uint8_t right) {
+    host->setOnRumble([weak](uint8_t player_index, uint8_t left, uint8_t right) {
         if (auto self = weak.lock()) {
-            self->onRumble(left, right);
+            self->onRumble(player_index, left, right);
         }
     });
 
@@ -63,18 +64,90 @@ void StreamView::setupCallbacks()
         }
     });
 
+    host->setOnPadPasscodeRequest([weak](uint8_t slot, bool retry) {
+        if (auto self = weak.lock()) {
+            self->onPadPasscodeRequest(slot, retry);
+        }
+    });
+
+    host->setOnPadJoinFailed([weak](uint8_t slot, uint8_t status) {
+        if (auto self = weak.lock()) {
+            self->onPadJoinFailed(slot, status);
+        }
+    });
+
     host->setOnReadController([weak](ChiakiControllerState* state, std::map<uint32_t, int8_t>* fingerIdTouchId) {
         if (auto self = weak.lock()) {
             self->session->UpdateControllerState(state, fingerIdTouchId);
         }
     });
 
+    host->setOnReadCouchSecondary([weak](ChiakiControllerState* states, uint8_t* count) {
+        if (auto self = weak.lock()) {
+            self->session->UpdateSecondaryPads(states, count);
+        }
+    });
+
     session->getInputManager()->setTargetPS5(host->isPS5());
 
-    host->setOnTriggerEffects([weak](const ChiakiTriggerEffectsEvent* effects) {
+    session->getInputManager()->setOnPadArrived([weak](HidNpadIdType npad) {
+        if (auto self = weak.lock())
+            self->onPadArrived(npad);
+    });
+
+    session->getInputManager()->setOnCouchDisconnected([weak](HidNpadIdType, uint8_t slot) {
         if (auto self = weak.lock()) {
-            self->session->SetTriggerEffects(effects);
+            if (self->host)
+                self->host->couchRemovePlayer(slot);
         }
+    });
+
+    host->setOnTriggerEffects([weak](const ChiakiTriggerEffectsEvent* effects) {
+        auto self = weak.lock();
+        if (!self)
+            return;
+
+        if (effects->player_index != 0) {
+            if (!self->host || !self->host->isCouchPadConfirmed(effects->player_index))
+                return;
+            auto* input = self->session ? self->session->getInputManager() : nullptr;
+            if (!input)
+                return;
+
+            uint8_t addr[6];
+            uint16_t vid = 0, pid = 0;
+            if (!input->couchSlotOutputTarget(effects->player_index, addr, &vid, &pid))
+                return;
+
+            input->extendedInput().registerCouchOutput(addr, vid, pid);
+            input->extendedInput().setCouchTriggerEffects(addr,
+                effects->type_left, effects->left,
+                effects->type_right, effects->right);
+            return;
+        }
+        self->session->SetTriggerEffects(effects);
+    });
+
+    host->setOnPadConfirmed([weak](uint8_t index, uint8_t red, uint8_t green, uint8_t blue) {
+        auto self = weak.lock();
+        if (!self || index == 0)
+            return;
+        if (!self->host || !self->host->isCouchPadConfirmed(index))
+            return;
+        if ((red | green | blue) == 0)
+            return;
+
+        auto* input = self->session ? self->session->getInputManager() : nullptr;
+        if (!input)
+            return;
+
+        uint8_t addr[6];
+        uint16_t vid = 0, pid = 0;
+        if (!input->couchSlotOutputTarget(index, addr, &vid, &pid))
+            return;
+
+        input->extendedInput().registerCouchOutput(addr, vid, pid);
+        input->extendedInput().setCouchLightbar(addr, red, green, blue);
     });
 
     host->setOnEffectIntensity([weak](uint8_t haptics, uint8_t triggers) {
@@ -789,9 +862,216 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
     });
 }
 
-void StreamView::onRumble(uint8_t left, uint8_t right)
+void StreamView::onRumble(uint8_t player_index, uint8_t left, uint8_t right)
 {
+    if (player_index != 0)
+    {
+        if (!host || !host->isCouchPadConfirmed(player_index))
+            return;
+        auto* input = session ? session->getInputManager() : nullptr;
+        if (!input)
+            return;
+
+        uint8_t addr[6];
+        uint16_t vid = 0, pid = 0;
+        if (!input->couchSlotOutputTarget(player_index, addr, &vid, &pid))
+            return;
+
+        input->extendedInput().registerCouchOutput(addr, vid, pid);
+        input->extendedInput().setCouchRumble(addr, left, right);
+        return;
+    }
     session->SetRumble(left, right);
+}
+
+void StreamView::pauseStreamForUi()
+{
+    menuOpen = true;
+    if (session)
+        session->setVideoPaused(true);
+    brls::Application::forceUnblockInputs();
+}
+
+void StreamView::resumeStreamAfterUi()
+{
+    if (session)
+        session->setVideoPaused(false);
+    menuOpen = false;
+    brls::Application::blockInputs(true);
+}
+
+void StreamView::onPadArrived(HidNpadIdType npad)
+{
+    if (!host || !host->isCouchPadSlotAvailable()) {
+        brls::Logger::info("Couch: pad arrived on npad {} but no slot is free", (int)npad);
+        return;
+    }
+
+    if (couchArrivalPromptOpen || menuOpen) {
+        brls::Logger::info("Couch: pad arrived on npad {} while UI is busy, not prompting", (int)npad);
+        return;
+    }
+    couchArrivalPromptOpen = true;
+
+    auto weak = weak_from_this();
+    brls::sync([weak]() {
+        auto self = weak.lock();
+        if (!self) {
+            return;
+        }
+
+        self->pauseStreamForUi();
+
+        auto* dialog = new brls::Dialog("akira/couch/controller_arrived"_i18n);
+
+        dialog->addButton("akira/couch/add_player"_i18n, [weak]() {
+            auto self = weak.lock();
+            if (!self)
+                return;
+            self->couchArrivalPromptOpen = false;
+            self->openCouchClaim();
+        });
+
+        dialog->addButton("akira/couch/not_now"_i18n, [weak]() {
+            auto self = weak.lock();
+            if (!self)
+                return;
+            self->couchArrivalPromptOpen = false;
+            auto* input = self->session ? self->session->getInputManager() : nullptr;
+            if (input)
+                input->resolvePadArrival();
+            if (input && input->couchRoster().empty()) {
+                self->openPrimaryControllerPicker();
+                return;
+            }
+            self->resumeStreamAfterUi();
+        });
+
+        dialog->setCloseCallback([weak]() {
+            auto self = weak.lock();
+            if (!self)
+                return;
+            self->couchArrivalPromptOpen = false;
+            if (auto* input = self->session ? self->session->getInputManager() : nullptr)
+                input->resolvePadArrival();
+            self->resumeStreamAfterUi();
+        });
+
+        brls::Logger::info("Couch: showing controller arrival prompt");
+        dialog->open();
+    });
+}
+
+void StreamView::openCouchClaim()
+{
+    auto* input = session ? session->getInputManager() : nullptr;
+    if (input == nullptr) {
+        brls::Logger::warning("StreamView: no input manager for couch claim");
+        resumeStreamAfterUi();
+        return;
+    }
+
+    auto weak = weak_from_this();
+    auto* panel = new PlayersPanelView(host, input, true);
+    panel->setOnClosed([weak]() {
+        auto self = weak.lock();
+        if (!self)
+            return;
+        if (auto* mgr = self->session ? self->session->getInputManager() : nullptr)
+            mgr->resolvePadArrival();
+        self->resumeStreamAfterUi();
+    });
+    brls::Application::pushActivity(new brls::Activity(panel), brls::TransitionAnimation::NONE);
+}
+
+void StreamView::openPrimaryControllerPicker()
+{
+    auto* input = session ? session->getInputManager() : nullptr;
+    if (!input) {
+        resumeStreamAfterUi();
+        return;
+    }
+
+    auto pads = input->describePads();
+    if (!ControllerPickerView::worthAsking(pads)) {
+        brls::Logger::info("Couch: no alternate primary controller worth asking about");
+        resumeStreamAfterUi();
+        return;
+    }
+
+    brls::Logger::info("Couch: opening primary controller picker after Not now");
+    auto weak = weak_from_this();
+    auto describe = [weak]() -> std::vector<akira::input::PadDescription> {
+        if (auto self = weak.lock()) {
+            if (auto* mgr = self->session ? self->session->getInputManager() : nullptr)
+                return mgr->describePads();
+        }
+        return {};
+    };
+
+    auto* picker = new ControllerPickerView(pads, [weak](HidNpadIdType npad) {
+        brls::Application::popActivity(brls::TransitionAnimation::NONE);
+
+        auto self = weak.lock();
+        if (!self)
+            return;
+        if (npad != ControllerPickerView::kCancelled &&
+            npad != ControllerPickerView::kNoChoice) {
+            if (auto* mgr = self->session ? self->session->getInputManager() : nullptr)
+                mgr->selectNpad(npad);
+        }
+        self->resumeStreamAfterUi();
+    }, describe);
+
+    brls::Application::pushActivity(new brls::Activity(picker),
+                                    brls::TransitionAnimation::NONE);
+}
+
+void StreamView::onPadPasscodeRequest(uint8_t slot, bool retry)
+{
+    brls::Logger::info("Couch passcode request for player {} (retry: {})", slot + 1, retry);
+
+    if (couchPasscodeDialogOpen) {
+        brls::Logger::info("Couch passcode dialog already open, ignoring repeat request");
+        return;
+    }
+    couchPasscodeDialogOpen = true;
+
+    Host* hostPtr = host;
+    auto weak = weak_from_this();
+
+    brls::sync([weak, hostPtr, slot, retry]() {
+        auto* pinView = new EnterPinView(hostPtr, PinViewType::CouchPasscode, retry);
+
+        pinView->setOnPinEntered([weak, hostPtr, slot](const std::string& pin) {
+            brls::Logger::info("Couch passcode entered for player {}", slot + 1);
+            if (auto self = weak.lock())
+                self->couchPasscodeDialogOpen = false;
+            hostPtr->couchSendPasscode(slot, pin);
+        });
+
+        pinView->setOnCancel([weak, hostPtr, slot]() {
+            brls::Logger::info("Couch passcode cancelled for player {}, releasing the pad", slot + 1);
+            if (auto self = weak.lock())
+                self->couchPasscodeDialogOpen = false;
+            hostPtr->couchRemovePlayer(slot);
+        });
+
+        brls::Application::pushActivity(new brls::Activity(pinView));
+    });
+}
+
+void StreamView::onPadJoinFailed(uint8_t slot, uint8_t status)
+{
+    brls::Logger::error("Couch join failed for player {} with status {}", slot + 1, status);
+
+    std::string message = status == 1
+        ? brls::getStr("akira/couch/join_failed_not_signed_in", slot + 1)
+        : brls::getStr("akira/couch/join_failed_status", slot + 1, status);
+
+    brls::sync([message]() {
+        brls::Application::notify(message);
+    });
 }
 
 void StreamView::onLoginPinRequest(bool pinIncorrect)
@@ -926,6 +1206,19 @@ void StreamView::showDisconnectMenu()
         remapView->setTranslucent(true);
         remapView->setStreamMode(true);
         brls::Application::pushActivity(new brls::Activity(remapView), brls::TransitionAnimation::NONE);
+    });
+
+    menu->setOnPlayers([weak]() {
+        auto self = weak.lock();
+        if (!self)
+            return;
+        auto* input = self->session ? self->session->getInputManager() : nullptr;
+        if (input == nullptr) {
+            brls::Logger::warning("StreamMenu: no input manager for players panel");
+            return;
+        }
+        auto* panel = new PlayersPanelView(self->host, input);
+        brls::Application::pushActivity(new brls::Activity(panel), brls::TransitionAnimation::NONE);
     });
 
     menu->setOnDisconnect([weak](bool sleep) {
