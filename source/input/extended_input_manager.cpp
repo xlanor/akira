@@ -434,6 +434,14 @@ void ExtendedInputManager::shutdown()
 
         ensureOutputOwnership(false);
 
+        mutexLock(&m_couch_lock);
+        for (auto& t : m_couch) {
+            if (t.in_use && t.owns_output)
+                ensureCouchOwnership(t, false, false);
+            t.in_use = false;
+        }
+        mutexUnlock(&m_couch_lock);
+
         if (m_subscribed) {
             logStatus("shutdown");
         }
@@ -856,6 +864,8 @@ void ExtendedInputManager::pumpDirectOutput()
 {
     reconsiderBackendRefusal();
 
+    pumpCouchOutputs(nowMs());
+
     const akira::input::PadOutputState state = outputState();
     const bool allowed = state.want_claim || state.write_state;
 
@@ -967,26 +977,275 @@ void ExtendedInputManager::pumpDirectState(uint32_t now)
 }
 
 
-bool ExtendedInputManager::readRawReport(AkiraInputRawReport* out) const
+ExtendedInputManager::CouchOutputTarget* ExtendedInputManager::findCouch(const uint8_t* bt_addr)
 {
-    if (out == nullptr)
+    for (auto& t : m_couch) {
+        if (t.in_use && std::memcmp(t.bt_addr, bt_addr, sizeof(t.bt_addr)) == 0)
+            return &t;
+    }
+    return nullptr;
+}
+
+void ExtendedInputManager::registerCouchOutput(const uint8_t* bt_addr, uint16_t vendor_id,
+                                               uint16_t product_id)
+{
+    if (bt_addr == nullptr)
+        return;
+
+    mutexLock(&m_couch_lock);
+    CouchOutputTarget* t = findCouch(bt_addr);
+    if (t == nullptr) {
+        for (auto& c : m_couch) {
+            if (!c.in_use) {
+                t = &c;
+                break;
+            }
+        }
+    }
+    if (t != nullptr) {
+        const bool fresh = !t->in_use;
+        t->in_use = true;
+        std::memcpy(t->bt_addr, bt_addr, sizeof(t->bt_addr));
+        t->vendor_id  = vendor_id;
+        t->product_id = product_id;
+        if (fresh) {
+            t->rumble        = 0;
+            t->have_triggers = false;
+            t->have_lightbar = false;
+            t->sent_valid    = false;
+            t->trigger_sent  = false;
+            t->lightbar_painted_valid = false;
+            t->owns_output   = false;
+            t->owns_recheck  = 0;
+            t->failures      = 0;
+        }
+    }
+    mutexUnlock(&m_couch_lock);
+
+    if (t == nullptr)
+        brls::Logger::warning("couch output: no free slot for pad {:04x}:{:04x}",
+                              vendor_id, product_id);
+    else
+        brls::Logger::info("couch output: registered {:04x}:{:04x}", vendor_id, product_id);
+}
+
+void ExtendedInputManager::unregisterCouchOutput(const uint8_t* bt_addr)
+{
+    if (bt_addr == nullptr)
+        return;
+
+    mutexLock(&m_couch_lock);
+    if (CouchOutputTarget* t = findCouch(bt_addr)) {
+        if (t->owns_output)
+            ensureCouchOwnership(*t, false, false);
+        t->in_use = false;
+    }
+    mutexUnlock(&m_couch_lock);
+}
+
+void ExtendedInputManager::setCouchRumble(const uint8_t* bt_addr, uint8_t left, uint8_t right)
+{
+    if (bt_addr == nullptr)
+        return;
+    mutexLock(&m_couch_lock);
+    if (CouchOutputTarget* t = findCouch(bt_addr))
+        t->rumble = (uint16_t)(((uint16_t)left << 8) | right);
+    mutexUnlock(&m_couch_lock);
+}
+
+void ExtendedInputManager::setCouchTriggerEffects(const uint8_t* bt_addr,
+                                                  uint8_t left_type, const uint8_t* left_params,
+                                                  uint8_t right_type, const uint8_t* right_params)
+{
+    if (bt_addr == nullptr || left_params == nullptr || right_params == nullptr)
+        return;
+    mutexLock(&m_couch_lock);
+    if (CouchOutputTarget* t = findCouch(bt_addr)) {
+        t->trigger_left[0] = left_type;
+        std::memcpy(t->trigger_left + 1, left_params, akira::input::kDs5TriggerParamBytes);
+        t->trigger_right[0] = right_type;
+        std::memcpy(t->trigger_right + 1, right_params, akira::input::kDs5TriggerParamBytes);
+        t->have_triggers = true;
+    }
+    mutexUnlock(&m_couch_lock);
+}
+
+void ExtendedInputManager::setCouchLightbar(const uint8_t* bt_addr, uint8_t red, uint8_t green,
+                                            uint8_t blue)
+{
+    if (bt_addr == nullptr)
+        return;
+    mutexLock(&m_couch_lock);
+    if (CouchOutputTarget* t = findCouch(bt_addr)) {
+        t->lightbar[0] = red;
+        t->lightbar[1] = green;
+        t->lightbar[2] = blue;
+        t->have_lightbar = true;
+    }
+    mutexUnlock(&m_couch_lock);
+}
+
+bool ExtendedInputManager::writeCouchFrame(CouchOutputTarget& t, uint8_t* frame, uint16_t length)
+{
+    if (frame == nullptr || length < 5 || length > AKIRA_INPUT_OUTPUT_MAX)
         return false;
 
+    frame[1] = (uint8_t)((t.seq++ & 0x0f) << 4);
+    akira::input::StampDs5Crc(frame, length);
+    return writeOutputReport(t.bt_addr, frame, length);
+}
+
+void ExtendedInputManager::ensureCouchOwnership(CouchOutputTarget& t, bool want, bool regime_on)
+{
+    if (!serviceIsActive(&m_srv))
+        return;
+
+    const uint32_t now = nowMs();
+    if (want) {
+        if (!regime_on)
+            return;
+        if (now < t.owns_recheck)
+            return;
+        t.owns_recheck = now + 1000;
+    } else if (!t.owns_output) {
+        return;
+    }
+
+    AkiraInputExternalControl in{};
+    std::memcpy(in.bt_addr, t.bt_addr, sizeof(in.bt_addr));
+    in.acquire = want ? 1 : 0;
+
+    uint32_t out_rc = 0;
+    mutexLock(&m_srv_lock);
+    const Result rc = serviceDispatchInOut(&m_srv, AkiraInputCmd_ExternalControl, in, out_rc);
+    mutexUnlock(&m_srv_lock);
+
+    if (R_FAILED(rc))
+        return;
+
+    const bool refused = R_FAILED((Result)out_rc);
+    if (want && refused) {
+        t.owns_output = false;
+        return;
+    }
+
+    if (!want)
+        t.lightbar_painted_valid = false;
+
+    t.owns_output = want;
+}
+
+void ExtendedInputManager::paintCouchLightbar(CouchOutputTarget& t, uint32_t now)
+{
+    if (!t.have_lightbar)
+        return;
+
+    if (t.lightbar_painted_valid && std::memcmp(t.lightbar_painted, t.lightbar, 3) == 0)
+        return;
+    if (t.lightbar_painted_valid && (now - t.lightbar_painted_ms) < kLightbarIntervalMs)
+        return;
+
+    uint8_t frame[akira::input::kDs5BluetoothFrameBytes];
+    const size_t len = akira::input::BuildDs5LightbarFrame(
+        0, t.lightbar[0], t.lightbar[1], t.lightbar[2], frame, sizeof(frame));
+    if (len == 0)
+        return;
+
+    if (writeCouchFrame(t, frame, (uint16_t)len)) {
+        std::memcpy(t.lightbar_painted, t.lightbar, 3);
+        t.lightbar_painted_valid = true;
+        t.lightbar_painted_ms    = now;
+    }
+}
+
+void ExtendedInputManager::pumpCouchOutputs(uint32_t now)
+{
+    const bool regime = s_direct_stream_allowed.load(std::memory_order_acquire)
+                     && !s_backend_released.load(std::memory_order_acquire)
+                     && !s_output_refused.load(std::memory_order_acquire)
+                     && m_direct_wanted.load(std::memory_order_acquire);
+
+    const uint8_t intensity = akira::input::Ds5IntensityByte(consoleVibrationIntensity(),
+                                                             consoleTriggerIntensity());
+
+    mutexLock(&m_couch_lock);
+    for (auto& t : m_couch) {
+        if (!t.in_use)
+            continue;
+
+        const bool supported = akira::input::PadTakesDirectOutput(t.vendor_id, t.product_id);
+        const bool want = regime && supported;
+
+        ensureCouchOwnership(t, want, regime);
+        if (!want || !t.owns_output)
+            continue;
+
+        paintCouchLightbar(t, now);
+
+        const uint16_t want_rumble = t.rumble;
+        uint8_t want_triggers[sizeof(t.trigger_last)] = {};
+        if (t.have_triggers) {
+            std::memcpy(want_triggers, t.trigger_left, sizeof(t.trigger_left));
+            std::memcpy(want_triggers + sizeof(t.trigger_left), t.trigger_right,
+                        sizeof(t.trigger_right));
+        }
+
+        const bool same = t.sent_valid
+                       && want_rumble == t.sent
+                       && intensity == t.intensity_last
+                       && std::memcmp(want_triggers, t.trigger_last, sizeof(want_triggers)) == 0;
+        if (same)
+            continue;
+        if (t.sent_valid && (now - t.sent_ms) < kDirectWriteIntervalMs)
+            continue;
+
+        const uint8_t* left  = want_triggers;
+        const uint8_t* right = want_triggers + sizeof(t.trigger_left);
+
+        uint8_t frame[akira::input::kDs5BluetoothFrameBytes];
+        const size_t len = akira::input::BuildDs5StateFrame(
+            0,
+            (uint8_t)(want_rumble >> 8), (uint8_t)(want_rumble & 0xff),
+            left[0], left + 1, right[0], right + 1,
+            frame, sizeof(frame), false, akira::input::Ds5FrameLayout::Tagged, intensity);
+        if (len == 0)
+            continue;
+
+        if (!writeCouchFrame(t, frame, (uint16_t)len)) {
+            t.sent_ms = now;
+            if (++t.failures >= kDirectFailureLimit)
+                ensureCouchOwnership(t, false, false);
+            continue;
+        }
+
+        t.sent           = want_rumble;
+        t.sent_valid     = true;
+        t.intensity_last = intensity;
+        t.sent_ms        = now;
+        t.trigger_sent   = true;
+        t.failures       = 0;
+        std::memcpy(t.trigger_last, want_triggers, sizeof(want_triggers));
+    }
+    mutexUnlock(&m_couch_lock);
+}
+
+bool ExtendedInputManager::copyRawSlot(const RawSlot& slot, AkiraInputRawReport* out) const
+{
     for (int attempt = 0; attempt < 3; attempt++) {
-        const uint32_t before = m_raw_seq.load(std::memory_order_acquire);
+        const uint32_t before = slot.seq.load(std::memory_order_acquire);
         if (before & 1u)
             continue;
 
-        AkiraInputRawReport copy = m_raw;
+        AkiraInputRawReport copy = slot.report;
 
-        const uint32_t after = m_raw_seq.load(std::memory_order_acquire);
+        const uint32_t after = slot.seq.load(std::memory_order_acquire);
         if (before != after)
             continue;
 
         if (before == 0 || copy.length == 0)
             return false;
 
-        const uint32_t published = m_raw_published_ms.load(std::memory_order_acquire);
+        const uint32_t published = slot.published_ms.load(std::memory_order_acquire);
         if (nowMs() - published > kMaxAgeMs)
             return false;
 
@@ -995,6 +1254,102 @@ bool ExtendedInputManager::readRawReport(AkiraInputRawReport* out) const
     }
 
     return false;
+}
+
+bool ExtendedInputManager::readRawReportFor(const uint8_t* bt_addr, AkiraInputRawReport* out) const
+{
+    if (out == nullptr || bt_addr == nullptr)
+        return false;
+
+    for (const RawSlot& slot : m_raw_slots) {
+        AkiraInputRawReport copy{};
+        if (!copyRawSlot(slot, &copy))
+            continue;
+        if (std::memcmp(copy.bt_addr, bt_addr, sizeof(copy.bt_addr)) != 0)
+            continue;
+        *out = copy;
+        return true;
+    }
+
+    return false;
+}
+
+bool ExtendedInputManager::readRawReport(AkiraInputRawReport* out) const
+{
+    if (out == nullptr)
+        return false;
+
+    if (m_direct_addr_valid && readRawReportFor(m_direct_addr, out))
+        return true;
+
+    for (const RawSlot& slot : m_raw_slots) {
+        if (copyRawSlot(slot, out))
+            return true;
+    }
+
+    return false;
+}
+
+int ExtendedInputManager::claimRawSlot(const uint8_t* bt_addr)
+{
+    for (int i = 0; i < kMaxRawSlots; i++) {
+        if (m_raw_slot_used[i] &&
+            std::memcmp(m_raw_slot_addr[i], bt_addr, sizeof(m_raw_slot_addr[i])) == 0) {
+            return i;
+        }
+    }
+
+    for (int i = 0; i < kMaxRawSlots; i++) {
+        if (!m_raw_slot_used[i]) {
+            m_raw_slot_used[i] = true;
+            std::memcpy(m_raw_slot_addr[i], bt_addr, sizeof(m_raw_slot_addr[i]));
+            return i;
+        }
+    }
+
+    int oldest = 0;
+    uint32_t oldest_ms = m_raw_slots[0].published_ms.load(std::memory_order_acquire);
+    for (int i = 1; i < kMaxRawSlots; i++) {
+        const uint32_t ms = m_raw_slots[i].published_ms.load(std::memory_order_acquire);
+        if (ms < oldest_ms) {
+            oldest_ms = ms;
+            oldest    = i;
+        }
+    }
+    std::memcpy(m_raw_slot_addr[oldest], bt_addr, sizeof(m_raw_slot_addr[oldest]));
+    return oldest;
+}
+
+void ExtendedInputManager::publishRawReport(const AkiraInputRawReport& raw)
+{
+    const int index = claimRawSlot(raw.bt_addr);
+    RawSlot& slot = m_raw_slots[index];
+
+    const uint32_t seq = slot.seq.load(std::memory_order_relaxed);
+    slot.seq.store(seq + 1, std::memory_order_release);
+    slot.report = raw;
+    slot.seq.store(seq + 2, std::memory_order_release);
+
+    slot.published_ms.store(nowMs(), std::memory_order_release);
+}
+
+void ExtendedInputManager::refreshTrackedDevices()
+{
+    AkiraInputDeviceList devices{};
+    if (!listDevices(&devices)) {
+        return;
+    }
+
+    uint8_t count = 0;
+    for (uint8_t i = 0; i < devices.count && count < kMaxRawSlots; i++) {
+        const AkiraInputDeviceInfo& dev = devices.devices[i];
+        if ((dev.flags & AkiraInputDevice_Identified) == 0)
+            continue;
+        std::memcpy(m_tracked_addr[count], dev.bt_addr, sizeof(m_tracked_addr[count]));
+        count++;
+    }
+
+    m_tracked_count = count;
 }
 
 void ExtendedInputManager::pollThreadFunc(void* arg)
@@ -1089,9 +1444,23 @@ void ExtendedInputManager::logRawReport(const char* when)
 
 void ExtendedInputManager::resolveDirectAddress()
 {
+    static uint32_t resolve_log = 0;
+    const bool log_this = (resolve_log++ % 20) == 0;
+
     AkiraInputDeviceList devices{};
     if (!listDevices(&devices)) {
+        if (log_this)
+            brls::Logger::warning("direct output: listDevices failed, no raw reports will be polled");
         return;
+    }
+
+    if (log_this && devices.count == 0)
+        brls::Logger::warning("direct output: device list empty, no raw reports will be polled");
+    for (uint8_t i = 0; log_this && i < devices.count; i++) {
+        const AkiraInputDeviceInfo& d = devices.devices[i];
+        brls::Logger::info("direct output: candidate {:04x}:{:04x} flags=0x{:02x} takes_direct={}",
+                           d.vendor_id, d.product_id, d.flags,
+                           akira::input::PadTakesDirectOutput(d.vendor_id, d.product_id));
     }
 
     for (uint8_t i = 0; i < devices.count; i++) {
@@ -1158,29 +1527,37 @@ void ExtendedInputManager::poll()
         }
 
         if (m_raw_wanted.load(std::memory_order_relaxed)) {
-            AkiraInputRawReport raw{};
-            mutexLock(&m_srv_lock);
-            const Result raw_rc = serviceDispatchInOut(&m_srv, AkiraInputCmd_GetRawReport, query, raw);
-            mutexUnlock(&m_srv_lock);
+            if (m_tracked_count == 0 || (m_tracked_refresh++ % 120) == 0)
+                refreshTrackedDevices();
 
-            if (R_SUCCEEDED(raw_rc) && raw.length > 0) {
-                const uint32_t seq = m_raw_seq.load(std::memory_order_relaxed);
-                m_raw_seq.store(seq + 1, std::memory_order_release);
-                m_raw = raw;
-                m_raw_seq.store(seq + 2, std::memory_order_release);
+            for (uint8_t i = 0; i < m_tracked_count; i++) {
+                AkiraInputTriggerQuery raw_query{};
+                std::memcpy(raw_query.bt_addr, m_tracked_addr[i], sizeof(raw_query.bt_addr));
 
-                m_raw_published_ms.store(nowMs(), std::memory_order_release);
+                AkiraInputRawReport raw{};
+                mutexLock(&m_srv_lock);
+                const Result raw_rc =
+                    serviceDispatchInOut(&m_srv, AkiraInputCmd_GetRawReport, raw_query, raw);
+                mutexUnlock(&m_srv_lock);
 
-                if (akira::input::PadTakesDirectOutput(raw.vendor_id, raw.product_id)) {
-                    if (!m_direct_addr_valid ||
-                        std::memcmp(m_direct_addr, raw.bt_addr, sizeof(m_direct_addr)) != 0) {
-                        std::memcpy(m_direct_addr, raw.bt_addr, sizeof(m_direct_addr));
-                        m_direct_addr_valid = true;
-                        refreshDirectGates(raw.vendor_id, raw.product_id, raw.bt_addr);
-                        m_direct_sent_valid = false;
-                        m_direct_failures   = 0;
-                        m_haptics_landing.store(true, std::memory_order_release);
-                    }
+                if (R_FAILED(raw_rc) || raw.length == 0)
+                    continue;
+
+                publishRawReport(raw);
+
+                if (!akira::input::PadTakesDirectOutput(raw.vendor_id, raw.product_id))
+                    continue;
+
+                if (!m_direct_addr_valid ||
+                    std::memcmp(m_direct_addr, raw.bt_addr, sizeof(m_direct_addr)) != 0) {
+                    if (m_direct_addr_valid)
+                        continue;
+                    std::memcpy(m_direct_addr, raw.bt_addr, sizeof(m_direct_addr));
+                    m_direct_addr_valid = true;
+                    refreshDirectGates(raw.vendor_id, raw.product_id, raw.bt_addr);
+                    m_direct_sent_valid = false;
+                    m_direct_failures   = 0;
+                    m_haptics_landing.store(true, std::memory_order_release);
                 }
             }
         }

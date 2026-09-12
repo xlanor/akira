@@ -8,7 +8,8 @@
 
 enum class PinViewType {
     Registration,
-    Login 
+    Login,
+    CouchPasscode
 };
 
 class EnterPinView : public brls::Box {

@@ -20,6 +20,7 @@ public:
     void setOnDismiss(std::function<void()> callback);
     void setOnGyroReset(std::function<void()> callback);
     void setOnButtonMapping(std::function<void()> callback);
+    void setOnPlayers(std::function<void()> callback);
 
     void setStatsMode(StatsOverlayMode mode);
     void setSleepAvailable(bool available);
@@ -102,6 +103,7 @@ private:
     std::function<void()> onDismiss;
     std::function<void()> onGyroReset;
     std::function<void()> onButtonMapping;
+    std::function<void()> onPlayers;
 };
 
 #endif // AKIRA_STREAM_MENU_HPP

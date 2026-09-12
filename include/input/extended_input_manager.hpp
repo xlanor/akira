@@ -6,6 +6,8 @@
 #include <string>
 #include <switch.h>
 
+#include <chiaki/common.h>
+
 #include "akira_input/ipc.h"
 #include "input/pad_output_state.hpp"
 #include "input/ps_output.hpp"
@@ -90,6 +92,7 @@ public:
     uint8_t r2() const;
 
     bool readRawReport(AkiraInputRawReport* out) const;
+    bool readRawReportFor(const uint8_t* bt_addr, AkiraInputRawReport* out) const;
 
     bool listDevices(AkiraInputDeviceList* out) const;
 
@@ -126,6 +129,14 @@ public:
 
     bool directHapticsReady() const;
 
+    void registerCouchOutput(const uint8_t* bt_addr, uint16_t vendor_id, uint16_t product_id);
+    void unregisterCouchOutput(const uint8_t* bt_addr);
+    void setCouchRumble(const uint8_t* bt_addr, uint8_t left, uint8_t right);
+    void setCouchTriggerEffects(const uint8_t* bt_addr,
+                                uint8_t left_type, const uint8_t* left_params,
+                                uint8_t right_type, const uint8_t* right_params);
+    void setCouchLightbar(const uint8_t* bt_addr, uint8_t red, uint8_t green, uint8_t blue);
+
 
 
 private:
@@ -139,6 +150,48 @@ private:
     bool writeOutputReport(const uint8_t* address, const uint8_t* data, uint16_t length);
     bool writeDirectFrame(uint8_t* frame, uint16_t length);
     bool directWriteFailed();
+
+    static constexpr int kMaxCouchOutputs = 3;
+
+    struct CouchOutputTarget {
+        bool     in_use     = false;
+        uint8_t  bt_addr[6] = {};
+        uint16_t vendor_id  = 0;
+        uint16_t product_id = 0;
+
+        bool     owns_output  = false;
+        uint32_t owns_recheck = 0;
+
+        uint16_t rumble        = 0;
+        bool     have_triggers = false;
+        uint8_t  trigger_left[11]  = {};
+        uint8_t  trigger_right[11] = {};
+        bool     have_lightbar = false;
+        uint8_t  lightbar[3]   = {};
+
+        uint16_t sent          = 0;
+        bool     sent_valid    = false;
+        uint32_t sent_ms       = 0;
+        uint8_t  trigger_last[22] = {};
+        bool     trigger_sent  = false;
+        uint8_t  intensity_last = 0;
+
+        bool     lightbar_painted_valid = false;
+        uint8_t  lightbar_painted[3]    = {};
+        uint32_t lightbar_painted_ms    = 0;
+
+        uint8_t  seq      = 0;
+        uint32_t failures = 0;
+    };
+
+    CouchOutputTarget* findCouch(const uint8_t* bt_addr);
+    void pumpCouchOutputs(uint32_t now);
+    void ensureCouchOwnership(CouchOutputTarget& t, bool want, bool regime_on);
+    bool writeCouchFrame(CouchOutputTarget& t, uint8_t* frame, uint16_t length);
+    void paintCouchLightbar(CouchOutputTarget& t, uint32_t now);
+
+    CouchOutputTarget m_couch[kMaxCouchOutputs]{};
+    Mutex             m_couch_lock{};
     void logStatus(const char* when);
     void logRawReport(const char* when);
 
@@ -206,9 +259,28 @@ private:
 
     uint64_t m_reports_seen = 0;
 
-    mutable std::atomic<uint32_t> m_raw_seq{0};
-    AkiraInputRawReport           m_raw{};
-    std::atomic<uint32_t>         m_raw_published_ms{0};
+    static constexpr int kMaxRawSlots = CHIAKI_COUCH_MAX_PADS;
+
+    struct RawSlot {
+        mutable std::atomic<uint32_t> seq{0};
+        AkiraInputRawReport           report{};
+        std::atomic<uint32_t>         published_ms{0};
+    };
+
+    RawSlot m_raw_slots[kMaxRawSlots];
+
+    uint8_t m_raw_slot_addr[kMaxRawSlots][6]{};
+    bool    m_raw_slot_used[kMaxRawSlots]{};
+
+    uint8_t m_tracked_addr[kMaxRawSlots][6]{};
+    uint8_t m_tracked_count = 0;
+    uint32_t m_tracked_refresh = 0;
+
+    bool copyRawSlot(const RawSlot& slot, AkiraInputRawReport* out) const;
+    int  claimRawSlot(const uint8_t* bt_addr);
+    void publishRawReport(const AkiraInputRawReport& raw);
+    void refreshTrackedDevices();
+
     std::atomic<bool>             m_raw_wanted{false};
 
     std::atomic<uint64_t> m_snapshot{0};

@@ -1,6 +1,8 @@
 #ifndef AKIRA_HOST_HPP
 #define AKIRA_HOST_HPP
 
+#include <chrono>
+#include <array>
 #include <functional>
 #include <map>
 #include <optional>
@@ -43,6 +45,20 @@ enum class HolepunchPhase {
     Negotiating,
     Punching
 };
+
+enum class CouchPadState : uint8_t {
+    Idle,
+    Joining,
+    NeedsProfile,
+    Passcode,
+    Announced,
+    Confirmed,
+    Failed
+};
+
+static constexpr uint8_t kCouchJoinTimedOut = 0xff;
+static constexpr uint8_t kCouchPadDropped = 0xfe;
+static constexpr int kCouchJoinTimeoutSeconds = 6;
 
 class Host {
     friend class SettingsManager;
@@ -104,14 +120,23 @@ private:
     ChiakiHolepunchRegistInfo autoRegistHinfo{};
     bool autoRegistActive = false;
     ChiakiControllerState controllerState;
+    ChiakiControllerState controllerStates[CHIAKI_COUCH_MAX_PADS];
+    uint8_t couchPadCount = 1;
+    bool couchMode = false;
+    CouchPadState couchPadStates[CHIAKI_COUCH_MAX_PADS] = {};
+    uint8_t couchPadFailStatus[CHIAKI_COUCH_MAX_PADS] = {};
+    std::chrono::steady_clock::time_point couchPadJoinAt[CHIAKI_COUCH_MAX_PADS] = {};
+    std::array<std::string, CHIAKI_COUCH_MAX_PADS> couchAccountLabels;
+    std::array<int64_t, CHIAKI_COUCH_MAX_PADS> couchProfileIds = {};
     std::map<uint32_t, int8_t> fingerIdTouchId;
 
     // Callbacks
     std::function<void()> onConnected;
     std::function<void(bool)> onLoginPinRequest;
     std::function<void(ChiakiQuitEvent*)> onQuit;
-    std::function<void(uint8_t, uint8_t)> onRumble;
+    std::function<void(uint8_t, uint8_t, uint8_t)> onRumble;
     std::function<void(ChiakiControllerState*, std::map<uint32_t, int8_t>*)> onReadController;
+    std::function<void(ChiakiControllerState*, uint8_t*)> onReadCouchSecondary;
     std::function<void()> onRegistCanceled;
     std::function<void()> onRegistFailed;
     std::function<void()> onRegistSuccess;
@@ -122,8 +147,16 @@ private:
 
     std::function<void(uint8_t, uint8_t)> onEffectIntensity;
     std::function<void(uint8_t, uint8_t, uint8_t)> onLedColor;
+    std::function<void(uint8_t, uint8_t, uint8_t, uint8_t)> onPadConfirmed;
+    std::function<void(uint8_t, bool)> onPadPasscodeRequest;
+    std::function<void(uint8_t, uint8_t)> onPadJoinFailed;
 
 public:
+    struct CouchProfileChoice {
+        int64_t profileId = 0;
+        std::string label;
+    };
+
     struct CloudSessionConfig {
         ChiakiServiceType serviceType = CHIAKI_SERVICE_TYPE_REMOTE_PLAY;
         std::string host;
@@ -220,6 +253,38 @@ public:
     int finiSession();
     int finiRegist();
     void sendFeedbackState();
+    void sendFeedbackStateCouch();
+
+    static constexpr uint8_t kCouchDualShock4TakionType = 2;
+    void couchAddPlayer(uint8_t slot, uint8_t deviceType = kCouchDualShock4TakionType);
+    void couchRemovePlayer(uint8_t slot);
+    void couchSendPasscode(uint8_t slot, const std::string& passcode);
+    void couchRetryPlayer(uint8_t slot);
+    std::vector<CouchProfileChoice> couchProfileChoices(uint8_t slot) const;
+    bool couchSelectProfile(uint8_t slot, int64_t profileId);
+    void couchHandlePadDropped(uint8_t slot);
+    bool isCouchMode() const { return couchMode; }
+    const std::string& couchAccountLabel(uint8_t slot) const {
+        static const std::string empty;
+        return slot < CHIAKI_COUCH_MAX_PADS ? couchAccountLabels[slot] : empty;
+    }
+    bool isCouchPadConfirmed(uint8_t slot) const { return couchPadState(slot) == CouchPadState::Confirmed; }
+    CouchPadState couchPadState(uint8_t slot) const {
+        return slot < CHIAKI_COUCH_MAX_PADS ? couchPadStates[slot] : CouchPadState::Idle;
+    }
+    uint8_t couchPadFailure(uint8_t slot) const {
+        return slot < CHIAKI_COUCH_MAX_PADS ? couchPadFailStatus[slot] : 0;
+    }
+    void couchTickJoinTimeouts();
+    bool isCouchPadSlotAvailable() const {
+        if (!sessionInit)
+            return false;
+        for (uint8_t slot = 1; slot < CHIAKI_COUCH_MAX_PADS; slot++) {
+            if (couchPadStates[slot] == CouchPadState::Idle)
+                return true;
+        }
+        return false;
+    }
 
     // Holepunch connection for remote play
     ChiakiErrorCode initHolepunchSession();
@@ -249,10 +314,14 @@ public:
     void setOnConnected(std::function<void()> callback) { onConnected = std::move(callback); }
     void setOnLoginPinRequest(std::function<void(bool)> callback) { onLoginPinRequest = std::move(callback); }
     void setOnQuit(std::function<void(ChiakiQuitEvent*)> callback) { onQuit = std::move(callback); }
-    void setOnRumble(std::function<void(uint8_t, uint8_t)> callback) { onRumble = std::move(callback); }
+    void setOnRumble(std::function<void(uint8_t, uint8_t, uint8_t)> callback) { onRumble = std::move(callback); }
     void setOnReadController(std::function<void(ChiakiControllerState*, std::map<uint32_t, int8_t>*)> callback) {
         onReadController = std::move(callback);
     }
+    void setOnReadCouchSecondary(std::function<void(ChiakiControllerState*, uint8_t*)> callback) {
+        onReadCouchSecondary = std::move(callback);
+    }
+    void setCouchMode(bool on) { couchMode = on; }
     void setOnRegistCanceled(std::function<void()> callback) { onRegistCanceled = std::move(callback); }
     void setOnRegistFailed(std::function<void()> callback) { onRegistFailed = std::move(callback); }
     void setOnRegistSuccess(std::function<void()> callback) { onRegistSuccess = std::move(callback); }
@@ -264,6 +333,15 @@ public:
     }
     void setOnEffectIntensity(std::function<void(uint8_t, uint8_t)> callback) {
         onEffectIntensity = std::move(callback);
+    }
+    void setOnPadConfirmed(std::function<void(uint8_t, uint8_t, uint8_t, uint8_t)> callback) {
+        onPadConfirmed = std::move(callback);
+    }
+    void setOnPadPasscodeRequest(std::function<void(uint8_t, bool)> callback) {
+        onPadPasscodeRequest = std::move(callback);
+    }
+    void setOnPadJoinFailed(std::function<void(uint8_t, uint8_t)> callback) {
+        onPadJoinFailed = std::move(callback);
     }
     void setOnLedColor(std::function<void(uint8_t, uint8_t, uint8_t)> callback) {
         onLedColor = std::move(callback);

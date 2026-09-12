@@ -66,6 +66,8 @@ private:
     bool intentionalDisconnect = false;
     bool reconnecting = false;
     bool loginPinEnteredThisSession = false;
+    bool couchPasscodeDialogOpen = false;
+    bool couchArrivalPromptOpen = false;
     uint32_t sessionGeneration = 0;
     std::chrono::steady_clock::time_point minusHoldStart;
     bool minusWasHeld = false;
@@ -81,8 +83,15 @@ private:
 
     void onConnected();
     void onQuit(ChiakiQuitEvent* event);
-    void onRumble(uint8_t left, uint8_t right);
+    void onRumble(uint8_t player_index, uint8_t left, uint8_t right);
     void onLoginPinRequest(bool pinIncorrect);
+    void pauseStreamForUi();
+    void resumeStreamAfterUi();
+    void onPadArrived(HidNpadIdType npad);
+    void openCouchClaim();
+    void openPrimaryControllerPicker();
+    void onPadPasscodeRequest(uint8_t slot, bool retry);
+    void onPadJoinFailed(uint8_t slot, uint8_t status);
 
     void checkMenuTrigger();
     void prepareVideoPipelineTick();

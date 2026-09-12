@@ -97,6 +97,8 @@ public:
     virtual bool menuHeld() const { return (heldButtons() & HidNpadButton_Minus) != 0; }
 
     virtual bool usesButtonMapping() const { return true; }
+
+    virtual void setExcludedNpads(uint64_t mask) { (void)mask; }
 };
 
 struct PadDescription {

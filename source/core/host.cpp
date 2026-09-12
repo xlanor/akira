@@ -16,6 +16,7 @@
 
 #include <chiaki/base64.h>
 
+
 static akira::input::RumbleProfile ActivePadProfile()
 {
     auto* settings = SettingsManager::getInstance();
@@ -577,6 +578,20 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
     connectInfo.packet_loss_max = settings->getPacketLossMax();
     connectInfo.holepunch_session = holepunch;
 
+    memset(connectInfo.couch_account_id, 0, sizeof(connectInfo.couch_account_id));
+    couchAccountLabels.fill(std::string{});
+    couchProfileIds.fill(0);
+    {
+        const Profile* active = settings->getActiveProfile();
+        if (active && !active->accountId.empty())
+        {
+            snprintf(connectInfo.couch_account_id[0], CHIAKI_COUCH_ACCOUNT_ID_SIZE, "%s", active->accountId.c_str());
+            couchAccountLabels[0] = active->label();
+            couchProfileIds[0] = active->id;
+        }
+        brls::Logger::info("Host::initSession: PS5 couch profiles will be selected explicitly per player");
+    }
+
     if (holepunch)
     {
         std::string accountId = settings->getPsnAccountId(this);
@@ -781,8 +796,220 @@ void Host::startSession()
     brls::Logger::info("chiaki_session_start returned SUCCESS");
 }
 
+void Host::sendFeedbackStateCouch()
+{
+    if (onReadController)
+    {
+        onReadController(&controllerStates[0], &fingerIdTouchId);
+    }
+
+    uint8_t count = 1;
+    if (onReadCouchSecondary)
+    {
+        onReadCouchSecondary(controllerStates, &count);
+    }
+
+    couchPadCount = count;
+    if (count > 1)
+        chiaki_session_set_pad_count(&session, count);
+    for (uint8_t i = 0; i < count; i++)
+    {
+        chiaki_session_set_controller_state_for_pad(&session, i, &controllerStates[i]);
+    }
+}
+
+void Host::couchAddPlayer(uint8_t slot, uint8_t deviceType)
+{
+    couchMode = true;
+
+    if (!sessionInit)
+        return;
+    if (slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
+        return;
+
+    couchPadStates[slot] = CouchPadState::Joining;
+    couchPadFailStatus[slot] = 0;
+    couchPadJoinAt[slot] = std::chrono::steady_clock::now();
+
+    ChiakiErrorCode err;
+    if (isPS5())
+    {
+        brls::Logger::info("Host: requesting PS5 couch player {}", slot + 1);
+        err = chiaki_session_couch_send_user_join(&session, slot);
+    }
+    else
+    {
+        brls::Logger::info("Host: opening couch pad for player {} (controller type {})", slot + 1, deviceType);
+        err = chiaki_session_couch_join_ps4(&session, slot, deviceType);
+    }
+
+    if (err != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Host: couch join for player {} could not be sent", slot + 1);
+        couchPadStates[slot] = CouchPadState::Failed;
+        couchPadFailStatus[slot] = 1;
+        if (onPadJoinFailed)
+            onPadJoinFailed(slot, 1);
+    }
+}
+
+void Host::couchRemovePlayer(uint8_t slot)
+{
+    if (!couchMode || !sessionInit)
+        return;
+    if (slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
+        return;
+
+    couchPadStates[slot] = CouchPadState::Idle;
+    couchPadFailStatus[slot] = 0;
+    couchAccountLabels[slot].clear();
+    couchProfileIds[slot] = 0;
+
+    brls::Logger::info("Host: closing couch pad for player {}", slot + 1);
+    if (isPS5())
+    {
+        chiaki_session_couch_send_leave(&session, slot);
+        chiaki_session_couch_close_pad(&session, slot);
+    }
+    else
+    {
+        chiaki_session_couch_leave_ps4(&session, slot);
+    }
+}
+
+void Host::couchHandlePadDropped(uint8_t slot)
+{
+    if (slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
+        return;
+
+    brls::Logger::info("Host: console dropped player {}, withdrawing the pad", slot + 1);
+    couchPadStates[slot] = CouchPadState::Failed;
+    couchPadFailStatus[slot] = kCouchPadDropped;
+
+    if (sessionInit)
+    {
+        if (isPS5())
+        {
+            chiaki_session_couch_send_leave(&session, slot);
+            chiaki_session_couch_close_pad(&session, slot);
+        }
+        else
+        {
+            chiaki_session_couch_leave_ps4(&session, slot);
+        }
+    }
+
+    if (onPadJoinFailed)
+        onPadJoinFailed(slot, kCouchPadDropped);
+}
+
+void Host::couchRetryPlayer(uint8_t slot)
+{
+    if (!sessionInit)
+        return;
+    if (slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
+        return;
+
+    brls::Logger::info("Host: retrying couch join for player {}", slot + 1);
+    chiaki_session_couch_send_leave(&session, slot);
+    couchAddPlayer(slot);
+}
+
+std::vector<Host::CouchProfileChoice> Host::couchProfileChoices(uint8_t slot) const
+{
+    std::vector<CouchProfileChoice> choices;
+    if (!isPS5() || !settings || slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
+        return choices;
+
+    const int64_t activeProfileId = settings->getActiveProfileId();
+    for (const Profile& profile : settings->getProfiles())
+    {
+        if (profile.id == activeProfileId || profile.accountId.empty())
+            continue;
+
+        if (couchPadStates[slot] == CouchPadState::NeedsProfile && couchProfileIds[slot] == profile.id)
+            continue;
+
+        bool assignedElsewhere = false;
+        for (uint8_t other = 1; other < CHIAKI_COUCH_MAX_PADS; other++)
+        {
+            if (other != slot && couchProfileIds[other] == profile.id)
+            {
+                assignedElsewhere = true;
+                break;
+            }
+        }
+        if (!assignedElsewhere)
+            choices.push_back({ profile.id, profile.label() });
+    }
+    return choices;
+}
+
+bool Host::couchSelectProfile(uint8_t slot, int64_t profileId)
+{
+    if (!isPS5() || !sessionInit || !settings || slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
+        return false;
+
+    const auto choices = couchProfileChoices(slot);
+    const auto choice = std::find_if(choices.begin(), choices.end(),
+        [profileId](const CouchProfileChoice& candidate) { return candidate.profileId == profileId; });
+    const Profile* profile = settings->findProfile(profileId);
+    if (choice == choices.end() || !profile)
+        return false;
+
+    if (chiaki_session_couch_set_account_id(&session, slot, profile->accountId.c_str()) != CHIAKI_ERR_SUCCESS)
+    {
+        brls::Logger::error("Host: selected couch profile has an invalid account id");
+        return false;
+    }
+
+    couchProfileIds[slot] = profileId;
+    couchAccountLabels[slot] = choice->label;
+    brls::Logger::info("Host: selected Akira profile {} for couch player {}", profileId, slot + 1);
+    return true;
+}
+
+void Host::couchTickJoinTimeouts()
+{
+    const auto now = std::chrono::steady_clock::now();
+    for (uint8_t slot = 1; slot < CHIAKI_COUCH_MAX_PADS; slot++)
+    {
+        if (couchPadStates[slot] != CouchPadState::Joining)
+            continue;
+        const auto waited = std::chrono::duration_cast<std::chrono::seconds>(now - couchPadJoinAt[slot]).count();
+        if (waited < kCouchJoinTimeoutSeconds)
+            continue;
+
+        brls::Logger::error("Host: couch join for player {} timed out after {}s", slot + 1, waited);
+        couchPadStates[slot] = CouchPadState::Failed;
+        couchPadFailStatus[slot] = kCouchJoinTimedOut;
+        if (onPadJoinFailed)
+            onPadJoinFailed(slot, kCouchJoinTimedOut);
+    }
+}
+
+void Host::couchSendPasscode(uint8_t slot, const std::string& passcode)
+{
+    if (!sessionInit)
+        return;
+    if (slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
+        return;
+
+    couchPadStates[slot] = CouchPadState::Joining;
+    couchPadJoinAt[slot] = std::chrono::steady_clock::now();
+
+    brls::Logger::info("Host: sending couch passcode for player {}", slot);
+    chiaki_session_couch_send_passcode(&session, slot, passcode.c_str());
+}
+
 void Host::sendFeedbackState()
 {
+    if (couchMode)
+    {
+        sendFeedbackStateCouch();
+        return;
+    }
+
     if (onReadController)
     {
         onReadController(&controllerState, &fingerIdTouchId);
@@ -837,7 +1064,7 @@ void Host::connectionEventCallback(ChiakiEvent* event)
                 brls::Logger::info("RUMBLE EVENT: left={}, right={}", event->rumble.left, event->rumble.right);
             if (onRumble)
             {
-                onRumble(event->rumble.left, event->rumble.right);
+                onRumble(event->rumble.player_index, event->rumble.left, event->rumble.right);
             }
             break;
 
@@ -882,6 +1109,78 @@ void Host::connectionEventCallback(ChiakiEvent* event)
             if (onLedColor)
             {
                 onLedColor(event->led_state[0], event->led_state[1], event->led_state[2]);
+            }
+            break;
+
+        case CHIAKI_EVENT_PAD_CONFIRMED:
+            brls::Logger::info("EventCB CHIAKI_EVENT_PAD_CONFIRMED: player_index={} led={:02x}{:02x}{:02x}",
+                               event->pad_confirmed.index, event->pad_confirmed.led[0],
+                               event->pad_confirmed.led[1], event->pad_confirmed.led[2]);
+            if (event->pad_confirmed.index < CHIAKI_COUCH_MAX_PADS)
+            {
+                couchPadStates[event->pad_confirmed.index] = CouchPadState::Confirmed;
+                couchPadFailStatus[event->pad_confirmed.index] = 0;
+            }
+            if (onPadConfirmed)
+            {
+                onPadConfirmed(event->pad_confirmed.index, event->pad_confirmed.led[0],
+                               event->pad_confirmed.led[1], event->pad_confirmed.led[2]);
+            }
+            break;
+
+        case CHIAKI_EVENT_PAD_ANNOUNCED:
+            brls::Logger::info("EventCB CHIAKI_EVENT_PAD_ANNOUNCED: player_index={}",
+                               event->pad_confirmed.index);
+            if (event->pad_confirmed.index < CHIAKI_COUCH_MAX_PADS)
+            {
+                couchPadStates[event->pad_confirmed.index] = CouchPadState::Announced;
+            }
+            if (onPadConfirmed)
+            {
+                onPadConfirmed(event->pad_confirmed.index, event->pad_confirmed.led[0],
+                               event->pad_confirmed.led[1], event->pad_confirmed.led[2]);
+            }
+            break;
+
+        case CHIAKI_EVENT_PAD_DROPPED:
+            couchHandlePadDropped(event->pad_join_failed.index);
+            break;
+
+        case CHIAKI_EVENT_PAD_PASSCODE_REQUEST:
+            brls::Logger::info("EventCB CHIAKI_EVENT_PAD_PASSCODE_REQUEST: player_index={} retry={}",
+                               event->pad_passcode_request.index, event->pad_passcode_request.retry);
+            if (event->pad_passcode_request.index < CHIAKI_COUCH_MAX_PADS)
+            {
+                couchPadStates[event->pad_passcode_request.index] = CouchPadState::Passcode;
+            }
+            if (onPadPasscodeRequest)
+            {
+                onPadPasscodeRequest(event->pad_passcode_request.index, event->pad_passcode_request.retry);
+            }
+            break;
+
+        case CHIAKI_EVENT_PAD_AUTHORIZATION_REQUIRED:
+            brls::Logger::info("EventCB CHIAKI_EVENT_PAD_AUTHORIZATION_REQUIRED: player_index={}",
+                               event->pad_authorization_required.index);
+            if (event->pad_authorization_required.index < CHIAKI_COUCH_MAX_PADS)
+            {
+                const uint8_t slot = event->pad_authorization_required.index;
+                couchPadStates[slot] = CouchPadState::NeedsProfile;
+                couchPadFailStatus[slot] = 0;
+            }
+            break;
+
+        case CHIAKI_EVENT_PAD_JOIN_FAILED:
+            brls::Logger::error("EventCB CHIAKI_EVENT_PAD_JOIN_FAILED: player_index={} status={}",
+                                event->pad_join_failed.index, event->pad_join_failed.status);
+            if (event->pad_join_failed.index < CHIAKI_COUCH_MAX_PADS)
+            {
+                couchPadStates[event->pad_join_failed.index] = CouchPadState::Failed;
+                couchPadFailStatus[event->pad_join_failed.index] = event->pad_join_failed.status;
+            }
+            if (onPadJoinFailed)
+            {
+                onPadJoinFailed(event->pad_join_failed.index, event->pad_join_failed.status);
             }
             break;
 
