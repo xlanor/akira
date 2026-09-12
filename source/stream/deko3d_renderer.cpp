@@ -12,6 +12,7 @@
 #include <borealis/platforms/switch/switch_platform.hpp>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <format>
@@ -992,7 +993,7 @@ void Deko3dRenderer::warmFontAtlas(NVGcontext* vg)
         return;
 
     static const char* charset =
-        "0123456789.,:/%+-x ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        "0123456789.,:/%+-x ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz·×›";
 
     nvgFontFaceId(vg, m_overlay_font);
     nvgFillColor(vg, nvgRGBA(0, 0, 0, 0));
@@ -1030,6 +1031,44 @@ void Deko3dRenderer::rebuildOverlayText()
     m_ov.out_res = std::format("{}x{}", m_stats.video_width, m_stats.video_height);
     m_ov.out_codec = m_stats.is_hevc ? "HEVC" : "H.264";
     m_ov.out_path = m_stats.is_hardware_decoder ? "NVTEGRA" : "SW";
+
+    m_ov.fsr_active = m_fsr_enabled;
+    m_ov.fsr_path.clear();
+    m_ov.fsr_detail.clear();
+    m_ov.fsr_compact.clear();
+    if (m_ov.fsr_active)
+    {
+        if (m_easu_enabled)
+        {
+            m_ov.fsr_path = std::format("{}›{}›{}",
+                m_frame_height, m_fsr_target_height, m_display_height);
+            const float scale = m_frame_height > 0
+                ? static_cast<float>(m_fsr_target_height) / static_cast<float>(m_frame_height)
+                : 1.0f;
+            m_ov.fsr_detail = "EASU";
+            m_ov.fsr_compact = std::format("{:.2f}× {}", scale,
+                m_fsr_supersampling ? "SS" : "EASU");
+        }
+        else
+        {
+            m_ov.fsr_path = std::format("{}›{}", m_frame_height, m_display_height);
+            m_ov.fsr_compact = "RCAS";
+        }
+
+        if (m_rcas_enabled)
+        {
+            const int strength = std::clamp(static_cast<int>(std::lround(
+                (1.0f - m_fsr_sharpness / 2.0f) * 100.0f)), 0, 100);
+            const std::string rcas = std::format("RCAS {}%", strength);
+            if (!m_ov.fsr_detail.empty())
+                m_ov.fsr_detail += " · ";
+            m_ov.fsr_detail += rcas;
+            if (m_easu_enabled)
+                m_ov.fsr_compact += std::format(" · {}", rcas);
+            else
+                m_ov.fsr_compact = rcas;
+        }
+    }
 
     m_ov.lost = std::format("{}", m_stats.network_frames_lost);
     m_ov.recovered = std::format("{}", m_stats.frames_recovered);
@@ -1248,6 +1287,32 @@ void Deko3dRenderer::drawStatRow(NVGcontext* vg, float x, float y, float w,
     nvgText(vg, right, y, value.c_str(), nullptr);
 }
 
+void Deko3dRenderer::drawFsrRow(NVGcontext* vg, float x, float y, float w)
+{
+    float s = m_overlay_scale;
+    const auto& p = akira::ui::active();
+
+    nvgFontSize(vg, ovlSize(11.5f * s));
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, ovl(p.text, 117));
+    nvgText(vg, x, y - 4.0f * s, "FSR", nullptr);
+
+    const float dotX = x + 30.0f * s;
+    nvgBeginPath(vg);
+    nvgCircle(vg, dotX, y - 4.0f * s, 2.5f * s);
+    nvgFillColor(vg, p.success);
+    nvgFill(vg);
+
+    nvgFontSize(vg, ovlSize(10.5f * s));
+    nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, p.accent);
+    nvgText(vg, x + w, y - 4.0f * s, m_ov.fsr_path.c_str(), nullptr);
+
+    nvgFontSize(vg, ovlSize(8.0f * s));
+    nvgFillColor(vg, ovl(p.text, 100));
+    nvgText(vg, x + w, y + 6.0f * s, m_ov.fsr_detail.c_str(), nullptr);
+}
+
 void Deko3dRenderer::drawCompactCell(NVGcontext* vg, float& cursorX, float centerY,
                                      const char* label, const std::string& value,
                                      const char* unit, Tone tone, bool first)
@@ -1288,6 +1353,28 @@ void Deko3dRenderer::drawCompactCell(NVGcontext* vg, float& cursorX, float cente
     }
 
     cursorX += pad;
+}
+
+void Deko3dRenderer::drawCompactFsrLine(NVGcontext* vg, float x, float centerY)
+{
+    float s = m_overlay_scale;
+    const auto& p = akira::ui::active();
+
+    nvgBeginPath(vg);
+    nvgCircle(vg, x + 2.5f * s, centerY, 2.5f * s);
+    nvgFillColor(vg, p.success);
+    nvgFill(vg);
+    x += 9.0f * s;
+
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFontSize(vg, ovlSize(10.0f * s));
+    nvgFillColor(vg, p.accent);
+    nvgText(vg, x, centerY, "FSR", nullptr);
+    x += nvgTextBounds(vg, 0, 0, "FSR", nullptr, nullptr) + 7.0f * s;
+
+    nvgFontSize(vg, ovlSize(10.5f * s));
+    nvgFillColor(vg, ovl(p.text, 160));
+    nvgText(vg, x, centerY, m_ov.fsr_compact.c_str(), nullptr);
 }
 
 void Deko3dRenderer::overlayOrigin(float w, float h, float& ox, float& oy)
@@ -1391,7 +1478,7 @@ void Deko3dRenderer::drawCompactOverlay(NVGcontext* vg)
 {
     float s = m_overlay_scale;
     float margin = 24.0f * s;
-    float height = 36.0f * s;
+    float height = (m_ov.fsr_active ? 58.0f : 36.0f) * s;
 
     Tone overall = Tone::Good;
     for (Tone t : { toneFps(), toneRate(), toneLoss(), toneRtt(), toneLost(), toneLatency() })
@@ -1412,7 +1499,7 @@ void Deko3dRenderer::drawCompactOverlay(NVGcontext* vg)
 
     drawOverlayPanel(vg, ox, oy, width, height);
 
-    float centerY = oy + height * 0.5f;
+    float centerY = oy + 18.0f * s;
     float dotX = ox + 14.0f * s + 3.5f * s;
     nvgBeginPath(vg);
     nvgCircle(vg, dotX, centerY, 3.5f * s);
@@ -1426,6 +1513,17 @@ void Deko3dRenderer::drawCompactOverlay(NVGcontext* vg)
     drawCompactCell(vg, cursorX, centerY, "RTT", m_ov.rtt, "ms", toneRtt(), false);
     drawCompactCell(vg, cursorX, centerY, "LAT", m_ov.lat_total, "ms", toneLatency(), false);
     drawCompactCell(vg, cursorX, centerY, "UP", m_ov.uptime, nullptr, Tone::Good, false);
+    if (m_ov.fsr_active)
+    {
+        const float dividerY = oy + 36.0f * s;
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, ox + 14.0f * s, dividerY);
+        nvgLineTo(vg, ox + width - 14.0f * s, dividerY);
+        nvgStrokeWidth(vg, 1.0f);
+        nvgStrokeColor(vg, ovl(akira::ui::active().text, 26));
+        nvgStroke(vg);
+        drawCompactFsrLine(vg, ox + 14.0f * s, oy + 47.0f * s);
+    }
 }
 
 void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
@@ -1437,7 +1535,8 @@ void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
     float rowH = 20.0f * s;
     float footH = 28.0f * s;
     float latH = 48.0f * s;
-    float height = headH + 22.0f * s + rowH * 4.0f + 10.0f * s + latH + footH;
+    const int rowCount = m_ov.fsr_active ? 5 : 4;
+    float height = headH + 22.0f * s + rowH * rowCount + 10.0f * s + latH + footH;
 
     float ox, oy;
     overlayOrigin(width, height, ox, oy);
@@ -1468,7 +1567,7 @@ void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
     nvgStroke(vg);
 
     float colW = (width - padX * 2.0f - 28.0f * s) / 3.0f;
-    const char* headers[3] = { "REQUESTED", "DECODE", "LINK" };
+    const char* headers[3] = { "REQUESTED", "OUTPUT", "LINK" };
 
     for (int c = 0; c < 3; c++)
     {
@@ -1478,7 +1577,7 @@ void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
         {
             nvgBeginPath(vg);
             nvgMoveTo(vg, cx - 7.0f * s, colTop - 14.0f * s);
-            nvgLineTo(vg, cx - 7.0f * s, colTop + rowH * 4.0f - 4.0f * s);
+            nvgLineTo(vg, cx - 7.0f * s, colTop + rowH * rowCount - 4.0f * s);
             nvgStrokeWidth(vg, 1.0f);
             nvgStrokeColor(vg, ovl(akira::ui::active().text, 26));
             nvgStroke(vg);
@@ -1489,7 +1588,7 @@ void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
         nvgFillColor(vg, ovl(akira::ui::active().text, 87));
         nvgText(vg, cx, colTop - 14.0f * s, headers[c], nullptr);
 
-        for (int r = 0; r < 4; r++)
+        for (int r = 0; r < rowCount; r++)
         {
             float ry = colTop + rowH * r + rowH * 0.5f;
             if (c == 0)
@@ -1502,9 +1601,11 @@ void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
             else if (c == 1)
             {
                 if (r == 0) drawStatRow(vg, cx, ry, colW, "Res", m_ov.out_res, nullptr, Tone::Good);
-                if (r == 1) drawStatRow(vg, cx, ry, colW, "FPS", m_ov.fps, nullptr, toneFps());
-                if (r == 2) drawStatRow(vg, cx, ry, colW, "Path", m_ov.out_path, nullptr, Tone::Good);
-                if (r == 3) drawStatRow(vg, cx, ry, colW, "Codec", m_ov.out_codec, nullptr, Tone::Good);
+                const int offset = m_ov.fsr_active ? 1 : 0;
+                if (m_ov.fsr_active && r == 1) drawFsrRow(vg, cx, ry, colW);
+                if (r == 1 + offset) drawStatRow(vg, cx, ry, colW, "FPS", m_ov.fps, nullptr, toneFps());
+                if (r == 2 + offset) drawStatRow(vg, cx, ry, colW, "Path", m_ov.out_path, nullptr, Tone::Good);
+                if (r == 3 + offset) drawStatRow(vg, cx, ry, colW, "Codec", m_ov.out_codec, nullptr, Tone::Good);
             }
             else
             {
@@ -1516,7 +1617,7 @@ void Deko3dRenderer::drawFullOverlay(NVGcontext* vg)
         }
     }
 
-    float latY = colTop + rowH * 4.0f + 10.0f * s;
+    float latY = colTop + rowH * rowCount + 10.0f * s;
     nvgBeginPath(vg);
     nvgMoveTo(vg, ox, latY);
     nvgLineTo(vg, ox + width, latY);
