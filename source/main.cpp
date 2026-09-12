@@ -111,11 +111,6 @@ void initCustomTheme()
 
 static void chiaki_to_brls_log(ChiakiLogLevel level, const char* msg, void* user)
 {
-    auto* settings = SettingsManager::getInstance();
-    const bool quiet = settings->isStreamingActive() && !settings->getDebugChiakiLog();
-    if (quiet && level != CHIAKI_LOG_ERROR && level != CHIAKI_LOG_WARNING)
-        return;
-
     switch (level)
     {
         case CHIAKI_LOG_ERROR:
@@ -128,8 +123,10 @@ static void chiaki_to_brls_log(ChiakiLogLevel level, const char* msg, void* user
             brls::Logger::info("{}", msg);
             break;
         case CHIAKI_LOG_DEBUG:
+            brls::Logger::debug("{}", msg);
+            break;
         case CHIAKI_LOG_VERBOSE:
-            brls::Logger::info("{}", msg);
+            brls::Logger::verbose("{}", msg);
             break;
     }
 }
@@ -449,6 +446,8 @@ public:
 int main(int argc, char* argv[])
 {
     brls::Logger::setLogLevel(brls::LogLevel::LOG_INFO);
+    auto* settings = SettingsManager::getInstance();
+    settings->applyChiakiLogVerbosity();
 
     akira::UpdateManager::setSelfPath(argc > 0 && argv[0] ? argv[0] : "");
 
@@ -466,7 +465,7 @@ int main(int argc, char* argv[])
 
     av_log_set_callback(ffmpeg_log_callback);
 
-    std::string overrideLocale = SettingsManager::getInstance()->getDebugLocale();
+    std::string overrideLocale = settings->getDebugLocale();
     if (!overrideLocale.empty()) {
         brls::Platform::APP_LOCALE_DEFAULT = overrideLocale;
     } else {
@@ -511,12 +510,8 @@ int main(int argc, char* argv[])
     }
 
     static ChiakiLog chiakiLog;
-#ifdef MUTE_CHIAKI_LOGS
     chiaki_log_init(&chiakiLog, 0, chiaki_to_brls_log, nullptr);
-#else
-    chiaki_log_init(&chiakiLog, CHIAKI_LOG_ALL, chiaki_to_brls_log, nullptr);
-#endif
-    SettingsManager::getInstance()->setLogger(&chiakiLog);
+    settings->setLogger(&chiakiLog);
     Session::GetInstance()->SetLogger(&chiakiLog);
     cloud::registerHttpBridge();
 

@@ -36,6 +36,13 @@ enum class GyroSource {
     Right = 2
 };
 
+enum class ChiakiLogVerbosity {
+    Normal = 0,
+    Info = 1,
+    Debug = 2,
+    Trace = 3
+};
+
 using ButtonMapping = std::map<uint32_t, std::vector<uint64_t>>;
 
 class SettingsManager {
@@ -170,7 +177,7 @@ private:
     bool debugLwipLog = false;
     bool debugWireguardLog = false;
     bool debugRenderLog = false;
-    bool debugChiakiLog = false;
+    ChiakiLogVerbosity chiakiLogVerbosity = ChiakiLogVerbosity::Normal;
     bool debugDiscoveryLog = false;
     bool debugFfmpegLog = false;
 
@@ -194,6 +201,7 @@ private:
     void parseLegacyFile();
     static size_t getB64EncodeSize(size_t inputSize);
     static bool fileExists(const char* path);
+    void updateChiakiLogMask();
 
 public:
     SettingsManager(const SettingsManager&) = delete;
@@ -494,8 +502,10 @@ public:
     void setDebugWireguardLog(bool enabled);
     bool getDebugRenderLog() const;
     void setDebugRenderLog(bool enabled);
+    ChiakiLogVerbosity getChiakiLogVerbosity() const;
+    void setChiakiLogVerbosity(ChiakiLogVerbosity verbosity);
+    void applyChiakiLogVerbosity();
     bool getDebugChiakiLog() const;
-    void setDebugChiakiLog(bool enabled);
     bool getDebugDiscoveryLog() const;
     void setDebugDiscoveryLog(bool enabled);
     bool getDebugFfmpegLog() const;

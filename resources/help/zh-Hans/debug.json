@@ -1,7 +1,7 @@
 {
   "settings/enableFileLogging": {
     "title": "文件日志",
-    "body": "将日志写入 SD 卡上的 /switch/akira/logs。必须启用此项，才能保留下方各子系统的日志。",
+    "body": "将日志写入 SD 卡上的 /switch/akira/logs。关闭后仍会保留日志详细程度设置。",
     "image": ""
   },
   "settings/debugLwipLog": {
@@ -20,8 +20,8 @@
     "image": ""
   },
   "settings/debugChiakiLog": {
-    "title": "chiaki 日志",
-    "body": "串流时在日志中包含远程游玩核心库的详细信息。",
+    "title": "Chiaki 日志详细程度",
+    "body": "普通模式记录连接信息，游玩期间仅记录警告和错误；信息模式保留常规消息；调试模式增加诊断信息；跟踪模式还包含输出量很大的数据包详情。",
     "image": ""
   },
   "settings/debugDiscoveryLog": {

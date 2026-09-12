@@ -2,6 +2,8 @@
 #include "views/discovery_log_view.hpp"
 
 #include <borealis/core/i18n.hpp>
+#include <string>
+#include <vector>
 
 using namespace brls::literals;
 
@@ -14,7 +16,7 @@ SettingsDebugView::SettingsDebugView() {
     initDebugLwipLogToggle();
     initDebugWireguardLogToggle();
     initDebugRenderLogToggle();
-    initDebugChiakiLogToggle();
+    initChiakiLogLevelSelector();
     initDebugDiscoveryLogToggle();
     initDebugFfmpegLogToggle();
 
@@ -32,20 +34,6 @@ void SettingsDebugView::initEnableFileLoggingToggle() {
         currentValue,
         [this](bool isOn) {
             settings->setEnableFileLogging(isOn);
-            if (!isOn) {
-                settings->setDebugLwipLog(false);
-                settings->setDebugWireguardLog(false);
-                settings->setDebugRenderLog(false);
-                settings->setDebugChiakiLog(false);
-                settings->setDebugDiscoveryLog(false);
-                settings->setDebugFfmpegLog(false);
-                debugLwipLogToggle->setOn(false, false);
-                debugWireguardLogToggle->setOn(false, false);
-                debugRenderLogToggle->setOn(false, false);
-                debugChiakiLogToggle->setOn(false, false);
-                debugDiscoveryLogToggle->setOn(false, false);
-                debugFfmpegLogToggle->setOn(false, false);
-            }
             settings->writeFile();
         }
     );
@@ -90,17 +78,27 @@ void SettingsDebugView::initDebugRenderLogToggle() {
     );
 }
 
-void SettingsDebugView::initDebugChiakiLogToggle() {
-    bool currentValue = settings->getDebugChiakiLog();
+void SettingsDebugView::initChiakiLogLevelSelector() {
+    const std::vector<std::string> options = {
+        "akira/settings/chiaki_log_normal"_i18n,
+        "akira/settings/chiaki_log_info"_i18n,
+        "akira/settings/chiaki_log_debug"_i18n,
+        "akira/settings/chiaki_log_trace"_i18n,
+    };
+    const int current = static_cast<int>(settings->getChiakiLogVerbosity());
 
-    debugChiakiLogToggle->init(
+    chiakiLogLevelSelector->init(
         "akira/settings/chiaki_log"_i18n,
-        currentValue,
-        [this](bool isOn) {
-            settings->setDebugChiakiLog(isOn);
+        options,
+        current,
+        [](int) {},
+        [this](int selected) {
+            if (selected < static_cast<int>(ChiakiLogVerbosity::Normal) ||
+                selected > static_cast<int>(ChiakiLogVerbosity::Trace))
+                selected = static_cast<int>(ChiakiLogVerbosity::Normal);
+            settings->setChiakiLogVerbosity(static_cast<ChiakiLogVerbosity>(selected));
             settings->writeFile();
-        }
-    );
+        });
 }
 
 void SettingsDebugView::initDebugDiscoveryLogToggle() {
