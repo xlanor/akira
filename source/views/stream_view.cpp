@@ -741,6 +741,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
     brls::Logger::info("Session quit: reason={}", static_cast<int>(event->reason));
 
     streamActive = false;
+    const bool ps4NicknameMismatch = host->takeTransientPs4NicknameMismatch();
 
 
     std::string reasonStr;
@@ -797,7 +798,7 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
 
     uint32_t gen = sessionGeneration;
     auto weak = weak_from_this();
-    brls::sync([weak, reasonStr, reason, gen]() {
+    brls::sync([weak, reasonStr, reason, gen, ps4NicknameMismatch]() {
         auto self = weak.lock();
         if (!self) {
             brls::Logger::info("onQuit: StreamView already destroyed, skipping");
@@ -841,7 +842,17 @@ void StreamView::onQuit(ChiakiQuitEvent* event)
         // Release early to invalidate weak_ptrs before popActivity
         SharedViewHolder::release(self.get());
 
-        if (reason == CHIAKI_QUIT_REASON_STOPPED) {
+        if (ps4NicknameMismatch) {
+            auto* dialog = new brls::Dialog("akira/stream/ps4_console_unregistered"_i18n);
+            dialog->setCloseCallback([]() {
+                akira::views::stream_nav::unwindToBase();
+            });
+            dialog->addButton("OK", []() {
+                akira::views::stream_nav::unwindToBase();
+            });
+            brls::Application::forceUnblockInputs();
+            dialog->open();
+        } else if (reason == CHIAKI_QUIT_REASON_STOPPED) {
             brls::Application::notify(reasonStr);
             akira::views::stream_nav::unwindToBase();
         } else {

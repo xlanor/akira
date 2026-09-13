@@ -218,6 +218,10 @@ public:
         if (host->isRemote() && host->needsLink()) {
             pillText = "akira/hosts/link"_i18n;
             fg = akira::ui::active().accent;
+        } else if (host->usesTransientPsnRegistration()) {
+            pillText = "akira/hosts/ready"_i18n;
+            fg = akira::ui::active().success;
+            dim = false;
         } else if (!host->hasRpKey() && (host->isDiscovered() || host->canAutoRegister())) {
             pillText = "akira/hosts/register"_i18n;
             fg = akira::ui::active().accent;
@@ -254,6 +258,7 @@ public:
 
     void doPrimaryAction() {
         if (host->isRemote() && host->needsLink()) doLink();
+        else if (host->usesTransientPsnRegistration()) doConnect();
         else if (!host->hasRpKey() && (host->isDiscovered() || host->canAutoRegister())) doRegister();
         else if (host->isStandby() && host->hasRpKey() && !host->isRemote()) doWake();
         else if (host->hasRpKey()) doConnect();

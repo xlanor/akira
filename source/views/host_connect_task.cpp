@@ -125,21 +125,26 @@ void HostConnectTask::run()
         return;
     }
 
-    brls::Logger::info("CTRL holepunch successful! Waiting for PS5 to be ready...");
+    brls::Logger::info("CTRL holepunch successful!");
 
-    /*
-     * A PS5 coming out of rest shows "press PS button" and cannot accept the
-     * DATA holepunch channel yet. Without this wait that channel times out
-     * after about fifteen seconds and the session never establishes.
-     */
-    for (int i = WAKEUP_WAIT_SECONDS; i > 0; i--) {
-        if (!running.load() || sink->cancelled())
-            return;
-        brls::Logger::info("PS5 waking up... {} seconds remaining", i);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    if (host->isPS5()) {
+        /*
+         * A PS5 coming out of rest shows "press PS button" and cannot accept the
+         * DATA holepunch channel yet. Without this wait that channel times out
+         * after about fifteen seconds and the session never establishes. The PS4
+         * wake-up path has already waited for the console to join and must proceed
+         * directly to the DATA channel.
+         */
+        brls::Logger::info("Waiting for PS5 to be ready...");
+        for (int i = WAKEUP_WAIT_SECONDS; i > 0; i--) {
+            if (!running.load() || sink->cancelled())
+                return;
+            brls::Logger::info("PS5 waking up... {} seconds remaining", i);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
     }
 
-    brls::Logger::info("Wait complete, transitioning to StreamView...");
+    brls::Logger::info("Transitioning to StreamView...");
 
     running.store(false);
     sink->succeeded(host, {});

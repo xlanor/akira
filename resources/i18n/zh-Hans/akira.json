@@ -362,6 +362,7 @@
     "quit_remote_disconnected": "远程已断开",
     "quit_remote_shutdown": "远程已关机",
     "quit_psn_regist_failed": "PSN 注册失败",
+    "ps4_console_unregistered": "PS4 主机未注册\n\n无法继续。请先使用此账号在本地注册您的主 PS4。",
     "quit_unknown": "未知错误（代码：{}）"
   },
   "stream_menu": {

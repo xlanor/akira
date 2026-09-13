@@ -370,6 +370,7 @@
     "quit_remote_disconnected": "Remote disconnected",
     "quit_remote_shutdown": "Remote shutdown",
     "quit_psn_regist_failed": "PSN registration failed",
+    "ps4_console_unregistered": "PS4 Console Unregistered\n\nCan't proceed. Register your main PS4 locally with this profile first.",
     "quit_unknown": "Unknown error (code: {})"
   },
   "stream_menu": {

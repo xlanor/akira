@@ -133,6 +133,8 @@ private:
     std::array<std::string, CHIAKI_COUCH_MAX_PADS> couchAccountLabels;
     std::array<int64_t, CHIAKI_COUCH_MAX_PADS> couchProfileIds = {};
     std::map<uint32_t, int8_t> fingerIdTouchId;
+    std::vector<std::string> transientPs4Nicknames;
+    std::atomic<bool> transientPs4NicknameMismatch{false};
 
     std::atomic<bool> feedbackLoopRunning{false};
     std::thread feedbackThread;
@@ -219,6 +221,8 @@ public:
     void setPsnRemotePlayDisabled(bool v) { psnRemotePlayDisabled = v; }
     bool isCloud() const { return cloudSession.has_value(); }
     bool isRemote() const { return hostType == HostType::Remote; }
+    bool usesTransientPsnRegistration() const { return isRemote() && !isPS5(); }
+    bool takeTransientPs4NicknameMismatch() { return transientPs4NicknameMismatch.exchange(false); }
     bool isManual() const { return hostType == HostType::Manual; }
     bool isAuto() const { return hostType == HostType::Auto; }
     HostType getHostType() const { return hostType; }

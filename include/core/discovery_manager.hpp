@@ -62,6 +62,7 @@ private:
 
     void fetchRemoteDevicesFromPsn();
     void processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType);
+    void processMainPs4Remote();
 
     static constexpr int PSN_REMOTE_COOLDOWN_S = 15;
     static constexpr int PSN_FAILED_COOLDOWN_S = 5;

@@ -507,6 +507,34 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
 {
     bool cloud = isCloud();
     bool pscloud = cloud && cloudSession->serviceType == CHIAKI_SERVICE_TYPE_PSCLOUD;
+
+    transientPs4Nicknames.clear();
+    transientPs4NicknameMismatch.store(false);
+    if (holepunch && usesTransientPsnRegistration())
+    {
+        auto* hostsMap = settings->getHostsMap();
+        if (hostsMap)
+        {
+            for (const auto& entry : *hostsMap)
+            {
+                const auto& candidate = entry.second;
+                if (!candidate || candidate.get() == this || candidate->isRemote() ||
+                    candidate->isCloud() || candidate->isPS5() || !candidate->hasRpKey())
+                    continue;
+
+                // New registrations persist the server nickname. Host name is
+                // the compatibility fallback for older configs, where local
+                // discovery supplied that same nickname.
+                transientPs4Nicknames.push_back(candidate->serverNickname.empty()
+                    ? candidate->hostName
+                    : candidate->serverNickname);
+            }
+        }
+
+        if (transientPs4Nicknames.empty())
+            throw Exception("Register your main PS4 locally before using PSN Remote Play");
+    }
+
     ChiakiVideoResolutionPreset resolution;
     ChiakiVideoFPSPreset fps;
     if (cloud) {
@@ -678,7 +706,7 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
         connectInfo.cloud_mtu_out = cloudSession->mtuOut;
         connectInfo.cloud_rtt_us = cloudSession->rttUs;
     }
-    else
+    else if (!holepunch)
     {
         const Registration* reg = activeRegistration();
         if (!reg)
@@ -1159,6 +1187,30 @@ void Host::connectionEventCallback(ChiakiEvent* event)
                 onLoginPinRequest(event->login_pin_request.pin_incorrect);
             }
             break;
+
+        case CHIAKI_EVENT_NICKNAME_RECEIVED:
+        {
+            if (!usesTransientPsnRegistration())
+                break;
+
+            const std::string nickname(event->server_nickname,
+                strnlen(event->server_nickname, sizeof(event->server_nickname)));
+            const bool registered = std::ranges::find(transientPs4Nicknames, nickname)
+                != transientPs4Nicknames.end();
+            if (!registered)
+            {
+                brls::Logger::error(
+                    "PSN selected PS4 '{}' but it is not registered locally for the active profile",
+                    nickname);
+                transientPs4NicknameMismatch.store(true);
+                stopSession();
+            }
+            else
+            {
+                brls::Logger::info("Transient PS4 registration matched locally registered console '{}'", nickname);
+            }
+            break;
+        }
 
         case CHIAKI_EVENT_RUMBLE:
             if (SettingsManager::getInstance()->getDebugChiakiLog())

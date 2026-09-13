@@ -752,6 +752,7 @@ void SettingsManager::parseTomlFile() {
                 Host* host = getOrCreateHost(nickname);
                 host->inConfig = true;
                 host->hostName = nickname;
+                host->serverNickname = (*ct)["server_nickname"].value<std::string>().value_or("");
                 host->consoleId = (*ct)["console_id"].value<int64_t>().value_or(host->consoleId);
                 if (host->consoleId >= nextConsoleId)
                     nextConsoleId = host->consoleId + 1;
@@ -1249,6 +1250,7 @@ int SettingsManager::writeFile() {
             toml::table ct;
             ct.insert("console_id", host->consoleId);
             ct.insert("nickname", name);
+            if (!host->serverNickname.empty()) ct.insert("server_nickname", host->serverNickname);
             ct.insert("host_addr", host->getHostAddr());
             ct.insert("target", static_cast<int>(host->getChiakiTarget()));
             ct.insert("host_type", std::to_underlying(host->hostType));

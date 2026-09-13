@@ -691,29 +691,78 @@ void DiscoveryManager::fetchRemoteDevicesFromPsn()
         brls::Logger::error("Failed to list PS5 devices: {}", chiaki_error_string(ps5Err));
     }
 
-    ChiakiHolepunchDeviceInfo* ps4Devices = nullptr;
-    size_t ps4Count = 0;
-    ChiakiErrorCode ps4Err = chiaki_holepunch_list_devices(
-        accessToken.c_str(),
-        CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4,
-        &ps4Devices,
-        &ps4Count,
-        log
-    );
+    /*
+     * Sony does not expose PS4s through the device-list endpoint. PS4 PSN
+     * remote play always targets the account's main PS4, and the holepunch
+     * library resolves its real DUID after the console joins the session.
+     * Mirror chiaki-ng's desktop frontend by offering one synthetic remote
+     * host whenever this profile has a locally registered PS4.
+     */
+    processMainPs4Remote();
+}
 
-    if (ps4Err == CHIAKI_ERR_SUCCESS)
-    {
-        brls::Logger::info("Found {} PS4 remote device(s)", ps4Count);
-        for (size_t i = 0; i < ps4Count; i++)
+void DiscoveryManager::processMainPs4Remote()
+{
+    brls::sync([this]() {
+        auto* hostsMap = settings->getHostsMap();
+        if (!hostsMap)
+            return;
+
+        std::vector<Host*> registeredPs4s;
+        for (auto& entry : *hostsMap)
         {
-            processRemoteDevice(&ps4Devices[i], CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4);
+            Host* host = entry.second.get();
+            if (host && !host->isRemote() && !host->isCloud() &&
+                !host->isPS5() && host->hasRpKey())
+            {
+                registeredPs4s.push_back(host);
+            }
         }
-        chiaki_holepunch_free_device_list(&ps4Devices);
-    }
-    else
-    {
-        brls::Logger::error("Failed to list PS4 devices: {}", chiaki_error_string(ps4Err));
-    }
+
+        static const std::string mainPs4Name = "Main PS4 Console";
+        static const std::string mainPs4RemoteName = mainPs4Name + " (Remote)";
+        // chiaki-ng uses 32 ASCII 'A' bytes as a placeholder. The PS4 path
+        // ignores this value and learns the console's real DUID from PSN.
+        static const std::string placeholderDuid =
+            "4141414141414141414141414141414141414141414141414141414141414141";
+
+        auto existing = hostsMap->find(mainPs4RemoteName);
+        if (registeredPs4s.empty())
+        {
+            if (existing != hostsMap->end())
+            {
+                Host* remote = existing->second.get();
+                remote->discovered = false;
+                remote->setNeedsLink(false);
+                // Remove keys written by older Akira builds. The PS4 PSN flow
+                // obtains fresh session-only keys from chiaki-ng instead.
+                remote->registrations.clear();
+                settings->writeFile();
+                if (onHostsChanged)
+                    onHostsChanged();
+            }
+
+            brls::Logger::info("No registered PS4 for the active profile; hiding main PS4 remote host");
+            return;
+        }
+
+        Host* remote = settings->getOrCreateHost(mainPs4RemoteName);
+        remote->setHostType(HostType::Remote);
+        remote->setChiakiTarget(CHIAKI_TARGET_PS4_10);
+        remote->setRemoteDuid(placeholderDuid);
+        remote->setPsnRemotePlayDisabled(false);
+        remote->discovered = true;
+        remote->state = CHIAKI_DISCOVERY_HOST_STATE_UNKNOWN;
+        remote->setNeedsLink(false);
+        // PS4-over-PSN always transiently registers during session startup.
+        // Never copy or persist a local console's Remote Play keys here.
+        remote->registrations.clear();
+
+        settings->writeFile();
+
+        if (onHostDiscovered)
+            onHostDiscovered(remote);
+    });
 }
 
 void DiscoveryManager::processRemoteDevice(ChiakiHolepunchDeviceInfo* device, ChiakiHolepunchConsoleType consoleType)
