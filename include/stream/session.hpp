@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <string>
 
 #include <chiaki/session.h>
 #include <chiaki/controller.h>
@@ -109,6 +110,7 @@ public:
     StatsOverlayMode getStatsOverlayMode() const { return m_stats_overlay_mode; }
     void setStatsOverlayMode(StatsOverlayMode mode) { m_stats_overlay_mode = mode; }
     void setVideoPaused(bool paused);
+    void setConnectionContext(const std::string& context);
     void triggerBorderFlash();
     void setRequestedProfile(int width, int height, int fps, int bitrate, bool hevc);
 

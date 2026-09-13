@@ -17,6 +17,37 @@ using namespace brls::literals;
 
 namespace akira::views {
 
+namespace {
+
+void replaceAll(std::string& text, const std::string& needle, const std::string& replacement)
+{
+    if (needle.empty() || needle == replacement)
+        return;
+    size_t position = 0;
+    while ((position = text.find(needle, position)) != std::string::npos)
+    {
+        text.replace(position, needle.size(), replacement);
+        position += replacement.size();
+    }
+}
+
+std::string privacySafeConnectionLine(const std::string& line)
+{
+    SettingsManager* settings = SettingsManager::getInstance();
+    if (!settings->getHideAccountName())
+        return line;
+
+    std::string safe = line;
+    for (const Profile& profile : settings->getProfiles())
+    {
+        replaceAll(safe, profile.onlineId, settings->maskAccountName(profile.onlineId));
+        replaceAll(safe, profile.accountId, settings->maskAccountName(profile.accountId));
+    }
+    return safe;
+}
+
+} // namespace
+
 ConnectingView::ConnectingView(std::unique_ptr<ConnectTask> task)
     : task(std::move(task))
 {
@@ -111,6 +142,7 @@ void ConnectingView::cancelFromUser()
 
 void ConnectingView::addLogLine(const std::string& line)
 {
+    const std::string safeLine = privacySafeConnectionLine(line);
     {
         std::lock_guard<std::mutex> lock(logMutex);
 
@@ -122,7 +154,7 @@ void ConnectingView::addLogLine(const std::string& line)
 
         logLines.push_back(std::format("{:02}:{:02}:{:02}.{:03} {}",
                                        time_tm.tm_hour, time_tm.tm_min, time_tm.tm_sec,
-                                       static_cast<int>(ms), line));
+                                       static_cast<int>(ms), safeLine));
 
         while (logLines.size() > MAX_LOG_LINES)
             logLines.pop_front();
@@ -137,7 +169,7 @@ void ConnectingView::addLogLine(const std::string& line)
         return;
 
     currentStage.store(static_cast<int>(
-        matchConnectionStage(line, static_cast<ConnectionStage>(currentStage.load()))));
+        matchConnectionStage(safeLine, static_cast<ConnectionStage>(currentStage.load()))));
 }
 
 void ConnectingView::switchToConnectionLog()

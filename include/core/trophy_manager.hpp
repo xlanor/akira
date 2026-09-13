@@ -35,6 +35,8 @@ public:
 
     void fetchSummary(bool forceRefresh, Callback<psn::TrophySummary> onSuccess, ErrorCallback onError);
     void fetchProfile(bool forceRefresh, Callback<psn::PsnProfile> onSuccess, ErrorCallback onError);
+    void fetchProfileForAccount(const std::string& accountId,
+        Callback<psn::PsnProfile> onSuccess, ErrorCallback onError);
     void fetchLibrary(bool forceRefresh, Callback<std::vector<psn::TrophyTitle>> onSuccess, ErrorCallback onError);
 
     void fetchTitleDetail(const psn::TrophyTitle& title, bool forceRefresh,

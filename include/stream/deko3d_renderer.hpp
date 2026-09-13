@@ -56,6 +56,7 @@ public:
     void setStreamStats(const StreamStats& stats) override { m_stats = stats; }
     float getRenderFPS() const override { return m_render_fps; }
     void setPaused(bool paused) { m_paused.store(paused, std::memory_order_relaxed); }
+    void setConnectionContext(const std::string& context) override;
     void updateResolution(int width, int height) { m_frame_width = width; m_frame_height = height; }
 
     void triggerBorderFlash() {
@@ -92,6 +93,7 @@ private:
     };
 
     OverlayText m_ov;
+    std::string m_connection_context;
     std::chrono::steady_clock::time_point m_ov_last_rebuild{};
     int m_overlay_font = -1;
     float m_overlay_scale = 1.0f;

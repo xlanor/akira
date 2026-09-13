@@ -41,6 +41,10 @@ private:
     void populateRoster();
     void populatePicker();
     void populateProfilePicker();
+    void loadProfileAvatar(int64_t profileId, const std::string& accountId,
+        const std::string& avatarUrl, brls::Image* image);
+    void loadProfileAvatarUrl(int64_t profileId, const std::string& avatarUrl,
+        brls::Image* image);
     void refreshStates();
     std::string structureSignature() const;
     const char* deviceLabelFor(HidNpadIdType npad) const;
@@ -48,7 +52,9 @@ private:
 
     Host*          m_host    = nullptr;
     InputManager*  m_input   = nullptr;
+    brls::Box*     m_panel   = nullptr;
     brls::Box*     m_slots   = nullptr;
+    brls::Label*   m_title   = nullptr;
     brls::Label*   m_count   = nullptr;
     brls::Label*   m_sub     = nullptr;
     brls::Label*   m_foot    = nullptr;
@@ -68,6 +74,8 @@ private:
         brls::View*  action = nullptr;
     };
     std::vector<SlotRow> m_rows;
+    std::vector<brls::Box*> m_profileTiles;
+    std::vector<brls::Image*> m_profileAvatars;
     brls::Label*   m_claimMeta = nullptr;
     brls::View*    m_addAction = nullptr;
     int            m_focusSlot = -1;

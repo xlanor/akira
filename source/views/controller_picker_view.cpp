@@ -6,6 +6,7 @@
 #include "views/battery_pips.hpp"
 #include "input/pad_art.hpp"
 
+#include "ui/glass.hpp"
 #include "ui/theme.hpp"
 
 #include <borealis/core/i18n.hpp>
@@ -27,15 +28,41 @@ bool Differ(const PadDescription& a, const PadDescription& b)
     return false;
 }
 
-std::vector<std::string> CapabilityLines(const PadDescription& d)
+std::vector<std::string> CapabilityLabels(const PadDescription& d)
 {
     std::vector<std::string> out;
 
-    if (d.caps.analog_triggers) out.emplace_back("analog triggers");
-    if (d.caps.touchpad)        out.emplace_back("touchpad");
-    if (out.empty())            out.emplace_back("digital triggers");
+    if (d.caps.touchpad)        out.emplace_back("Touchpad");
+    if (d.caps.analog_triggers) out.emplace_back("Triggers");
+    if (d.caps.gyro)            out.emplace_back("Motion");
+    if (out.empty())            out.emplace_back("Digital input");
 
     return out;
+}
+
+brls::Box* MakeCapabilityChip(const std::string& text)
+{
+    const auto& p = akira::ui::active();
+    auto* chip = new brls::Box();
+    chip->setAxis(brls::Axis::ROW);
+    chip->setJustifyContent(brls::JustifyContent::CENTER);
+    chip->setAlignItems(brls::AlignItems::CENTER);
+    chip->setHeight(27);
+    chip->setPaddingLeft(10);
+    chip->setPaddingRight(10);
+    chip->setMarginLeft(4);
+    chip->setMarginRight(4);
+    chip->setCornerRadius(13.5f);
+    chip->setBackgroundColor(akira::ui::withAlpha(p.surface, 0x50));
+    chip->setBorderThickness(1.0f);
+    chip->setBorderColor(akira::ui::withAlpha(p.focusB, 0x28));
+
+    auto* label = new brls::Label();
+    label->setText(text);
+    label->setFontSize(13);
+    label->setTextColor(p.textMuted);
+    chip->addView(label);
+    return chip;
 }
 
 std::string SlotLine(HidNpadIdType npad)
@@ -65,7 +92,7 @@ ControllerPickerView::ControllerPickerView(std::vector<PadDescription> pads,
     , m_onChosen(std::move(onChosen))
     , m_describe(std::move(describe))
 {
-    auto theme = brls::Application::getTheme();
+    const auto& p = akira::ui::active();
 
     setAxis(brls::Axis::COLUMN);
     setJustifyContent(brls::JustifyContent::CENTER);
@@ -73,80 +100,102 @@ ControllerPickerView::ControllerPickerView(std::vector<PadDescription> pads,
     setGrow(1.0f);
     setWidthPercentage(100.0f);
     setHeightPercentage(100.0f);
-    setBackgroundColor(nvgRGB(14, 18, 26));
+    setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+
+    m_panel = new brls::Box();
+    m_panel->setAxis(brls::Axis::COLUMN);
+    m_panel->setWidth(1120);
+    m_panel->setHeight(514);
+    m_panel->setPaddingTop(25);
+    m_panel->setPaddingBottom(18);
+    m_panel->setPaddingLeft(28);
+    m_panel->setPaddingRight(28);
+    m_panel->setCornerRadius(20);
+    m_panel->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+    addView(m_panel);
+
+    auto* title = new brls::Label();
+    title->setText("Choose a controller");
+    title->setFontSize(28);
+    title->setTextColor(p.text);
+    title->setMarginBottom(3);
+    m_panel->addView(title);
 
     auto* prompt = new brls::Box();
     prompt->setAxis(brls::Axis::ROW);
-    prompt->setJustifyContent(brls::JustifyContent::CENTER);
+    prompt->setJustifyContent(brls::JustifyContent::FLEX_START);
     prompt->setAlignItems(brls::AlignItems::CENTER);
-    prompt->setMarginBottom(34);
-    addView(prompt);
+    prompt->setMarginBottom(15);
+    m_panel->addView(prompt);
 
     auto* before = new brls::Label();
     before->setText("Press");
-    before->setFontSize(22);
-    before->setTextColor(nvgRGB(232, 238, 245));
+    before->setFontSize(17);
+    before->setTextColor(p.textMuted);
     prompt->addView(before);
 
     auto* lBtn = new brls::Image();
     lBtn->setImageFromRes("img/buttons/l.png");
-    lBtn->setWidth(62);
-    lBtn->setHeight(46);
-    lBtn->setMarginLeft(12);
+    lBtn->setWidth(44);
+    lBtn->setHeight(32);
+    lBtn->setMarginLeft(8);
     prompt->addView(lBtn);
 
     auto* plus = new brls::Label();
     plus->setText("+");
-    plus->setFontSize(20);
-    plus->setTextColor(nvgRGB(140, 155, 172));
-    plus->setMarginLeft(6);
-    plus->setMarginRight(6);
+    plus->setFontSize(16);
+    plus->setTextColor(p.textDim);
+    plus->setMarginLeft(4);
+    plus->setMarginRight(4);
     prompt->addView(plus);
 
     auto* rBtn = new brls::Image();
     rBtn->setImageFromRes("img/buttons/r.png");
-    rBtn->setWidth(62);
-    rBtn->setHeight(46);
-    rBtn->setMarginRight(12);
+    rBtn->setWidth(44);
+    rBtn->setHeight(32);
+    rBtn->setMarginRight(8);
     prompt->addView(rBtn);
 
     auto* after = new brls::Label();
-    after->setText("on the controller you'd like to use");
-    after->setFontSize(22);
-    after->setTextColor(nvgRGB(232, 238, 245));
+    after->setText("on the controller you want to use");
+    after->setFontSize(17);
+    after->setTextColor(p.textMuted);
     prompt->addView(after);
+
+    auto* rule = new brls::Box();
+    rule->setWidthPercentage(100.0f);
+    rule->setHeight(1);
+    rule->setBackgroundColor(p.surfaceLine);
+    rule->setMarginBottom(17);
+    m_panel->addView(rule);
 
     m_row = new brls::Box();
     m_row->setAxis(brls::Axis::ROW);
     m_row->setJustifyContent(brls::JustifyContent::CENTER);
     m_row->setAlignItems(brls::AlignItems::CENTER);
-    addView(m_row);
+    m_row->setHeight(274);
+    m_panel->addView(m_row);
 
     buildCards();
 
-
     auto* hintBar = new brls::Box();
     hintBar->setAxis(brls::Axis::ROW);
-    hintBar->setJustifyContent(brls::JustifyContent::CENTER);
+    hintBar->setJustifyContent(brls::JustifyContent::FLEX_END);
     hintBar->setAlignItems(brls::AlignItems::CENTER);
-    hintBar->setPaddingLeft(26);
-    hintBar->setPaddingRight(26);
-    hintBar->setPaddingTop(6);
-    hintBar->setPaddingBottom(6);
-    hintBar->setCornerRadius(12);
-    hintBar->setBackgroundColor(nvgRGBA(255, 255, 255, 20));
-    hintBar->setBorderColor(nvgRGBA(255, 255, 255, 38));
-    hintBar->setBorderThickness(1.5f);
-    hintBar->setMarginTop(34);
+    hintBar->setWidthPercentage(100.0f);
+    hintBar->setPaddingTop(8);
+    hintBar->setMarginTop(13);
+    hintBar->setBorderColor(p.surfaceLine);
+    hintBar->setBorderThickness(1.0f);
 
     auto* hints = new brls::Hints();
-    hints->setHintFontSizes(34.0f, 28.0f);
+    hints->setHintFontSizes(22.0f, 16.0f);
     hintBar->addView(hints);
-    addView(hintBar);
+    m_panel->addView(hintBar);
 
     setFocusable(true);
 
-    registerAction("Continue", brls::ControllerButton::BUTTON_A,
+    registerAction("Use controller", brls::ControllerButton::BUTTON_A,
         [this](brls::View*) {
             accept();
             return true;
@@ -192,24 +241,23 @@ void ControllerPickerView::cancel()
 
 void ControllerPickerView::buildCards()
 {
-    auto theme = brls::Application::getTheme();
-    (void)theme;
+    const auto& p = akira::ui::active();
 
     m_states.resize(m_pads.size());
     m_seen_clear.assign(m_pads.size(), false);
 
-    constexpr float kCanvas   = 1280.0f;
-    constexpr float kGutter   = 28.0f;
-    constexpr float kMaxCard  = 250.0f;
-    constexpr float kMinCard  = 156.0f;
+    constexpr float kCanvas   = 1040.0f;
+    constexpr float kGutter   = 20.0f;
+    constexpr float kMaxCard  = 300.0f;
+    constexpr float kMinCard  = 148.0f;
 
     const float count    = (float)(m_pads.size() > 0 ? m_pads.size() : 1);
     const float budget   = (kCanvas - 60.0f) / count - kGutter;
     const float cardW    = budget > kMaxCard ? kMaxCard : (budget < kMinCard ? kMinCard : budget);
     const float scale    = cardW / kMaxCard;
 
-    const float artW     = 128.0f;
-    const float artH     = 128.0f;
+    const float artW     = scale < 0.72f ? 84.0f : 112.0f;
+    const float artH     = scale < 0.72f ? 84.0f : 112.0f;
 
     for (std::size_t i = 0; i < m_pads.size(); i++) {
         padInitialize(&m_states[i], m_pads[i].npad);
@@ -220,45 +268,42 @@ void ControllerPickerView::buildCards()
         card->setAlignItems(brls::AlignItems::CENTER);
         card->setJustifyContent(brls::JustifyContent::CENTER);
         card->setWidth(cardW);
-        card->setHeight(258);
-        card->setMarginLeft(14);
-        card->setMarginRight(14);
-        card->setBackgroundColor(nvgRGBA(255, 255, 255, 16));
-        card->setCornerRadius(14);
-        card->setBorderColor(nvgRGBA(255, 255, 255, 30));
-        card->setBorderThickness(1.5f);
+        card->setHeight(252);
+        card->setMarginLeft(10);
+        card->setMarginRight(10);
+        card->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        card->setCornerRadius(18);
 
         auto* art = new brls::Image();
         art->setImageFromRes(akira::input::PadArtPath(m_pads[i]));
         art->setScalingType(brls::ImageScalingType::FIT);
         art->setWidth(artW);
         art->setHeight(artH);
-        art->setMarginBottom(14);
+        art->setMarginBottom(8);
         card->addView(art);
 
         auto* name = new brls::Label();
         name->setText(m_pads[i].label);
-        name->setFontSize(scale < 0.8f ? 19 : 23);
-        name->setTextColor(nvgRGB(232, 238, 245));
-        name->setMarginBottom(4);
+        name->setFontSize(scale < 0.8f ? 18 : 21);
+        name->setTextColor(p.text);
+        name->setMarginBottom(2);
         card->addView(name);
 
         auto* slot = new brls::Label();
         slot->setText(SlotLine(m_pads[i].npad));
-        slot->setFontSize(17);
-        slot->setTextColor(nvgRGB(140, 155, 172));
-        slot->setMarginBottom(8);
+        slot->setFontSize(14);
+        slot->setTextColor(p.textMuted);
+        slot->setMarginBottom(9);
         card->addView(slot);
 
-        const auto capLines = CapabilityLines(m_pads[i]);
-        for (std::size_t c = 0; c < capLines.size(); c++) {
-            auto* caps = new brls::Label();
-            caps->setText(capLines[c]);
-            caps->setFontSize(scale < 0.8f ? 14 : 16);
-            caps->setTextColor(nvgRGB(140, 155, 172));
-            caps->setMarginBottom(c + 1 == capLines.size() ? 10 : 2);
-            card->addView(caps);
-        }
+        auto* chips = new brls::Box();
+        chips->setAxis(brls::Axis::ROW);
+        chips->setJustifyContent(brls::JustifyContent::CENTER);
+        chips->setAlignItems(brls::AlignItems::CENTER);
+        chips->setMarginBottom(8);
+        for (const auto& capability : CapabilityLabels(m_pads[i]))
+            chips->addView(MakeCapabilityChip(capability));
+        card->addView(chips);
 
         if (m_pads[i].caps.battery) {
             const bool split = akira::input::PadHasTwoBatteries(m_pads[i]);
@@ -343,6 +388,29 @@ void ControllerPickerView::choose(std::size_t index)
 void ControllerPickerView::draw(NVGcontext* vg, float x, float y, float width, float height,
                                 brls::Style style, brls::FrameContext* ctx)
 {
+    const auto& p = akira::ui::active();
+
+    NVGpaint scrim = nvgLinearGradient(vg, x, y, x, y + height,
+        akira::ui::withAlpha(p.backgroundDeep, 0x8c),
+        akira::ui::withAlpha(p.gradientBottom, 0xd4));
+    nvgBeginPath(vg);
+    nvgRect(vg, x, y, width, height);
+    nvgFillPaint(vg, scrim);
+    nvgFill(vg);
+
+    if (m_panel && m_panel->getWidth() > 0.0f && m_panel->getHeight() > 0.0f)
+        akira::ui::drawGlassSurface(vg, m_panel->getX(), m_panel->getY(),
+            m_panel->getWidth(), m_panel->getHeight(), 20.0f, 1.0f, false, p);
+
+    for (std::size_t i = 0; i < m_cards.size(); i++) {
+        auto* card = m_cards[i];
+        if (!card || card->getWidth() <= 0.0f || card->getHeight() <= 0.0f)
+            continue;
+        akira::ui::drawGlassSurface(vg, card->getX(), card->getY(),
+            card->getWidth(), card->getHeight(), 18.0f, 0.92f,
+            (int)i == m_selected, p);
+    }
+
     Box::draw(vg, x, y, width, height, style, ctx);
 
     if (m_selected >= 0 && m_selected < (int)m_cards.size()) {
@@ -352,11 +420,12 @@ void ControllerPickerView::draw(NVGcontext* vg, float x, float y, float width, f
 
         for (int pass = 3; pass >= 0; pass--) {
             const float grow  = 3.0f + pass * 4.0f;
-            const int   alpha = pass == 0 ? 255 : 46 - pass * 10;
+            const int   alpha = pass == 0 ? 230 : 58 - pass * 10;
             nvgBeginPath(vg);
-            nvgRoundedRect(vg, cx - grow, cy - grow, cw + grow * 2, ch + grow * 2, 14.0f + grow);
-            nvgStrokeColor(vg, nvgRGBA(64, 208, 122, (unsigned char)alpha));
-            nvgStrokeWidth(vg, pass == 0 ? 3.0f : 6.0f);
+            nvgRoundedRect(vg, cx - grow, cy - grow, cw + grow * 2, ch + grow * 2, 18.0f + grow);
+            nvgStrokeColor(vg, akira::ui::withAlpha(
+                pass == 0 ? p.accent : p.focusA, (unsigned char)alpha));
+            nvgStrokeWidth(vg, pass == 0 ? 2.5f : 5.0f);
             nvgStroke(vg);
         }
     }
