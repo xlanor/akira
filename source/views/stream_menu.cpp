@@ -1,6 +1,7 @@
 #include "views/stream_menu.hpp"
 #include "views/stream_cards.hpp"
 #include "stream/session.hpp"
+#include "ui/glass.hpp"
 #include "ui/theme.hpp"
 
 #include <borealis/core/i18n.hpp>
@@ -73,6 +74,27 @@ namespace
     bool inside(float px, float py, float x, float y, float w, float h)
     {
         return px >= x && px <= x + w && py >= y && py <= y + h;
+    }
+
+    std::string elideText(NVGcontext* vg, const std::string& text, float maxWidth)
+    {
+        if (text.empty() || nvgTextBounds(vg, 0.0f, 0.0f, text.c_str(), nullptr, nullptr) <= maxWidth)
+            return text;
+
+        constexpr const char* ellipsis = "\xe2\x80\xa6";
+        std::string shortened = text;
+        while (!shortened.empty())
+        {
+            size_t start = shortened.size() - 1;
+            while (start > 0 && (static_cast<unsigned char>(shortened[start]) & 0xc0) == 0x80)
+                --start;
+            shortened.resize(start);
+
+            std::string candidate = shortened + ellipsis;
+            if (nvgTextBounds(vg, 0.0f, 0.0f, candidate.c_str(), nullptr, nullptr) <= maxWidth)
+                return candidate;
+        }
+        return ellipsis;
     }
 }
 
@@ -174,7 +196,7 @@ void StreamMenu::buildCards()
             onButtonMapping();
     }));
 
-    cards.push_back(std::make_unique<PlayersCard>([this]() {
+    cards.push_back(std::make_unique<PlayersCard>(playersAvailable, [this]() {
         if (onPlayers)
             onPlayers();
     }));
@@ -288,7 +310,7 @@ void StreamMenu::leavePanel()
 void StreamMenu::fire()
 {
     StreamCard* card = selected();
-    if (!card)
+    if (!card || !card->available())
         return;
 
     if (inPanel && card->optionCount() > 0)
@@ -363,6 +385,12 @@ void StreamMenu::setStatsMode(StatsOverlayMode mode)
 void StreamMenu::setSleepAvailable(bool available)
 {
     sleepAvailable = available;
+    buildCards();
+}
+
+void StreamMenu::setPlayersAvailable(bool available)
+{
+    playersAvailable = available;
     buildCards();
 }
 
@@ -478,17 +506,7 @@ void StreamMenu::drawIdentity(NVGcontext* vg, float x, float y, float e, const a
     float cy = y + CARD_SIZE * s * 0.5f;
     float by = cy - box * 0.5f;
 
-    NVGpaint tile = nvgLinearGradient(vg, x, by, x + box, by + box,
-                                      fade(akira::ui::withAlpha(p.accent, 0x4c), e),
-                                      fade(akira::ui::withAlpha(p.accent, 0x12), e));
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, x, by, box, box, 13.0f * s);
-    nvgFillPaint(vg, tile);
-    nvgFill(vg);
-
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, x + 0.5f, by + 0.5f, box - 1.0f, box - 1.0f, 13.0f * s);
-    stroked(vg, fade(akira::ui::withAlpha(p.accent, 0x57), e), 1.0f);
+    akira::ui::drawGlassSurface(vg, x, by, box, box, 13.0f * s, e, true, p, s);
 
     int tex = consoleTexture(vg, consolePs5);
     if (tex >= 0)
@@ -523,7 +541,9 @@ void StreamMenu::drawIdentity(NVGcontext* vg, float x, float y, float e, const a
     nvgFontSize(vg, 16.0f * s);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
     nvgFillColor(vg, fade(p.text, e));
-    nvgText(vg, tx, cy - 1.0f * s, consoleName.c_str(), nullptr);
+    const float nameWidth = IDENT_W * s - (tx - x) - 14.0f * s;
+    const std::string displayName = elideText(vg, consoleName, nameWidth);
+    nvgText(vg, tx, cy - 1.0f * s, displayName.c_str(), nullptr);
 
     float dotR = 3.0f * s;
     float my = cy + 7.0f * s;
@@ -575,17 +595,15 @@ void StreamMenu::drawRail(NVGcontext* vg, float x, float y, float lift, float dt
 
     for (size_t i = 0; i < cards.size(); i++)
     {
-        if (!cards[i]->available())
-            continue;
-
         float ce = easeOut((openT - 0.04f - (float)i * CARD_STAGGER) / CARD_DURATION);
         float cy = y + lift + (1.0f - ce) * CARD_RISE * s;
         float cx = x + (float)i * step;
 
         drawCard(vg, cards[i].get(), cx, cy, i == selection, ce, i, p);
 
-        cardHits.push_back({ cx - 6.0f * s, cy - 6.0f * s,
-                             CARD_SIZE * s + 12.0f * s, CARD_SIZE * s + 12.0f * s, (int)i });
+        if (cards[i]->available())
+            cardHits.push_back({ cx - 6.0f * s, cy - 6.0f * s,
+                                 CARD_SIZE * s + 12.0f * s, CARD_SIZE * s + 12.0f * s, (int)i });
     }
 }
 
@@ -604,17 +622,11 @@ void StreamMenu::drawCard(NVGcontext* vg, StreamCard* card, float x, float y, bo
     float cy = y + squash * 0.5f;
     float cs = size - squash;
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, cx, cy, cs, cs, r);
-    nvgFillColor(vg, fade(akira::ui::withAlpha(sel ? p.surfaceElevated : p.surface, sel ? 0x8c : 0x66), e));
-    nvgFill(vg);
+    akira::ui::drawGlassSurface(vg, cx, cy, cs, cs, r, e, sel, p, s);
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, cx + 0.5f, cy + 0.5f, cs - 1.0f, cs - 1.0f, r);
-    stroked(vg, fade(sel ? akira::ui::withAlpha(p.accent, 0xbe) : p.surfaceLine, e), 1.0f);
-
-    NVGcolor tint = p.textMuted;
-    if (sel)
+    const bool available = card->available();
+    NVGcolor tint = available ? p.textMuted : akira::ui::withAlpha(p.textDim, 0x62);
+    if (sel && available)
         tint = p.accent;
     else if (card->state() == CardState::Active)
         tint = p.success;
@@ -628,7 +640,8 @@ void StreamMenu::drawCard(NVGcontext* vg, StreamCard* card, float x, float y, bo
     nvgFontFaceId(vg, theme.font_ui);
     nvgFontSize(vg, 11.0f * s);
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, fade(sel ? p.text : p.textMuted, e));
+    nvgFillColor(vg, fade(!available ? akira::ui::withAlpha(p.textDim, 0x68)
+                                       : (sel ? p.text : p.textMuted), e));
     nvgText(vg, cx + cs * 0.5f, cy + cs * 0.76f, label.c_str(), nullptr);
 
     int badge = card->badge();
@@ -790,14 +803,7 @@ void StreamMenu::drawPanel(NVGcontext* vg, float x, float y, float w, float h)
     if (!card)
         return;
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, x, y, w, h, 20.0f * s);
-    nvgFillColor(vg, fade(akira::ui::withAlpha(p.backgroundDeep, 0xe6), a));
-    nvgFill(vg);
-
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, x + 0.5f, y + 0.5f, w - 1.0f, h - 1.0f, 20.0f * s);
-    stroked(vg, fade(p.surfaceLine, a), 1.0f);
+    akira::ui::drawGlassSurface(vg, x, y, w, h, 20.0f * s, a, false, p, s);
 
     nvgSave(vg);
     nvgScissor(vg, x, y, w, h);
@@ -869,16 +875,8 @@ void StreamMenu::drawOptions(NVGcontext* vg, float x, float y, float w)
             nvgFill(vg);
         }
 
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, cursor, y, bw, bh, 11.0f * s);
-        nvgFillColor(vg, fade(akira::ui::withAlpha(isActive ? p.accent : p.surface,
-                                                   isActive ? 0x3c : 0x66), a));
-        nvgFill(vg);
-
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, cursor + 0.5f, y + 0.5f, bw - 1.0f, bh - 1.0f, 11.0f * s);
-        stroked(vg, fade((isActive || isCursor) ? akira::ui::withAlpha(p.accent, 0xbe)
-                                                : p.surfaceLine, a), 1.0f);
+        akira::ui::drawGlassSurface(vg, cursor, y, bw, bh, 11.0f * s, a,
+                                    isActive || isCursor, p, s);
 
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, fade((isActive || isCursor) ? p.text : p.textMuted, a));

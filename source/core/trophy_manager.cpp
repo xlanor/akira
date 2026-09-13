@@ -33,6 +33,22 @@ static void forwardPsnLog(psn::LogLevel level, const std::string& message)
     }
 }
 
+static std::string psnAccountIdDecimal(const std::string& accountId)
+{
+    uint8_t bytes[8] = {0};
+    size_t size = sizeof(bytes);
+    if (chiaki_base64_decode(accountId.c_str(), accountId.length(), bytes, &size) != CHIAKI_ERR_SUCCESS || size != 8)
+    {
+        brls::Logger::warning("PSN profile: could not decode account id '{}' to decimal", accountId);
+        return accountId;
+    }
+
+    uint64_t id = 0;
+    for (int i = 0; i < 8; i++)
+        id |= static_cast<uint64_t>(bytes[i]) << (8 * i);
+    return std::to_string(id);
+}
+
 TrophyManager* TrophyManager::getInstance()
 {
     static TrophyManager* instance = new TrophyManager();
@@ -1058,22 +1074,7 @@ void TrophyManager::fetchProfile(bool forceRefresh, Callback<psn::PsnProfile> on
         return;
     }
 
-    std::string accountIdDecimal = accountId;
-    {
-        uint8_t bytes[8] = {0};
-        size_t sz = sizeof(bytes);
-        if (chiaki_base64_decode(accountId.c_str(), accountId.length(), bytes, &sz) == CHIAKI_ERR_SUCCESS && sz == 8)
-        {
-            uint64_t id = 0;
-            for (int i = 0; i < 8; i++)
-                id |= static_cast<uint64_t>(bytes[i]) << (8 * i);
-            accountIdDecimal = std::to_string(id);
-        }
-        else
-        {
-            brls::Logger::warning("PSN profile: could not decode account id '{}' to decimal", accountId);
-        }
-    }
+    std::string accountIdDecimal = psnAccountIdDecimal(accountId);
 
     HttpPool::instance().submit([this, forceRefresh, accountIdDecimal, onSuccess, onError](HttpSession& session) {
         if (!forceRefresh)
@@ -1119,6 +1120,40 @@ void TrophyManager::fetchProfile(bool forceRefresh, Callback<psn::PsnProfile> on
         brls::Logger::error("PSN profile fetch failed: {} ({})",
             psn::statusName(error.status), error.message);
         brls::sync([onError, error]() { if (onError) onError(error.status, error.message); });
+    });
+}
+
+void TrophyManager::fetchProfileForAccount(const std::string& accountId,
+    Callback<psn::PsnProfile> onSuccess, ErrorCallback onError)
+{
+    if (accountId.empty())
+    {
+        brls::sync([onError]() {
+            if (onError)
+                onError(psn::Status::NotLinked, "No account id for the profile");
+        });
+        return;
+    }
+
+    const std::string accountIdDecimal = psnAccountIdDecimal(accountId);
+    HttpPool::instance().submit([this, accountIdDecimal, onSuccess, onError](HttpSession& session) {
+        psn::PsnProfile profile;
+        psn::Error error = clientFor(session).fetchProfile(accountIdDecimal, profile);
+        if (error.ok())
+        {
+            brls::sync([onSuccess, profile]() {
+                if (onSuccess)
+                    onSuccess(profile);
+            });
+            return;
+        }
+
+        brls::Logger::warning("PSN profile lookup failed: {} ({})",
+            psn::statusName(error.status), error.message);
+        brls::sync([onError, error]() {
+            if (onError)
+                onError(error.status, error.message);
+        });
     });
 }
 

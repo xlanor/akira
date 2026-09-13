@@ -171,6 +171,8 @@ public:
     struct CouchProfileChoice {
         int64_t profileId = 0;
         std::string label;
+        std::string accountId;
+        std::string avatarUrl;
     };
 
     struct CloudSessionConfig {

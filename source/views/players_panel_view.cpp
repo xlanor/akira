@@ -6,8 +6,12 @@
 #include <vector>
 
 #include "core/host.hpp"
+#include "core/settings_manager.hpp"
+#include "core/trophy_manager.hpp"
 #include "stream/input_manager.hpp"
 #include "input/pad_path.hpp"
+#include "ui/glass.hpp"
+#include "ui/theme.hpp"
 
 #include <chiaki/common.h>
 
@@ -16,6 +20,8 @@ using akira::input::PadDescription;
 namespace {
 
 constexpr int kSecondarySlots = CHIAKI_COUCH_MAX_PADS - 1;
+constexpr float kPanelWidth = 680.0f;
+constexpr float kContentWidth = 644.0f;
 
 NVGcolor SlotLed(int player)
 {
@@ -30,23 +36,26 @@ NVGcolor SlotLed(int player)
 
 brls::Box* MakeRowShell(bool empty)
 {
+    const auto& p = akira::ui::active();
     auto* row = new brls::Box();
     row->setAxis(brls::Axis::ROW);
     row->setAlignItems(brls::AlignItems::CENTER);
-    row->setWidth(424);
+    row->setWidth(kContentWidth);
     row->setHeight(70);
     row->setPaddingLeft(14);
     row->setPaddingRight(14);
     row->setCornerRadius(14);
     row->setMarginBottom(9);
-    row->setBackgroundColor(nvgRGB(0x1f, 0x1f, 0x24));
+    row->setBackgroundColor(akira::ui::withAlpha(
+        empty ? p.backgroundDeep : p.surface, empty ? 0x78 : 0x68));
     row->setBorderThickness(1.0f);
-    row->setBorderColor(empty ? nvgRGB(0x3a, 0x3a, 0x44) : nvgRGB(0x31, 0x31, 0x39));
+    row->setBorderColor(empty ? akira::ui::withAlpha(p.textDim, 0x32) : p.surfaceLine);
     return row;
 }
 
 brls::Box* MakeLed(int player, bool empty)
 {
+    const auto& p = akira::ui::active();
     auto* led = new brls::Box();
     led->setAxis(brls::Axis::COLUMN);
     led->setJustifyContent(brls::JustifyContent::CENTER);
@@ -56,9 +65,9 @@ brls::Box* MakeLed(int player, bool empty)
     led->setCornerRadius(11);
     led->setMarginRight(13);
     if (empty) {
-        led->setBackgroundColor(nvgRGB(0x2a, 0x2a, 0x31));
+        led->setBackgroundColor(akira::ui::withAlpha(p.surface, 0x54));
         led->setBorderThickness(1.0f);
-        led->setBorderColor(nvgRGB(0x3a, 0x3a, 0x44));
+        led->setBorderColor(p.surfaceLine);
     } else {
         led->setBackgroundColor(SlotLed(player));
     }
@@ -73,6 +82,7 @@ brls::Box* MakeLed(int player, bool empty)
 
 brls::Box* MakeBody(const std::string& dev, const std::string& meta, bool dim, brls::Label** outMeta = nullptr)
 {
+    const auto& p = akira::ui::active();
     auto* body = new brls::Box();
     body->setAxis(brls::Axis::COLUMN);
     body->setJustifyContent(brls::JustifyContent::CENTER);
@@ -81,13 +91,13 @@ brls::Box* MakeBody(const std::string& dev, const std::string& meta, bool dim, b
     auto* devLabel = new brls::Label();
     devLabel->setText(dev);
     devLabel->setFontSize(19);
-    devLabel->setTextColor(dim ? nvgRGB(0x6c, 0x6c, 0x76) : nvgRGB(0xf3, 0xf3, 0xf6));
+    devLabel->setTextColor(dim ? p.textDim : p.text);
     body->addView(devLabel);
 
     auto* metaLabel = new brls::Label();
     metaLabel->setText(meta);
     metaLabel->setFontSize(14);
-    metaLabel->setTextColor(nvgRGB(0x9a, 0x9a, 0xa4));
+    metaLabel->setTextColor(p.textMuted);
     metaLabel->setMarginTop(3);
     body->addView(metaLabel);
 
@@ -96,6 +106,62 @@ brls::Box* MakeBody(const std::string& dev, const std::string& meta, bool dim, b
 
     return body;
 }
+
+NVGcolor ProfileAccent(std::size_t index)
+{
+    const auto& p = akira::ui::active();
+    switch (index % 4) {
+        case 1: return p.media;
+        case 2: return p.success;
+        case 3: return p.warning;
+        default: return p.accent;
+    }
+}
+
+class ProfileAvatar final : public brls::View
+{
+public:
+    explicit ProfileAvatar(NVGcolor accent) : m_accent(accent) {}
+
+    void draw(NVGcontext* vg, float x, float y, float width, float height,
+              brls::Style style, brls::FrameContext* ctx) override
+    {
+        (void)style;
+        (void)ctx;
+        const auto& p = akira::ui::active();
+        const float r = std::min(width, height) * 0.5f;
+        const float cx = x + width * 0.5f;
+        const float cy = y + height * 0.5f;
+
+        NVGpaint fill = nvgLinearGradient(vg, x, y, x + width, y + height,
+            akira::ui::withAlpha(m_accent, 0xd8),
+            akira::ui::withAlpha(p.backgroundDeep, 0xf0));
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, r);
+        nvgFillPaint(vg, fill);
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, y + height * 0.36f, height * 0.13f);
+        nvgFillColor(vg, akira::ui::withAlpha(p.text, 0xe8));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, x + width * 0.27f, y + height * 0.55f,
+            width * 0.46f, height * 0.23f, height * 0.115f);
+        nvgFillColor(vg, akira::ui::withAlpha(p.text, 0xe8));
+        nvgFill(vg);
+
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, r - 0.5f);
+        nvgStrokeColor(vg, akira::ui::withAlpha(p.focusB, 0x70));
+        nvgStrokeWidth(vg, 1.0f);
+        nvgStroke(vg);
+    }
+
+private:
+    NVGcolor m_accent;
+};
 
 brls::Button* MakeAction(const std::string& text, NVGcolor color)
 {
@@ -160,7 +226,7 @@ std::string WithAccount(const std::string& text, const Host* host, uint8_t slot)
     const std::string& account = host->couchAccountLabel(slot);
     if (account.empty())
         return text + " - no PSN account configured";
-    return text + " - PSN: " + account;
+    return text + " - PSN: " + SettingsManager::getInstance()->maskAccountName(account);
 }
 
 } // namespace
@@ -175,54 +241,70 @@ PlayersPanelView::PlayersPanelView(Host* host, InputManager* input, bool claimIm
     setGrow(1.0f);
     setWidthPercentage(100.0f);
     setHeightPercentage(100.0f);
-    setBackgroundColor(nvgRGBA(6, 7, 10, 190));
+    setBackgroundColor(nvgRGBA(0, 0, 0, 0));
 
-    auto* panel = new brls::Box();
-    panel->setAxis(brls::Axis::COLUMN);
-    panel->setWidth(460);
-    panel->setPaddingTop(18);
-    panel->setPaddingBottom(16);
-    panel->setPaddingLeft(18);
-    panel->setPaddingRight(18);
-    panel->setCornerRadius(16);
-    panel->setBackgroundColor(nvgRGB(0x26, 0x26, 0x2b));
-    panel->setBorderThickness(1.0f);
-    panel->setBorderColor(nvgRGB(0x3a, 0x3a, 0x42));
-    addView(panel);
+    m_panel = new brls::Box();
+    m_panel->setAxis(brls::Axis::COLUMN);
+    m_panel->setWidth(kPanelWidth);
+    m_panel->setPaddingTop(22);
+    m_panel->setPaddingBottom(16);
+    m_panel->setPaddingLeft(18);
+    m_panel->setPaddingRight(18);
+    m_panel->setCornerRadius(20);
+    m_panel->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+    addView(m_panel);
 
     auto* header = new brls::Box();
     header->setAxis(brls::Axis::ROW);
     header->setAlignItems(brls::AlignItems::CENTER);
     header->setMarginBottom(2);
-    panel->addView(header);
+    m_panel->addView(header);
 
-    auto* title = new brls::Label();
-    title->setText("Players");
-    title->setFontSize(24);
-    title->setTextColor(nvgRGB(0xf3, 0xf3, 0xf6));
-    title->setMarginRight(10);
-    header->addView(title);
+    m_title = new brls::Label();
+    m_title->setText("Players");
+    m_title->setFontSize(26);
+    m_title->setTextColor(akira::ui::active().text);
+    m_title->setMarginRight(10);
+    header->addView(m_title);
 
     m_count = new brls::Label();
     m_count->setFontSize(15);
-    m_count->setTextColor(nvgRGB(0x16, 0xbf, 0xe0));
+    m_count->setTextColor(akira::ui::active().accent);
     header->addView(m_count);
 
     m_sub = new brls::Label();
     m_sub->setFontSize(14);
-    m_sub->setTextColor(nvgRGB(0x9a, 0x9a, 0xa4));
+    m_sub->setTextColor(akira::ui::active().textMuted);
     m_sub->setMarginBottom(14);
-    panel->addView(m_sub);
+    m_panel->addView(m_sub);
+
+    auto* rule = new brls::Box();
+    rule->setWidthPercentage(100.0f);
+    rule->setHeight(1);
+    rule->setBackgroundColor(akira::ui::active().surfaceLine);
+    rule->setMarginBottom(14);
+    m_panel->addView(rule);
 
     m_slots = new brls::Box();
     m_slots->setAxis(brls::Axis::COLUMN);
-    panel->addView(m_slots);
+    m_panel->addView(m_slots);
 
+    auto* footer = new brls::Box();
+    footer->setAxis(brls::Axis::ROW);
+    footer->setAlignItems(brls::AlignItems::CENTER);
+    footer->setJustifyContent(brls::JustifyContent::SPACE_BETWEEN);
+    footer->setWidthPercentage(100.0f);
+    footer->setMarginTop(8);
     m_foot = new brls::Label();
     m_foot->setFontSize(13);
-    m_foot->setTextColor(nvgRGB(0x6c, 0x6c, 0x76));
-    m_foot->setMarginTop(6);
-    panel->addView(m_foot);
+    m_foot->setTextColor(akira::ui::active().textDim);
+    m_foot->setGrow(1.0f);
+    footer->addView(m_foot);
+
+    auto* hints = new brls::Hints();
+    hints->setHintFontSizes(21.0f, 15.0f);
+    footer->addView(hints);
+    m_panel->addView(footer);
 
     if (m_input) {
         auto alive = m_callback_alive;
@@ -425,19 +507,123 @@ void PlayersPanelView::populateProfilePicker()
         return;
     }
 
-    for (const auto& choice : choices) {
-        auto* row = MakeRowShell(false);
-        row->addView(MakeBody(choice.label, "Akira profile", false));
-        auto* use = MakeAction("Use", nvgRGB(0x16, 0xbf, 0xe0));
-        use->registerClickAction([this, profileId = choice.profileId](brls::View*) {
+    const float cardWidth = choices.size() <= 3 ? 184.0f : 145.0f;
+    brls::Box* profileRow = nullptr;
+    for (std::size_t i = 0; i < choices.size(); i++) {
+        if ((i % 4) == 0) {
+            profileRow = new brls::Box();
+            profileRow->setAxis(brls::Axis::ROW);
+            profileRow->setJustifyContent(brls::JustifyContent::CENTER);
+            profileRow->setAlignItems(brls::AlignItems::CENTER);
+            profileRow->setWidth(kContentWidth);
+            if (i + 4 < choices.size())
+                profileRow->setMarginBottom(10);
+            m_slots->addView(profileRow);
+        }
+
+        const auto& choice = choices[i];
+        auto* tile = new brls::Box();
+        tile->setAxis(brls::Axis::COLUMN);
+        tile->setAlignItems(brls::AlignItems::CENTER);
+        tile->setJustifyContent(brls::JustifyContent::CENTER);
+        tile->setWidth(cardWidth);
+        tile->setHeight(138);
+        tile->setMarginLeft(7);
+        tile->setMarginRight(7);
+        tile->setCornerRadius(18);
+        tile->setBackgroundColor(nvgRGBA(0, 0, 0, 0));
+        tile->setFocusable(true);
+        tile->setHideHighlightBackground(true);
+        tile->setHighlightPadding(4);
+
+        tile->registerClickAction([this, profileId = choice.profileId](brls::View*) {
             selectProfile(profileId);
             return true;
         });
-        row->addView(use);
+
+        auto* avatarShell = new brls::Box();
+        avatarShell->setWidth(68);
+        avatarShell->setHeight(68);
+        avatarShell->setMarginBottom(9);
+
+        auto* fallback = new ProfileAvatar(ProfileAccent(i));
+        fallback->setWidth(68);
+        fallback->setHeight(68);
+        avatarShell->addView(fallback);
+
+        auto* avatar = new brls::Image();
+        avatar->setPositionType(brls::PositionType::ABSOLUTE);
+        avatar->setPositionTop(0);
+        avatar->setPositionLeft(0);
+        avatar->setWidth(68);
+        avatar->setHeight(68);
+        avatar->setCornerRadius(34);
+        avatar->setScalingType(brls::ImageScalingType::FILL);
+        avatarShell->addView(avatar);
+        tile->addView(avatarShell);
+        m_profileAvatars.push_back(avatar);
+        loadProfileAvatar(choice.profileId, choice.accountId, choice.avatarUrl, avatar);
+
+        auto* name = new brls::Label();
+        name->setText(SettingsManager::getInstance()->maskAccountName(choice.label));
+        name->setFontSize(cardWidth < 170.0f ? 16 : 18);
+        name->setTextColor(akira::ui::active().text);
+        name->setMarginBottom(0);
+        tile->addView(name);
         if (!m_first)
-            m_first = use;
-        m_slots->addView(row);
+            m_first = tile;
+        m_profileTiles.push_back(tile);
+        profileRow->addView(tile);
     }
+}
+
+void PlayersPanelView::loadProfileAvatarUrl(int64_t profileId, const std::string& avatarUrl,
+                                            brls::Image* image)
+{
+    if (avatarUrl.empty() || !image)
+        return;
+
+    auto alive = m_callback_alive;
+    TrophyManager::getInstance()->fetchIcon(avatarUrl,
+        [this, alive, image, profileId](const std::string&, const std::vector<uint8_t>& bytes) {
+            if (!alive->load(std::memory_order_acquire) || bytes.empty())
+                return;
+            if (std::find(m_profileAvatars.begin(), m_profileAvatars.end(), image) == m_profileAvatars.end())
+                return;
+            image->setImageFromMem(bytes.data(), static_cast<int>(bytes.size()));
+            brls::Logger::debug("Loaded cached PSN avatar for profile {}", profileId);
+        });
+}
+
+void PlayersPanelView::loadProfileAvatar(int64_t profileId, const std::string& accountId,
+                                         const std::string& avatarUrl, brls::Image* image)
+{
+    if (!avatarUrl.empty())
+    {
+        loadProfileAvatarUrl(profileId, avatarUrl, image);
+        return;
+    }
+    if (accountId.empty() || !image)
+        return;
+
+    auto alive = m_callback_alive;
+    TrophyManager::getInstance()->fetchProfileForAccount(accountId,
+        [this, alive, image, profileId](const psn::PsnProfile& profile) {
+            if (!alive->load(std::memory_order_acquire))
+                return;
+            const std::string url = profile.avatarUrl();
+            if (url.empty())
+                return;
+
+            SettingsManager* settings = SettingsManager::getInstance();
+            if (Profile* saved = settings->findProfile(profileId); saved && saved->avatarUrl != url)
+            {
+                saved->avatarUrl = url;
+                settings->writeFile();
+            }
+            loadProfileAvatarUrl(profileId, url, image);
+        },
+        [](psn::Status, const std::string&) {});
 }
 
 void PlayersPanelView::populatePicker()
@@ -536,17 +722,25 @@ void PlayersPanelView::rebuild(bool refocus)
     m_claimMeta = nullptr;
     m_addAction = nullptr;
     m_rows.clear();
+    m_profileTiles.clear();
+    m_profileAvatars.clear();
 
     const int total = 1 + rosterCount();
     m_count->setText(std::to_string(total) + " / " + std::to_string(CHIAKI_COUCH_MAX_PADS));
+    m_count->setVisibility(brls::Visibility::VISIBLE);
+    m_title->setText("Players");
 
     if (m_selectingProfile) {
+        m_title->setText("Add player");
+        m_count->setVisibility(brls::Visibility::GONE);
         m_sub->setText(m_profileRejected
             ? "That account is not registered on this PS5. Choose another Akira profile registered on the console."
-            : "Choose the Akira profile for Player " + std::to_string(m_profileSlot + 1));
-        m_foot->setText("The PS5 will verify whether the selected account is registered on the console.");
+            : "Choose a profile for Player " + std::to_string(m_profileSlot + 1));
+        m_foot->setText("The profile must also be signed in on the connected console.");
         populateProfilePicker();
     } else if (m_claiming) {
+        m_title->setText("Choose a controller");
+        m_count->setVisibility(brls::Visibility::GONE);
         m_sub->setText("Hold ZL + ZR on the controller you want to add");
         m_foot->setText("Press B to cancel. A connected pad does nothing until it claims a slot.");
         populatePicker();
@@ -748,6 +942,34 @@ void PlayersPanelView::draw(NVGcontext* vg, float x, float y, float width, float
     }
 
     refreshStates();
+
+    const auto& p = akira::ui::active();
+    NVGpaint scrim = nvgLinearGradient(vg, x, y, x, y + height,
+        akira::ui::withAlpha(p.backgroundDeep, 0x70),
+        akira::ui::withAlpha(p.gradientBottom, 0xc8));
+    nvgBeginPath(vg);
+    nvgRect(vg, x, y, width, height);
+    nvgFillPaint(vg, scrim);
+    nvgFill(vg);
+
+    if (m_panel && m_panel->getWidth() > 0.0f && m_panel->getHeight() > 0.0f)
+        akira::ui::drawGlassSurface(vg, m_panel->getX(), m_panel->getY(),
+            m_panel->getWidth(), m_panel->getHeight(), 20.0f, 1.0f, false, p);
+
+    for (auto* tile : m_profileTiles) {
+        if (!tile || tile->getWidth() <= 0.0f || tile->getHeight() <= 0.0f)
+            continue;
+
+        bool focused = false;
+        for (brls::View* view = brls::Application::getCurrentFocus(); view; view = view->getParent()) {
+            if (view == tile) {
+                focused = true;
+                break;
+            }
+        }
+        akira::ui::drawGlassSurface(vg, tile->getX(), tile->getY(),
+            tile->getWidth(), tile->getHeight(), 18.0f, 0.94f, focused, p);
+    }
 
     Box::draw(vg, x, y, width, height, style, ctx);
 }

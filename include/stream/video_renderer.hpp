@@ -3,6 +3,7 @@
 
 #include <chiaki/log.h>
 #include <functional>
+#include <string>
 #include <vector>
 #include <atomic>
 #include <cstdint>
@@ -58,6 +59,7 @@ public:
     }
     virtual float getRenderFPS() const { return 0.0f; }
     virtual void setPaused(bool paused) { (void)paused; }
+    virtual void setConnectionContext(const std::string& context) { (void)context; }
     virtual void updateResolution(int width, int height) { (void)width; (void)height; }
     virtual void triggerBorderFlash() {}
 

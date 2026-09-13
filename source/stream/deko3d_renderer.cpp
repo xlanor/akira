@@ -94,6 +94,12 @@ static std::string loadShaderSource(const char* path)
     return source;
 }
 
+void Deko3dRenderer::setConnectionContext(const std::string& context)
+{
+    m_connection_context = context;
+    m_ovl_dirty = true;
+}
+
 static std::string injectShaderDefines(const std::string& source, const std::string& defines)
 {
     if (defines.empty())
@@ -1076,9 +1082,11 @@ void Deko3dRenderer::rebuildOverlayText()
     m_ov.ghash = (chiaki_libnx_get_ghash_mode() == CHIAKI_LIBNX_GHASH_PMULL) ? "PMULL" : "TABLE";
     m_ov.vpn = wg.isConnected() ? wg.getTunnelIP() : "Off";
 
-    m_ov.context = std::format("{} \xc2\xb7 {}",
-        m_stats.is_hevc ? "PS5" : "PS4",
-        wg.isConnected() ? "VPN" : "Direct");
+    m_ov.context = m_connection_context.empty()
+        ? std::format("{} \xc2\xb7 {}",
+            m_stats.is_hevc ? "PS5" : "PS4",
+            wg.isConnected() ? "VPN" : "Direct")
+        : m_connection_context;
 
     m_ov.lat_valid = m_stats.latency_valid;
     m_ov.lat_net_ms = m_stats.net_ms;

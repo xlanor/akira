@@ -65,15 +65,18 @@ private:
 class PlayersCard : public StreamCard
 {
 public:
-    explicit PlayersCard(std::function<void()> open) : open(std::move(open)) {}
+    PlayersCard(bool available, std::function<void()> open)
+        : enabled(available), open(std::move(open)) {}
 
     const char* id() const override { return "players"; }
     std::string label() const override;
     CardGlyph glyph() const override { return CardGlyph::Party; }
+    bool available() const override { return enabled; }
     bool isInstant() const override { return true; }
     void activate() override { if (open) open(); }
 
 private:
+    bool enabled;
     std::function<void()> open;
 };
 

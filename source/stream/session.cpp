@@ -456,6 +456,12 @@ void Session::setVideoPaused(bool paused)
         m_video_renderer->setPaused(paused);
 }
 
+void Session::setConnectionContext(const std::string& context)
+{
+    if (m_video_renderer)
+        m_video_renderer->setConnectionContext(context);
+}
+
 
 void Session::triggerBorderFlash()
 {

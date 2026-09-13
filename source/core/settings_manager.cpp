@@ -780,6 +780,7 @@ void SettingsManager::parseTomlFile() {
                 profile.npssoLastCheckedAt = (*pt)["npsso_last_checked_at"].value<int64_t>().value_or(0);
                 profile.npssoValid = (*pt)["npsso_valid"].value<bool>().value_or(false);
                 profile.duid = (*pt)["duid"].value<std::string>().value_or("");
+                profile.avatarUrl = (*pt)["avatar_url"].value<std::string>().value_or("");
                 profile.trophiesEnabled = (*pt)["trophies_enabled"].value<bool>().value_or(true);
                 profile.legacy = (*pt)["legacy"].value<bool>().value_or(false);
                 profile.cloudShortcuts = readShortcuts((*pt)["cloud_shortcuts"].as_array());
@@ -1281,6 +1282,7 @@ int SettingsManager::writeFile() {
             if (p.npssoLastCheckedAt > 0) pt.insert("npsso_last_checked_at", p.npssoLastCheckedAt);
             if (p.npssoLastCheckedAt > 0) pt.insert("npsso_valid", p.npssoValid);
             if (!p.duid.empty()) pt.insert("duid", p.duid);
+            if (!p.avatarUrl.empty()) pt.insert("avatar_url", p.avatarUrl);
             if (!p.trophiesEnabled) pt.insert("trophies_enabled", false);
             if (p.legacy) pt.insert("legacy", true);
             if (!p.cloudShortcuts.empty()) pt.insert("cloud_shortcuts", shortcutsToToml(p.cloudShortcuts));

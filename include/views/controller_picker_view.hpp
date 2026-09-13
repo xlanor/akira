@@ -31,6 +31,8 @@ public:
 
     brls::View* getDefaultFocus() override { return this; }
 
+    bool isTranslucent() override { return true; }
+
 private:
     void choose(std::size_t index);
 
@@ -55,6 +57,7 @@ private:
     unsigned                                  m_frames = 0;
     OnChosen                                  m_onChosen;
     Describe                                  m_describe;
+    brls::Box*                                m_panel = nullptr;
     brls::Box*                                m_row = nullptr;
     bool                                      m_done = false;
 };

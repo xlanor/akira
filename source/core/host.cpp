@@ -336,12 +336,12 @@ int Host::registerHost(int pin)
     if (target >= CHIAKI_TARGET_PS4_9)
     {
         brls::Logger::info("Registering to host `{}` `{}` with PSN AccountID `{}` pin `{}`",
-            hostName, hostAddr, accountId, pin);
+            hostName, hostAddr, settings->maskAccountName(accountId), pin);
     }
     else
     {
         brls::Logger::info("Registering to host `{}` `{}` with PSN OnlineID `{}` pin `{}`",
-            hostName, hostAddr, onlineId, pin);
+            hostName, hostAddr, settings->maskAccountName(onlineId), pin);
     }
 
     registInit = true;
@@ -692,6 +692,27 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
     if (!streamSession->InitVideo(connectInfo.video_profile.width, connectInfo.video_profile.height))
     {
         throw Exception("Failed to initiate video");
+    }
+
+    const char* platformLabel = isPS5() ? "PS5" : "PS4";
+    if (cloud && cloudSession)
+    {
+        std::string server = cloudSession->host;
+        if (cloudSession->port != 0)
+            server += ":" + std::to_string(cloudSession->port);
+        streamSession->setConnectionContext(std::format("Cloud \xc2\xb7 {}", server));
+    }
+    else if (holepunch || isRemote())
+    {
+        streamSession->setConnectionContext(std::format("{} \xc2\xb7 Remote", platformLabel));
+    }
+    else if (wg.isConnected())
+    {
+        streamSession->setConnectionContext(std::format("{} \xc2\xb7 VPN", platformLabel));
+    }
+    else
+    {
+        streamSession->setConnectionContext(std::format("{} \xc2\xb7 Direct", platformLabel));
     }
 
     if (cloud && cloudSession)
@@ -1058,7 +1079,7 @@ std::vector<Host::CouchProfileChoice> Host::couchProfileChoices(uint8_t slot) co
             }
         }
         if (!assignedElsewhere)
-            choices.push_back({ profile.id, profile.label() });
+            choices.push_back({ profile.id, profile.label(), profile.accountId, profile.avatarUrl });
     }
     return choices;
 }
