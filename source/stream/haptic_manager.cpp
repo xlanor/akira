@@ -23,9 +23,9 @@ akira::input::RumbleSource HapticManager::effectiveSource() const
     if (m_rumble_source == akira::input::RumbleSource::Off)
         return akira::input::RumbleSource::Off;
 
-    auto* path = m_input ? m_input->path() : nullptr;
-    if (path != nullptr
-        && akira::input::PadTakesDirectOutput(path->vendorId(), path->productId()))
+    const PadPathInfo path = m_input ? m_input->pathInfo() : PadPathInfo{};
+    if (path.available
+        && akira::input::PadTakesDirectOutput(path.vendorId, path.productId))
         return akira::input::RumbleSource::Derived;
 
     return m_rumble_source;
@@ -36,22 +36,14 @@ void HapticManager::emit(float left, float right)
     if (!m_input)
         return;
 
-    auto* path = m_input->path();
-    if (!path)
-        return;
-
-    if (!path->nativeRumble()) {
-        const float scale = akira::input::Ds5IntensityScale(
-            akira::input::Ds5IntensityFromWire(
-                m_console_vibration.load(std::memory_order_relaxed)));
-        left  *= scale;
-        right *= scale;
-    }
+    const float nonNativeScale = akira::input::Ds5IntensityScale(
+        akira::input::Ds5IntensityFromWire(
+            m_console_vibration.load(std::memory_order_relaxed)));
 
     if (left  > m_ceiling) left  = m_ceiling;
     if (right > m_ceiling) right = m_ceiling;
 
-    path->sendRumble(left, right, m_freq_low, m_freq_high);
+    m_input->sendRumble(left, right, m_freq_low, m_freq_high, nonNativeScale);
 }
 
 void HapticManager::setRumble(uint8_t left, uint8_t right)
@@ -75,16 +67,16 @@ void HapticManager::setRumble(uint8_t left, uint8_t right)
 
 void HapticManager::refreshProfile()
 {
-    auto* path = m_input ? m_input->path() : nullptr;
-    if (path == nullptr) {
-        m_profile_path = nullptr;
+    const PadPathInfo path = m_input ? m_input->pathInfo() : PadPathInfo{};
+    if (!path.available) {
+        m_profile_generation = path.generation;
         return;
     }
 
     m_profile = SettingsManager::getInstance()->resolveRumbleProfile(
-        path->vendorId(), path->productId(), path->address(), path->switchNative(),
-        path->kind() == akira::input::PadPathKind::JoyCon);
-    m_profile_path = path;
+        path.vendorId, path.productId, path.hasAddress ? path.address.data() : nullptr,
+        path.switchNative, path.kind == akira::input::PadPathKind::JoyCon);
+    m_profile_generation = path.generation;
 }
 
 bool HapticManager::streamNativeHaptics(const int16_t* stereo, size_t frames)
@@ -173,10 +165,10 @@ bool HapticManager::streamNativeHaptics(const int16_t* stereo, size_t frames)
 
 void HapticManager::emitMotorsFromWaveform(const int16_t* stereo, size_t frames)
 {
-    auto* path = m_input ? m_input->path() : nullptr;
+    const PadPathInfo path = m_input ? m_input->pathInfo() : PadPathInfo{};
     const bool motor_stalls =
-        path == nullptr
-        || !akira::input::PadTakesDirectOutput(path->vendorId(), path->productId());
+        !path.available
+        || !akira::input::PadTakesDirectOutput(path.vendorId, path.productId);
 
     const akira::input::HapticRumble r =
         akira::input::HapticAudioToRumble(stereo, frames, m_profile.haptic_intensity,
@@ -250,8 +242,11 @@ void HapticManager::processHapticAudio(uint8_t* buf, size_t buf_size)
     const auto* stereo = reinterpret_cast<const int16_t*>(buf);
     const size_t frames = buf_size / (2 * sizeof(int16_t));
 
-    if (m_input && m_input->path() != m_profile_path)
-        refreshProfile();
+    if (m_input) {
+        const PadPathInfo path = m_input->pathInfo();
+        if (path.generation != m_profile_generation)
+            refreshProfile();
+    }
 
     m_haptic_buffers++;
     if (m_haptic_buffers == 1)
@@ -273,10 +268,10 @@ void HapticManager::processHapticAudio(uint8_t* buf, size_t buf_size)
     if (nativeRumble() && streamNativeHaptics(stereo, frames))
         return;
 
-    auto* path = m_input ? m_input->path() : nullptr;
+    const PadPathInfo path = m_input ? m_input->pathInfo() : PadPathInfo{};
     const bool tuned_for_this_pad =
-        path != nullptr
-        && akira::input::PadTakesDirectOutput(path->vendorId(), path->productId());
+        path.available
+        && akira::input::PadTakesDirectOutput(path.vendorId, path.productId);
 
     if (tuned_for_this_pad)
         emitMotorsFromWaveform(stereo, frames);
@@ -289,8 +284,8 @@ bool HapticManager::nativeRumble() const
     if (!m_input)
         return false;
 
-    auto* path = m_input->path();
-    return path != nullptr && path->nativeRumble();
+    const PadPathInfo path = m_input->pathInfo();
+    return path.available && path.nativeRumble;
 }
 
 void HapticManager::setHapticRumble(uint8_t left, uint8_t right)

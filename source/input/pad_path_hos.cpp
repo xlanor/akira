@@ -166,8 +166,7 @@ bool HosPadPath::readGyro(HidSixAxisSensorState* out)
         }
     }
 
-    hidGetSixAxisSensorStates(m_sixaxis[index], out, 1);
-    return true;
+    return hidGetSixAxisSensorStates(m_sixaxis[index], out, 1) != 0;
 }
 
 void HosPadPath::resetMotion()

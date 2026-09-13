@@ -4,7 +4,9 @@
 #include <borealis.hpp>
 #include <switch.h>
 
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -71,6 +73,8 @@ private:
     int            m_focusSlot = -1;
     bool           m_focusAddNext = false;
     std::function<void()> m_on_closed;
+    std::shared_ptr<std::atomic<bool>> m_callback_alive =
+        std::make_shared<std::atomic<bool>>(true);
 };
 
 #endif // AKIRA_PLAYERS_PANEL_VIEW_HPP

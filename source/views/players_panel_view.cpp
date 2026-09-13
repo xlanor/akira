@@ -225,8 +225,12 @@ PlayersPanelView::PlayersPanelView(Host* host, InputManager* input, bool claimIm
     panel->addView(m_foot);
 
     if (m_input) {
-        m_input->setOnCouchJoined([this](HidNpadIdType npad, uint8_t slot) {
-            onJoined(npad, slot);
+        auto alive = m_callback_alive;
+        m_input->setOnCouchJoined([this, alive](HidNpadIdType npad, uint8_t slot) {
+            brls::sync([this, alive, npad, slot]() {
+                if (alive->load(std::memory_order_acquire))
+                    onJoined(npad, slot);
+            });
         });
     }
 
@@ -260,6 +264,7 @@ PlayersPanelView::PlayersPanelView(Host* host, InputManager* input, bool claimIm
 
 PlayersPanelView::~PlayersPanelView()
 {
+    m_callback_alive->store(false, std::memory_order_release);
     if (m_input) {
         m_input->cancelCouchJoin();
         m_input->setOnCouchJoined(nullptr);
@@ -305,7 +310,8 @@ void PlayersPanelView::populateRoster()
 
     std::vector<std::pair<HidNpadIdType, uint8_t>> ordered;
     if (m_input) {
-        for (const auto& entry : m_input->couchRoster())
+        const auto roster = m_input->couchRoster();
+        for (const auto& entry : roster)
             ordered.emplace_back(entry.first, entry.second);
     }
     std::sort(ordered.begin(), ordered.end(),
@@ -439,8 +445,9 @@ void PlayersPanelView::populatePicker()
     std::vector<PadDescription> candidates;
     if (m_input) {
         const auto pads = m_input->describePads();
+        const auto couchRoster = m_input->couchRoster();
         std::string roster;
-        for (const auto& entry : m_input->couchRoster())
+        for (const auto& entry : couchRoster)
             roster += " " + std::to_string((int)entry.first) + "->" + std::to_string((int)entry.second);
         brls::Logger::info("Couch picker: {} pad(s) listed, bound npad {}, roster:{}",
                            pads.size(), (int)m_input->boundNpad(),
@@ -448,7 +455,7 @@ void PlayersPanelView::populatePicker()
 
         for (const auto& d : pads) {
             const bool claimable = m_input->isClaimableNpad(d.npad);
-            const bool inRoster = m_input->couchRoster().find(d.npad) != m_input->couchRoster().end();
+            const bool inRoster = couchRoster.find(d.npad) != couchRoster.end();
             brls::Logger::info("Couch picker: npad {} '{}' claimable={} inRoster={}",
                                (int)d.npad, d.label, claimable, inRoster);
             if (!claimable || inRoster)
@@ -585,8 +592,9 @@ void PlayersPanelView::startAddPlayer()
     }
 
     uint8_t slot = 1;
+    const auto roster = m_input->couchRoster();
     for (; slot < CHIAKI_COUCH_MAX_PADS; slot++) {
-        const bool used = std::any_of(m_input->couchRoster().begin(), m_input->couchRoster().end(),
+        const bool used = std::any_of(roster.begin(), roster.end(),
             [slot](const auto& entry) { return entry.second == slot; });
         if (!used)
             break;
@@ -695,7 +703,8 @@ std::string PlayersPanelView::structureSignature() const
         return sig;
 
     std::vector<std::pair<HidNpadIdType, uint8_t>> ordered;
-    for (const auto& entry : m_input->couchRoster())
+    const auto roster = m_input->couchRoster();
+    for (const auto& entry : roster)
         ordered.emplace_back(entry.first, entry.second);
     std::sort(ordered.begin(), ordered.end(),
               [](const auto& a, const auto& b) { return a.second < b.second; });
@@ -711,10 +720,11 @@ std::string PlayersPanelView::structureSignature() const
     }
 
     if (m_claiming) {
+        const auto couchRoster = m_input->couchRoster();
         for (const auto& d : m_input->describePads()) {
             if (!m_input->isClaimableNpad(d.npad))
                 continue;
-            if (m_input->couchRoster().find(d.npad) != m_input->couchRoster().end())
+            if (couchRoster.find(d.npad) != couchRoster.end())
                 continue;
             sig += "/" + std::to_string((int)d.npad);
         }

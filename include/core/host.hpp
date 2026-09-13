@@ -1,12 +1,16 @@
 #ifndef AKIRA_HOST_HPP
 #define AKIRA_HOST_HPP
 
-#include <chrono>
 #include <array>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <chiaki/common.h>
@@ -122,13 +126,23 @@ private:
     ChiakiControllerState controllerState;
     ChiakiControllerState controllerStates[CHIAKI_COUCH_MAX_PADS];
     uint8_t couchPadCount = 1;
-    bool couchMode = false;
+    std::atomic<bool> couchMode{false};
     CouchPadState couchPadStates[CHIAKI_COUCH_MAX_PADS] = {};
     uint8_t couchPadFailStatus[CHIAKI_COUCH_MAX_PADS] = {};
     std::chrono::steady_clock::time_point couchPadJoinAt[CHIAKI_COUCH_MAX_PADS] = {};
     std::array<std::string, CHIAKI_COUCH_MAX_PADS> couchAccountLabels;
     std::array<int64_t, CHIAKI_COUCH_MAX_PADS> couchProfileIds = {};
     std::map<uint32_t, int8_t> fingerIdTouchId;
+
+    std::atomic<bool> feedbackLoopRunning{false};
+    std::thread feedbackThread;
+    std::mutex feedbackLoopMutex;
+    std::condition_variable feedbackLoopCv;
+    std::atomic<bool> inputSuppressed{false};
+
+    bool startFeedbackLoop();
+    void stopFeedbackLoop();
+    void feedbackLoop();
 
     // Callbacks
     std::function<void()> onConnected;
@@ -263,7 +277,7 @@ public:
     std::vector<CouchProfileChoice> couchProfileChoices(uint8_t slot) const;
     bool couchSelectProfile(uint8_t slot, int64_t profileId);
     void couchHandlePadDropped(uint8_t slot);
-    bool isCouchMode() const { return couchMode; }
+    bool isCouchMode() const { return couchMode.load(std::memory_order_acquire); }
     const std::string& couchAccountLabel(uint8_t slot) const {
         static const std::string empty;
         return slot < CHIAKI_COUCH_MAX_PADS ? couchAccountLabels[slot] : empty;
@@ -285,6 +299,7 @@ public:
         }
         return false;
     }
+    void setInputSuppressed(bool suppressed);
 
     // Holepunch connection for remote play
     ChiakiErrorCode initHolepunchSession();
@@ -321,7 +336,7 @@ public:
     void setOnReadCouchSecondary(std::function<void(ChiakiControllerState*, uint8_t*)> callback) {
         onReadCouchSecondary = std::move(callback);
     }
-    void setCouchMode(bool on) { couchMode = on; }
+    void setCouchMode(bool on) { couchMode.store(on, std::memory_order_release); }
     void setOnRegistCanceled(std::function<void()> callback) { onRegistCanceled = std::move(callback); }
     void setOnRegistFailed(std::function<void()> callback) { onRegistFailed = std::move(callback); }
     void setOnRegistSuccess(std::function<void()> callback) { onRegistSuccess = std::move(callback); }

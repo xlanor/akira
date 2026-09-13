@@ -119,13 +119,11 @@ public:
         uint64_t styleSet = padGetStyleSet(&m_pad);
 
         if (styleSet & HidNpadStyleTag_NpadHandheld) {
-            hidGetSixAxisSensorStates(m_sixaxis[0], out, 1);
-            return true;
+            return hidGetSixAxisSensorStates(m_sixaxis[0], out, 1) != 0;
         }
 
         if (styleSet & HidNpadStyleTag_NpadFullKey) {
-            hidGetSixAxisSensorStates(m_sixaxis[1], out, 1);
-            return true;
+            return hidGetSixAxisSensorStates(m_sixaxis[1], out, 1) != 0;
         }
 
         if (styleSet & HidNpadStyleTag_NpadJoyDual) {
@@ -146,11 +144,11 @@ public:
                     break;
             }
 
-            if (useLeft)       hidGetSixAxisSensorStates(m_sixaxis[2], out, 1);
-            else if (useRight) hidGetSixAxisSensorStates(m_sixaxis[3], out, 1);
-            else               return false;
-
-            return true;
+            if (useLeft)
+                return hidGetSixAxisSensorStates(m_sixaxis[2], out, 1) != 0;
+            if (useRight)
+                return hidGetSixAxisSensorStates(m_sixaxis[3], out, 1) != 0;
+            return false;
         }
 
         return false;

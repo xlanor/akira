@@ -20,8 +20,22 @@ InputManager::~InputManager()
     cleanup();
 }
 
+void InputManager::setLogger(ChiakiLog* log)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    m_log = log;
+}
+
+void InputManager::setTargetPS5(bool ps5)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    m_is_ps5 = ps5;
+}
+
 bool InputManager::init()
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+
     bool vibration_permitted = true;
     if (R_SUCCEEDED(hidIsVibrationPermitted(&vibration_permitted)) && !vibration_permitted) {
         brls::Logger::warning("Controller Vibration is off in System Settings - "
@@ -41,7 +55,7 @@ bool InputManager::init()
     padConfigureInput(8, HidNpadStyleSet_NpadStandard);
     hidInitializeTouchScreen();
 
-    m_path = akira::input::DefaultPadPath(m_extended);
+    setPathLocked(akira::input::DefaultPadPath(m_extended));
 
     m_extended.initializeOptional();
 
@@ -49,7 +63,16 @@ bool InputManager::init()
     {
         HidNpadIdType wanted = m_bound_npad;
         m_bound_npad = kNoNpad;
-        selectNpad(wanted);
+        for (const auto& desc : describePadsLocked()) {
+            if (desc.npad != wanted)
+                continue;
+            auto path = akira::input::MakePath(desc, m_extended);
+            if (path) {
+                m_bound_npad = wanted;
+                setPathLocked(std::move(path));
+            }
+            break;
+        }
     }
 
     return true;
@@ -57,6 +80,8 @@ bool InputManager::init()
 
 void InputManager::cleanup()
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    m_menu_held.store(false, std::memory_order_release);
     m_extended.shutdown();
 
     for (int i = 0; i < SDL_JOYSTICK_COUNT; i++)
@@ -68,11 +93,20 @@ void InputManager::cleanup()
         }
     }
 
-    m_path.reset();
+    if (m_path) {
+        m_path.reset();
+        ++m_path_generation;
+    }
     m_overlay_drag_finger = -1;
 }
 
 void InputManager::setPath(std::unique_ptr<akira::input::PadPath> path)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    setPathLocked(std::move(path));
+}
+
+void InputManager::setPathLocked(std::unique_ptr<akira::input::PadPath> path)
 {
     if (!path)
         return;
@@ -80,18 +114,90 @@ void InputManager::setPath(std::unique_ptr<akira::input::PadPath> path)
     if (m_path)
         m_path->sendRumble(0.0f, 0.0f, 0.0f, 0.0f);
     m_path = std::move(path);
+    ++m_path_generation;
 
     brls::Logger::info("InputManager: input path is now {}", m_path->label());
 }
 
+PadPathInfo InputManager::pathInfo() const
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return pathInfoLocked();
+}
+
+PadPathInfo InputManager::pathInfoLocked() const
+{
+    PadPathInfo info;
+    info.generation = m_path_generation;
+    if (!m_path)
+        return info;
+
+    info.available = true;
+    info.kind = m_path->kind();
+    info.npad = m_path->npad();
+    info.style = m_path->style();
+    info.vendorId = m_path->vendorId();
+    info.productId = m_path->productId();
+    info.nativeRumble = m_path->nativeRumble();
+    info.switchNative = m_path->switchNative();
+    if (const uint8_t* address = m_path->address()) {
+        std::copy_n(address, info.address.size(), info.address.begin());
+        info.hasAddress = true;
+    }
+    return info;
+}
+
+void InputManager::sendRumble(float left, float right, float freqLow, float freqHigh,
+    float nonNativeScale)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    if (!m_path)
+        return;
+    if (!m_path->nativeRumble()) {
+        left *= nonNativeScale;
+        right *= nonNativeScale;
+    }
+    m_path->sendRumble(left, right, freqLow, freqHigh);
+}
+
+void InputManager::sendTriggerEffects(const akira::input::PadPath::TriggerEffect& left,
+    const akira::input::PadPath::TriggerEffect& right)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    if (m_path)
+        m_path->sendTriggerEffects(left, right);
+}
+
+void InputManager::sendEffectIntensity(uint8_t vibration, uint8_t trigger)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    if (m_path)
+        m_path->sendEffectIntensity(vibration, trigger);
+}
+
+void InputManager::sendLightbar(uint8_t red, uint8_t green, uint8_t blue)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    if (m_path)
+        m_path->sendLightbar(red, green, blue);
+}
+
 std::vector<akira::input::PadDescription> InputManager::describePads()
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return describePadsLocked();
+}
+
+std::vector<akira::input::PadDescription> InputManager::describePadsLocked()
 {
     return akira::input::DescribePads(m_extended);
 }
 
 void InputManager::selectNpad(HidNpadIdType npad)
 {
-    for (const auto& desc : describePads()) {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+
+    for (const auto& desc : describePadsLocked()) {
         if (desc.npad != npad)
             continue;
 
@@ -102,12 +208,12 @@ void InputManager::selectNpad(HidNpadIdType npad)
         m_bound_npad = npad;
 
         brls::Logger::info("InputManager: using {} on npad {}", path->label(), (int)npad);
-        setPath(std::move(path));
+        setPathLocked(std::move(path));
         return;
     }
 
     brls::Logger::warning("InputManager: npad {} no longer present, falling back to default", (int)npad);
-    setPath(akira::input::DefaultPadPath(m_extended));
+    setPathLocked(akira::input::DefaultPadPath(m_extended));
 }
 
 void InputManager::retryPathIdentification()
@@ -142,7 +248,7 @@ void InputManager::retryPathIdentification()
         return;
     m_identify_next = now + 1000;
 
-    for (const auto& desc : describePads()) {
+    for (const auto& desc : describePadsLocked()) {
         if (desc.kind != akira::input::PadPathKind::McPsNative)
             continue;
         if (m_couch_roster.find(desc.npad) != m_couch_roster.end())
@@ -160,7 +266,7 @@ void InputManager::retryPathIdentification()
 
         m_bound_npad    = desc.npad;
         m_identify_done = true;
-        setPath(std::move(path));
+        setPathLocked(std::move(path));
         return;
     }
 }
@@ -175,7 +281,7 @@ void InputManager::reconcilePathDriver()
         return;
     m_driver_next = now + 1000;
 
-    for (const auto& desc : describePads()) {
+    for (const auto& desc : describePadsLocked()) {
         if (desc.npad != m_bound_npad)
             continue;
 
@@ -194,7 +300,7 @@ void InputManager::reconcilePathDriver()
                            " - {} to {}",
                            (int)desc.npad, akira::input::PadDriverName(driver),
                            m_path->label(), path->label());
-        setPath(std::move(path));
+        setPathLocked(std::move(path));
         return;
     }
 }
@@ -305,6 +411,12 @@ void InputManager::applyPadInput(akira::input::PadPath* path, ChiakiControllerSt
 
 uint8_t InputManager::couchJoin(HidNpadIdType npad)
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return couchJoinLocked(npad);
+}
+
+uint8_t InputManager::couchJoinLocked(HidNpadIdType npad)
+{
     if (npad == m_bound_npad)
         return kNoCouchSlot;
     auto existing = m_couch_roster.find(npad);
@@ -340,12 +452,24 @@ uint64_t InputManager::couchNpadMask() const
 
 void InputManager::couchLeave(HidNpadIdType npad)
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    couchLeaveLocked(npad);
+}
+
+void InputManager::couchLeaveLocked(HidNpadIdType npad)
+{
     m_couch_roster.erase(npad);
     m_secondary_paths.erase(npad);
-    m_secondary_missing_frames.erase(npad);
+    m_secondary_missing_since.erase(npad);
 }
 
 uint8_t InputManager::couchPadCount() const
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return couchPadCountLocked();
+}
+
+uint8_t InputManager::couchPadCountLocked() const
 {
     uint8_t count = 1;
     for (const auto& entry : m_couch_roster)
@@ -358,6 +482,7 @@ uint8_t InputManager::couchPadCount() const
 
 uint8_t InputManager::CouchPadIndexForController(HidNpadIdType npad)
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
     if (npad == m_bound_npad)
         return 0;
     auto it = m_couch_roster.find(npad);
@@ -369,6 +494,8 @@ uint8_t InputManager::CouchPadIndexForController(HidNpadIdType npad)
 bool InputManager::couchSlotOutputTarget(uint8_t slot, uint8_t out_addr[6], uint16_t* vendor_id,
                                          uint16_t* product_id)
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+
     if (slot == 0 || slot == kNoCouchSlot)
         return false;
 
@@ -382,7 +509,7 @@ bool InputManager::couchSlotOutputTarget(uint8_t slot, uint8_t out_addr[6], uint
     if (npad == kNoNpad)
         return false;
 
-    for (const auto& desc : describePads()) {
+    for (const auto& desc : describePadsLocked()) {
         if (desc.npad != npad)
             continue;
         if (!desc.has_address)
@@ -400,7 +527,10 @@ bool InputManager::couchSlotOutputTarget(uint8_t slot, uint8_t out_addr[6], uint
 
 void InputManager::readSecondaryPads(ChiakiControllerState* states, uint8_t max_pads, uint8_t& count)
 {
-    auto pads = describePads();
+    DeferredCallbacks callbacks;
+    std::unique_lock<std::mutex> lock(m_state_mutex);
+    auto pads = describePadsLocked();
+    const auto now = akira::input::timing::Clock::now();
     std::vector<std::pair<HidNpadIdType, uint8_t>> disconnected;
 
     for (const auto& entry : m_couch_roster)
@@ -410,7 +540,6 @@ void InputManager::readSecondaryPads(ChiakiControllerState* states, uint8_t max_
         if (slot == 0 || slot >= max_pads)
             continue;
 
-        // Never retain input from a controller that is no longer readable.
         chiaki_controller_state_set_idle(&states[slot]);
         if (slot + 1 > count)
             count = (uint8_t)(slot + 1);
@@ -426,18 +555,16 @@ void InputManager::readSecondaryPads(ChiakiControllerState* states, uint8_t max_
         }
         if (!found)
         {
-            uint8_t& misses = m_secondary_missing_frames[npad];
-            if (misses < kDisconnectGraceFrames)
-                misses++;
-            if (misses == 1)
+            auto [missing, firstMiss] = m_secondary_missing_since.try_emplace(npad, now);
+            if (firstMiss)
                 brls::Logger::warning("Couch: slot {} npad {} disappeared; sending idle input",
                                       (int)slot, (int)npad);
-            if (misses >= kDisconnectGraceFrames)
+            if (now - missing->second >= akira::input::timing::DisconnectGrace)
                 disconnected.emplace_back(npad, slot);
             continue;
         }
 
-        m_secondary_missing_frames.erase(npad);
+        m_secondary_missing_since.erase(npad);
 
         auto& cached = m_secondary_paths[npad];
         if (!cached)
@@ -452,12 +579,16 @@ void InputManager::readSecondaryPads(ChiakiControllerState* states, uint8_t max_
     {
         brls::Logger::warning("Couch: removing disconnected slot {} npad {}",
                               (int)entry.second, (int)entry.first);
-        couchLeave(entry.first);
-        if (m_on_couch_disconnected)
-            m_on_couch_disconnected(entry.first, entry.second);
+        couchLeaveLocked(entry.first);
+        if (m_on_couch_disconnected) {
+            auto callback = m_on_couch_disconnected;
+            callbacks.emplace_back([callback, entry]() {
+                callback(entry.first, entry.second);
+            });
+        }
     }
 
-    count = couchPadCount();
+    count = couchPadCountLocked();
 
     for (auto it = m_secondary_paths.begin(); it != m_secondary_paths.end(); )
     {
@@ -466,37 +597,92 @@ void InputManager::readSecondaryPads(ChiakiControllerState* states, uint8_t max_
         else
             ++it;
     }
+
+    lock.unlock();
+    for (auto& callback : callbacks)
+        callback();
+}
+
+std::map<HidNpadIdType, uint8_t> InputManager::couchRoster() const
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return m_couch_roster;
 }
 
 float InputManager::couchClaimProgress() const
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+
     if (!m_couch_claim_active)
         return 0.0f;
 
-    int best = 0;
-    for (const auto& entry : m_claim_hold)
-    {
-        if (entry.second > best)
-            best = entry.second;
-    }
-    if (best <= 0)
-        return 0.0f;
-    if (best >= kClaimHoldFrames)
-        return 1.0f;
-    return (float)best / (float)kClaimHoldFrames;
+    const auto now = akira::input::timing::Clock::now();
+    float bestProgress = 0.0f;
+    for (const auto& entry : m_claim_started_at)
+        bestProgress = std::max(bestProgress, akira::input::timing::progress(
+            entry.second, now, akira::input::timing::CouchClaimHold));
+    return bestProgress;
+}
+
+bool InputManager::couchClaimActive() const
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return m_couch_claim_active;
+}
+
+void InputManager::setOnCouchJoined(std::function<void(HidNpadIdType, uint8_t)> callback)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    m_on_couch_joined = std::move(callback);
+}
+
+void InputManager::setOnCouchDisconnected(std::function<void(HidNpadIdType, uint8_t)> callback)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    m_on_couch_disconnected = std::move(callback);
+}
+
+void InputManager::setOnPadArrived(std::function<void(HidNpadIdType)> callback)
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    m_on_pad_arrived = std::move(callback);
+}
+
+HidNpadIdType InputManager::boundNpad() const
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return m_bound_npad;
+}
+
+void InputManager::resolvePadArrival()
+{
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    m_arrival_pending = false;
 }
 
 void InputManager::beginCouchJoin()
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
     m_couch_claim_active = true;
-    m_claim_hold.clear();
+    m_claim_started_at.clear();
 }
 
 void InputManager::cancelCouchJoin()
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
     m_couch_claim_active = false;
     m_arrival_pending = false;
-    m_claim_hold.clear();
+    m_claim_started_at.clear();
+}
+
+void InputManager::tickCouchClaim()
+{
+    DeferredCallbacks callbacks;
+    std::unique_lock<std::mutex> lock(m_state_mutex);
+    pollCouchClaim(callbacks);
+    lock.unlock();
+    for (auto& callback : callbacks)
+        callback();
 }
 
 void InputManager::promptControllerSetup()
@@ -511,6 +697,12 @@ void InputManager::promptControllerSetup()
 
 bool InputManager::isClaimableNpad(HidNpadIdType npad) const
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+    return isClaimableNpadLocked(npad);
+}
+
+bool InputManager::isClaimableNpadLocked(HidNpadIdType npad) const
+{
     if (npad == m_bound_npad)
         return false;
     if ((uint32_t)npad >= 8)
@@ -518,9 +710,10 @@ bool InputManager::isClaimableNpad(HidNpadIdType npad) const
     return true;
 }
 
-void InputManager::pollPadArrivals()
+void InputManager::pollPadArrivals(DeferredCallbacks& callbacks)
 {
-    if ((m_arrival_tick++ % kArrivalPollFrames) != 0)
+    const auto now = akira::input::timing::Clock::now();
+    if (!m_arrival_cadence.due(now))
         return;
 
     static constexpr HidNpadIdType kArrivalScan[] = {
@@ -571,21 +764,32 @@ void InputManager::pollPadArrivals()
         m_announced_mask |= bit;
         m_arrival_pending = true;
         brls::Logger::info("Couch: controller appeared on npad {}", (int)npad);
-        m_on_pad_arrived(npad);
+        auto callback = m_on_pad_arrived;
+        callbacks.emplace_back([callback, npad]() { callback(npad); });
         return;
     }
 }
 
-void InputManager::pollCouchClaim()
+void InputManager::pollCouchClaim(DeferredCallbacks& callbacks)
 {
     if (!m_couch_claim_active)
         return;
 
-    auto pads = describePads();
+    auto pads = describePadsLocked();
+    const auto now = akira::input::timing::Clock::now();
+    for (auto it = m_claim_started_at.begin(); it != m_claim_started_at.end();) {
+        const bool present = std::any_of(pads.begin(), pads.end(), [it](const auto& pad) {
+            return pad.npad == it->first;
+        });
+        if (!present)
+            it = m_claim_started_at.erase(it);
+        else
+            ++it;
+    }
     for (const auto& desc : pads)
     {
         HidNpadIdType npad = desc.npad;
-        if (!isClaimableNpad(npad))
+        if (!isClaimableNpadLocked(npad))
             continue;
         if (m_couch_roster.find(npad) != m_couch_roster.end())
             continue;
@@ -596,44 +800,54 @@ void InputManager::pollCouchClaim()
         u64 btns = padGetButtons(&pad);
         bool combo = (btns & HidNpadButton_ZL) && (btns & HidNpadButton_ZR);
 
-        int& hold = m_claim_hold[npad];
         if (combo)
         {
-            hold++;
-            if (hold >= kClaimHoldFrames)
+            auto [started, firstSample] = m_claim_started_at.try_emplace(npad, now);
+            if (!firstSample && now - started->second >= akira::input::timing::CouchClaimHold)
             {
-                uint8_t slot = couchJoin(npad);
-                m_claim_hold.clear();
+                uint8_t slot = couchJoinLocked(npad);
+                m_claim_started_at.clear();
                 m_couch_claim_active = false;
-                if (slot != kNoCouchSlot && m_on_couch_joined)
-                    m_on_couch_joined(npad, slot);
+                if (slot != kNoCouchSlot && m_on_couch_joined) {
+                    auto callback = m_on_couch_joined;
+                    callbacks.emplace_back([callback, npad, slot]() { callback(npad, slot); });
+                }
                 return;
             }
         }
         else
         {
-            hold = 0;
+            m_claim_started_at.erase(npad);
         }
     }
 }
 
 void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_t>* finger_id_touch_id)
 {
-    pollPadArrivals();
-    pollCouchClaim();
+    DeferredCallbacks callbacks;
+    std::unique_lock<std::mutex> lock(m_state_mutex);
+
+    pollPadArrivals(callbacks);
+    pollCouchClaim(callbacks);
 
     if (!m_path)
     {
         chiaki_controller_state_set_idle(state);
+        lock.unlock();
+        for (auto& callback : callbacks)
+            callback();
         return;
     }
 
     retryPathIdentification();
     reconcilePathDriver();
 
+    const auto now = akira::input::gesture::Clock::now();
+
     m_path->setExcludedNpads(couchNpadMask());
 
     m_path->poll();
+    m_menu_held.store(m_path->menuHeld(), std::memory_order_release);
 
     applyPadInput(m_path.get(), state);
 
@@ -641,29 +855,33 @@ void InputManager::update(ChiakiControllerState* state, std::map<uint32_t, int8_
 
     if (!m_path->readTouchpad(state))
     {
-        readTouchScreen(state, finger_id_touch_id);
-        updateSyntheticSwipes(state, buttons);
+        readTouchScreen(state, finger_id_touch_id, now);
+        updateSyntheticSwipes(state, buttons, now);
 
-        if (m_touchpad_button_hold < 0)
+        if (m_touchpad_button_pulse.scheduled)
         {
-            m_touchpad_button_hold++;
-            if (m_touchpad_button_hold == 0)
-                m_touchpad_button_hold = PendingBorderTap::TAP_BUTTON_HOLD_FRAMES;
+            if (now >= m_touchpad_button_pulse.releaseAt)
+            {
+                m_touchpad_button_pulse.scheduled = false;
+                fireDeferredRelease(state);
+            }
+            else if (now >= m_touchpad_button_pulse.pressAt)
+            {
+                state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
+            }
         }
-        else if (m_touchpad_button_hold > 0)
+        else
         {
-            state->buttons |= CHIAKI_CONTROLLER_BUTTON_TOUCHPAD;
-            m_touchpad_button_hold--;
-        }
-
-        if (m_touchpad_button_hold == 0)
             fireDeferredRelease(state);
+        }
     }
 
-    if (++m_sixaxis_frame_counter >= 3) {
-        m_sixaxis_frame_counter = 0;
+    if (m_motion_cadence.due(now))
         readSixAxis(state);
-    }
+
+    lock.unlock();
+    for (auto& callback : callbacks)
+        callback();
 }
 
 void InputManager::fireDeferredRelease(ChiakiControllerState* state)
@@ -676,16 +894,20 @@ void InputManager::fireDeferredRelease(ChiakiControllerState* state)
     m_active_click_touch_id = -1;
 }
 
-bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map<uint32_t, int8_t>* finger_id_touch_id)
+bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state,
+    std::map<uint32_t, int8_t>* finger_id_touch_id,
+    akira::input::gesture::TimePoint now)
 {
     HidTouchScreenState sw_state = {0};
 
     size_t got = hidGetTouchScreenStates(&sw_state, 1);
     if (got == 0)
     {
-        if (m_touch_debug_counter % 300 == 0 && !finger_id_touch_id->empty())
+        if (!finger_id_touch_id->empty() && now >= m_next_touch_warning)
+        {
             brls::Logger::warning("Touch: hidGetTouchScreenStates returned 0, preserving {} active touches", finger_id_touch_id->size());
-        m_touch_debug_counter++;
+            m_next_touch_warning = now + akira::input::gesture::TouchWarningInterval;
+        }
         return !finger_id_touch_id->empty();
     }
 
@@ -734,7 +956,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
         {
             if (cur->second >= 0)
             {
-                if (m_touchpad_button_hold != 0)
+                if (m_touchpad_button_pulse.scheduled)
                 {
                     m_deferred_release_touch_id = cur->second;
                     brls::Logger::debug("Touch: defer stop_touch={} until button hold completes", cur->second);
@@ -833,7 +1055,7 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
             if (isBorder)
             {
                 m_pending_border_taps[sw_state.touches[i].finger_id] =
-                    {(uint16_t)rawX, (uint16_t)rawY, 0};
+                    {(uint16_t)rawX, (uint16_t)rawY, now};
                 brls::Logger::info("Touch: pending border tap for finger_id={} raw=({},{})",
                     sw_state.touches[i].finger_id, rawX, rawY);
             }
@@ -864,16 +1086,19 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
                     sw_state.touches[i].finger_id, touch_id, x, y);
                 m_pending_border_taps.erase(pt);
             }
-            else if (++pt->second.frame_count >= PendingBorderTap::TAP_COMMIT_FRAMES)
+            else if (now - pt->second.downAt >= akira::input::gesture::BorderTapCommitDelay)
             {
                 fireDeferredRelease(chiaki_state);
                 int8_t touch_id = chiaki_controller_state_start_touch(chiaki_state, x, y);
                 (*finger_id_touch_id)[sw_state.touches[i].finger_id] = touch_id;
-                m_touchpad_button_hold = -PendingBorderTap::TAP_BUTTON_DELAY_FRAMES;
+                m_touchpad_button_pulse.scheduled = true;
+                m_touchpad_button_pulse.pressAt = now + akira::input::gesture::TouchpadButtonDelay;
+                m_touchpad_button_pulse.releaseAt = m_touchpad_button_pulse.pressAt
+                    + akira::input::gesture::TouchpadButtonHold;
                 m_active_click_touch_id = touch_id;
                 Session::GetInstance()->triggerBorderFlash();
-                brls::Logger::info("Touch: border tap committed (touch first, button in {} frames, pos frozen) finger_id={} -> touch_id={} at mapped=({},{})",
-                    PendingBorderTap::TAP_BUTTON_DELAY_FRAMES, sw_state.touches[i].finger_id, touch_id, x, y);
+                brls::Logger::info("Touch: border tap committed (touch first, button in 67 ms, pos frozen) finger_id={} -> touch_id={} at mapped=({},{})",
+                    sw_state.touches[i].finger_id, touch_id, x, y);
                 m_pending_border_taps.erase(pt);
             }
         }
@@ -893,7 +1118,8 @@ bool InputManager::readTouchScreen(ChiakiControllerState* chiaki_state, std::map
 bool InputManager::readSixAxis(ChiakiControllerState* state)
 {
     HidSixAxisSensorState sixaxis = {0};
-    m_path->readGyro(&sixaxis);
+    if (!m_path->readGyro(&sixaxis))
+        return false;
 
     state->gyro_x = sixaxis.angular_velocity.x * 2.0f * M_PI;
     state->gyro_y = sixaxis.angular_velocity.z * 2.0f * M_PI;
@@ -952,6 +1178,8 @@ bool InputManager::readSixAxis(ChiakiControllerState* state)
 
 void InputManager::resetMotionControls()
 {
+    std::lock_guard<std::mutex> lock(m_state_mutex);
+
     if (!m_path)
         return;
 
@@ -965,7 +1193,8 @@ void InputManager::resetMotionControls()
         m_accel_zero_x, m_accel_zero_y, m_accel_zero_z);
 }
 
-void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 buttons)
+void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 buttons,
+    akira::input::gesture::TimePoint now)
 {
     static constexpr uint32_t swipeConstants[4] = {
         SWIPE_TOUCHPAD_UP, SWIPE_TOUCHPAD_DOWN,
@@ -975,18 +1204,15 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
     const int16_t padMaxX = m_is_ps5 ? 1919 : 1920;
     const int16_t padMaxY = m_is_ps5 ? 1079 : 942;
 
-    const int16_t dyStep = (padMaxY + SyntheticSwipe::SWIPE_FRAMES - 1) / SyntheticSwipe::SWIPE_FRAMES;
-    const int16_t dxStep = (padMaxX + SyntheticSwipe::SWIPE_FRAMES - 1) / SyntheticSwipe::SWIPE_FRAMES;
-
     struct SwipeConfig {
         int16_t startX, startY;
-        int16_t dx, dy;
+        int16_t endX, endY;
     };
     SwipeConfig configs[4] = {
-        {(int16_t)(padMaxX / 2), padMaxY,  0, (int16_t)-dyStep},
-        {(int16_t)(padMaxX / 2), 0,        0, dyStep},
-        {padMaxX, (int16_t)(padMaxY / 2), (int16_t)-dxStep, 0},
-        {0, (int16_t)(padMaxY / 2),        dxStep, 0},
+        {(int16_t)(padMaxX / 2), padMaxY, (int16_t)(padMaxX / 2), 0},
+        {(int16_t)(padMaxX / 2), 0, (int16_t)(padMaxX / 2), padMaxY},
+        {padMaxX, (int16_t)(padMaxY / 2), 0, (int16_t)(padMaxY / 2)},
+        {0, (int16_t)(padMaxY / 2), padMaxX, (int16_t)(padMaxY / 2)},
     };
 
     const ButtonMapping& mapping = SettingsManager::getInstance()->getButtonMapping();
@@ -1045,34 +1271,37 @@ void InputManager::updateSyntheticSwipes(ChiakiControllerState* state, u64 butto
 
         if (swipe.phase == SyntheticSwipe::Phase::IDLE) {
             if (comboHeld && stickDirectionValid && !swipe.buttonWasPressed) {
-                swipe.curX = configs[i].startX;
-                swipe.curY = configs[i].startY;
-                swipe.dx = configs[i].dx;
-                swipe.dy = configs[i].dy;
-                swipe.touchId = chiaki_controller_state_start_touch(state, swipe.curX, swipe.curY);
+                swipe.startX = configs[i].startX;
+                swipe.startY = configs[i].startY;
+                swipe.endX = configs[i].endX;
+                swipe.endY = configs[i].endY;
+                swipe.touchId = chiaki_controller_state_start_touch(state, swipe.startX, swipe.startY);
                 if (swipe.touchId >= 0) {
                     swipe.phase = SyntheticSwipe::Phase::ACTIVE;
-                    swipe.frameCounter = 0;
-                    brls::Logger::info("Swipe {}: started touch_id={}, start=({},{}) step=({},{})",
-                        swipeNames[i], swipe.touchId, swipe.curX, swipe.curY, swipe.dx, swipe.dy);
+                    swipe.startedAt = now;
+                    brls::Logger::info("Swipe {}: started touch_id={}, start=({},{}) end=({},{}) duration=300 ms",
+                        swipeNames[i], swipe.touchId, swipe.startX, swipe.startY,
+                        swipe.endX, swipe.endY);
                 } else {
                     brls::Logger::warning("Swipe {}: no free touch slots", swipeNames[i]);
                 }
             }
             swipe.buttonWasPressed = comboHeld && stickDirectionValid;
         } else {
-            swipe.frameCounter++;
-            if (swipe.frameCounter >= SyntheticSwipe::SWIPE_FRAMES) {
+            const auto elapsed = now - swipe.startedAt;
+            if (elapsed >= akira::input::gesture::SwipeDuration) {
                 brls::Logger::info("Swipe {}: completed, final pos=({},{}), touch_id={}",
-                    swipeNames[i], swipe.curX, swipe.curY, swipe.touchId);
+                    swipeNames[i], swipe.endX, swipe.endY, swipe.touchId);
                 chiaki_controller_state_stop_touch(state, (uint8_t)swipe.touchId);
                 swipe.phase = SyntheticSwipe::Phase::IDLE;
                 swipe.touchId = -1;
                 swipe.buttonWasPressed = comboHeld && stickDirectionValid;
             } else {
-                swipe.curX = (int16_t)std::clamp((int)(swipe.curX + swipe.dx), 0, (int)padMaxX);
-                swipe.curY = (int16_t)std::clamp((int)(swipe.curY + swipe.dy), 0, (int)padMaxY);
-                chiaki_controller_state_set_touch_pos(state, (uint8_t)swipe.touchId, swipe.curX, swipe.curY);
+                const int16_t x = akira::input::gesture::interpolate(
+                    swipe.startX, swipe.endX, elapsed, akira::input::gesture::SwipeDuration);
+                const int16_t y = akira::input::gesture::interpolate(
+                    swipe.startY, swipe.endY, elapsed, akira::input::gesture::SwipeDuration);
+                chiaki_controller_state_set_touch_pos(state, (uint8_t)swipe.touchId, x, y);
             }
         }
     }

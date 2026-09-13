@@ -68,7 +68,7 @@ private:
     static constexpr float kNativeSilence = 2.0f / 255.0f;
 
     akira::input::RumbleProfile   m_profile;
-    const void*                   m_profile_path = nullptr;
+    uint64_t                      m_profile_generation = 0;
     float    m_native_env_left  = 0.0f;
     float    m_native_env_right = 0.0f;
 

@@ -6,6 +6,7 @@
 #include "core/discovery_manager.hpp"
 #include "input/pad_path.hpp"
 #include "input/rumble_profile.hpp"
+#include "input/sample_cadence.hpp"
 
 #include <borealis.hpp>
 #include <algorithm>
@@ -86,6 +87,7 @@ Host::Host(const std::string& name)
 
 Host::~Host()
 {
+    stopFeedbackLoop();
     if (sessionInit)
     {
         finiSession();
@@ -723,6 +725,7 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
 
 int Host::finiSession()
 {
+    stopFeedbackLoop();
     if (sessionInit)
     {
         sessionInit = false;
@@ -757,7 +760,9 @@ int Host::finiRegist()
 
 void Host::stopSession()
 {
-    chiaki_session_stop(&session);
+    stopFeedbackLoop();
+    if (sessionInit)
+        chiaki_session_stop(&session);
 }
 
 bool Host::isSessionSocketHealthy() const
@@ -794,25 +799,110 @@ void Host::startSession()
         throw Exception("Chiaki Session Start failed");
     }
     brls::Logger::info("chiaki_session_start returned SUCCESS");
+    if (!startFeedbackLoop()) {
+        chiaki_session_stop(&session);
+        throw Exception("Failed to start input feedback loop");
+    }
+}
+
+bool Host::startFeedbackLoop()
+{
+    bool expected = false;
+    if (!feedbackLoopRunning.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel))
+        return true;
+
+    inputSuppressed.store(false, std::memory_order_release);
+
+    try {
+        feedbackThread = std::thread(&Host::feedbackLoop, this);
+    } catch (const std::exception& e) {
+        feedbackLoopRunning.store(false, std::memory_order_release);
+        brls::Logger::error("Input feedback loop failed to start: {}", e.what());
+        return false;
+    }
+
+    brls::Logger::info("Input feedback loop started independently of rendering at 120 Hz");
+    return true;
+}
+
+void Host::stopFeedbackLoop()
+{
+    const bool wasRunning = feedbackLoopRunning.exchange(false, std::memory_order_acq_rel);
+    feedbackLoopCv.notify_all();
+
+    if (feedbackThread.joinable())
+        feedbackThread.join();
+
+    if (wasRunning)
+        brls::Logger::info("Input feedback loop stopped");
+}
+
+void Host::feedbackLoop()
+{
+    using Clock = std::chrono::steady_clock;
+    constexpr auto period = akira::input::InputPollPeriod;
+    constexpr auto reportPeriod = std::chrono::seconds(10);
+
+    auto next = Clock::now();
+    auto reportStart = next;
+    uint64_t iterations = 0;
+    uint64_t lateIterations = 0;
+
+    while (feedbackLoopRunning.load(std::memory_order_acquire)) {
+        sendFeedbackState();
+        iterations++;
+
+        next += period;
+        std::unique_lock<std::mutex> lock(feedbackLoopMutex);
+        feedbackLoopCv.wait_until(lock, next, [this]() {
+            return !feedbackLoopRunning.load(std::memory_order_acquire);
+        });
+        lock.unlock();
+
+        if (!feedbackLoopRunning.load(std::memory_order_acquire))
+            break;
+
+        const auto now = Clock::now();
+        if (now > next + period) {
+            lateIterations++;
+            next = now;
+        }
+
+        if (now - reportStart >= reportPeriod) {
+            const double seconds = std::chrono::duration<double>(now - reportStart).count();
+            brls::Logger::info(
+                "Input feedback loop: actual_hz={:.2f} late_iterations={}",
+                static_cast<double>(iterations) / seconds, lateIterations);
+            reportStart = now;
+            iterations = 0;
+            lateIterations = 0;
+        }
+    }
 }
 
 void Host::sendFeedbackStateCouch()
 {
-    if (onReadController)
+    if (inputSuppressed.load(std::memory_order_acquire))
     {
-        onReadController(&controllerStates[0], &fingerIdTouchId);
+        fingerIdTouchId.clear();
+        for (uint8_t i = 0; i < couchPadCount; i++)
+            chiaki_controller_state_set_idle(&controllerStates[i]);
+    }
+    else
+    {
+        if (onReadController)
+            onReadController(&controllerStates[0], &fingerIdTouchId);
+
+        uint8_t count = 1;
+        if (onReadCouchSecondary)
+            onReadCouchSecondary(controllerStates, &count);
+        couchPadCount = count;
     }
 
-    uint8_t count = 1;
-    if (onReadCouchSecondary)
-    {
-        onReadCouchSecondary(controllerStates, &count);
-    }
-
-    couchPadCount = count;
-    if (count > 1)
-        chiaki_session_set_pad_count(&session, count);
-    for (uint8_t i = 0; i < count; i++)
+    if (couchPadCount > 1)
+        chiaki_session_set_pad_count(&session, couchPadCount);
+    for (uint8_t i = 0; i < couchPadCount; i++)
     {
         chiaki_session_set_controller_state_for_pad(&session, i, &controllerStates[i]);
     }
@@ -820,7 +910,7 @@ void Host::sendFeedbackStateCouch()
 
 void Host::couchAddPlayer(uint8_t slot, uint8_t deviceType)
 {
-    couchMode = true;
+    couchMode.store(true, std::memory_order_release);
 
     if (!sessionInit)
         return;
@@ -855,7 +945,7 @@ void Host::couchAddPlayer(uint8_t slot, uint8_t deviceType)
 
 void Host::couchRemovePlayer(uint8_t slot)
 {
-    if (!couchMode || !sessionInit)
+    if (!couchMode.load(std::memory_order_acquire) || !sessionInit)
         return;
     if (slot == 0 || slot >= CHIAKI_COUCH_MAX_PADS)
         return;
@@ -1004,13 +1094,18 @@ void Host::couchSendPasscode(uint8_t slot, const std::string& passcode)
 
 void Host::sendFeedbackState()
 {
-    if (couchMode)
+    if (couchMode.load(std::memory_order_acquire))
     {
         sendFeedbackStateCouch();
         return;
     }
 
-    if (onReadController)
+    if (inputSuppressed.load(std::memory_order_acquire))
+    {
+        chiaki_controller_state_set_idle(&controllerState);
+        fingerIdTouchId.clear();
+    }
+    else if (onReadController)
     {
         onReadController(&controllerState, &fingerIdTouchId);
     }
@@ -1034,6 +1129,12 @@ void Host::sendFeedbackState()
         prevTouchId1 = controllerState.touches[1].id;
     }
     chiaki_session_set_controller_state(&session, &controllerState);
+}
+
+void Host::setInputSuppressed(bool suppressed)
+{
+    inputSuppressed.store(suppressed, std::memory_order_release);
+    feedbackLoopCv.notify_all();
 }
 
 void Host::connectionEventCallback(ChiakiEvent* event)

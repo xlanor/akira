@@ -207,10 +207,6 @@ void Session::SetTriggerEffects(const ChiakiTriggerEffectsEvent* effects)
         == akira::input::Ds5EffectIntensity::Off)
         return;
 
-    auto* path = m_input_manager->path();
-    if (!path)
-        return;
-
     akira::input::PadPath::TriggerEffect left;
     akira::input::PadPath::TriggerEffect right;
 
@@ -219,7 +215,7 @@ void Session::SetTriggerEffects(const ChiakiTriggerEffectsEvent* effects)
     right.type = effects->type_right;
     std::memcpy(right.params, effects->right, sizeof(right.params));
 
-    path->sendTriggerEffects(left, right);
+    m_input_manager->sendTriggerEffects(left, right);
 }
 
 void Session::SetEffectIntensity(uint8_t vibration, uint8_t trigger)
@@ -229,8 +225,7 @@ void Session::SetEffectIntensity(uint8_t vibration, uint8_t trigger)
     if (!m_input_manager)
         return;
 
-    if (auto* path = m_input_manager->path())
-        path->sendEffectIntensity(vibration, trigger);
+    m_input_manager->sendEffectIntensity(vibration, trigger);
 
     if (m_haptic_manager)
         m_haptic_manager->setConsoleVibration(vibration);
@@ -241,8 +236,7 @@ void Session::SetLedColor(uint8_t red, uint8_t green, uint8_t blue)
     if (!m_input_manager)
         return;
 
-    if (auto* path = m_input_manager->path())
-        path->sendLightbar(red, green, blue);
+    m_input_manager->sendLightbar(red, green, blue);
 }
 
 void Session::HapticCB(uint8_t* buf, size_t buf_size)

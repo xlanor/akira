@@ -816,7 +816,7 @@ void Deko3dRenderer::renderVideo()
 
     compositeOverlay();
 
-    if (m_border_flash_frames > 0)
+    if (m_border_flash_frames.load(std::memory_order_acquire) > 0)
         renderBorderFlash();
 }
 
@@ -1326,6 +1326,7 @@ void Deko3dRenderer::updateOverlayPlacement()
 
 bool Deko3dRenderer::overlayTouchBegin(float x, float y)
 {
+    std::lock_guard<std::mutex> lock(m_overlay_touch_mutex);
     if (m_stats_mode.load(std::memory_order_relaxed) == StatsOverlayMode::Off)
         return false;
 
@@ -1336,7 +1337,7 @@ bool Deko3dRenderer::overlayTouchBegin(float x, float y)
     if (w <= 0.0f || h <= 0.0f)
         return false;
 
-    float slop = 12.0f * m_overlay_scale;
+    float slop = 12.0f * m_overlay_hit_scale.load(std::memory_order_relaxed);
     if (x < ox - slop || x > ox + w + slop || y < oy - slop || y > oy + h + slop)
     {
         return false;
@@ -1350,6 +1351,7 @@ bool Deko3dRenderer::overlayTouchBegin(float x, float y)
 
 void Deko3dRenderer::overlayTouchMove(float x, float y)
 {
+    std::lock_guard<std::mutex> lock(m_overlay_touch_mutex);
     if (!m_overlay_drag)
         return;
 
@@ -1364,6 +1366,7 @@ void Deko3dRenderer::overlayTouchMove(float x, float y)
 
 void Deko3dRenderer::overlayTouchEnd()
 {
+    std::lock_guard<std::mutex> lock(m_overlay_touch_mutex);
     if (!m_overlay_drag)
         return;
     m_overlay_drag = false;
@@ -1570,6 +1573,7 @@ void Deko3dRenderer::updateOverlayTexture()
     if (scale != m_overlay_scale)
     {
         m_overlay_scale = scale;
+        m_overlay_hit_scale.store(scale, std::memory_order_relaxed);
         m_ovl_dirty = true;
     }
 
@@ -1910,10 +1914,14 @@ void Deko3dRenderer::compositeOverlay()
 
 void Deko3dRenderer::renderBorderFlash()
 {
-    if (m_border_flash_frames <= 0)
+    int before = m_border_flash_frames.load(std::memory_order_acquire);
+    while (before > 0
+           && !m_border_flash_frames.compare_exchange_weak(
+               before, before - 1, std::memory_order_acq_rel)) {
+    }
+    if (before <= 0)
         return;
-
-    m_border_flash_frames--;
+    const int remaining = before - 1;
 
     if (!m_ovl_shaders_ready)
         return;
@@ -1927,7 +1935,7 @@ void Deko3dRenderer::renderBorderFlash()
     if (sw <= 0.0f || sh <= 0.0f)
         return;
 
-    const float fade = (float)m_border_flash_frames / (float)BORDER_FLASH_DURATION;
+    const float fade = (float)remaining / (float)BORDER_FLASH_DURATION;
     const float alpha = fade * 0.25f;
     if (alpha <= 0.002f)
         return;
@@ -2045,4 +2053,3 @@ bool Deko3dRenderer::captureLastFrame(std::vector<uint8_t>& rgba, int& width, in
 }
 
 #endif // BOREALIS_USE_DEKO3D
-

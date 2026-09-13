@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -57,7 +58,9 @@ public:
     void setPaused(bool paused) { m_paused.store(paused, std::memory_order_relaxed); }
     void updateResolution(int width, int height) { m_frame_width = width; m_frame_height = height; }
 
-    void triggerBorderFlash() { m_border_flash_frames = BORDER_FLASH_DURATION; }
+    void triggerBorderFlash() {
+        m_border_flash_frames.store(BORDER_FLASH_DURATION, std::memory_order_release);
+    }
 
     bool captureLastFrame(std::vector<uint8_t>& rgba, int& width, int& height) override;
 
@@ -123,7 +126,7 @@ private:
     void drawCompactOverlay(NVGcontext* vg);
     void drawFullOverlay(NVGcontext* vg);
 
-    int m_border_flash_frames = 0;
+    std::atomic<int> m_border_flash_frames{0};
     static constexpr int BORDER_FLASH_DURATION = 20;
 
 
@@ -204,6 +207,8 @@ private:
     std::atomic<float> m_overlay_w{0.0f};
     std::atomic<float> m_overlay_h{0.0f};
     bool m_overlay_drag = false;
+    std::mutex m_overlay_touch_mutex;
+    std::atomic<float> m_overlay_hit_scale{1.0f};
     std::atomic<bool> m_overlay_pos_dirty{false};
     float m_overlay_grab_dx = 0.0f;
     float m_overlay_grab_dy = 0.0f;
