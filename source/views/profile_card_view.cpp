@@ -16,6 +16,10 @@ std::string cloudSummary(const cloud::Status& status)
     {
         case cloud::Availability::Ready:
             return "akira/cloud/chip_ready"_i18n;
+        case cloud::Availability::CatalogAvailable:
+            return "akira/cloud/chip_catalog"_i18n;
+        case cloud::Availability::SubscriptionRequired:
+            return "akira/cloud/chip_unavailable"_i18n;
         case cloud::Availability::Warning:
             return "akira/cloud/chip_warning"_i18n;
         case cloud::Availability::Empty:

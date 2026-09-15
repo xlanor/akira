@@ -44,6 +44,11 @@ CloudConnectTask::CloudConnectTask(const Game& game, bool skipAttr)
 {
 }
 
+CloudConnectTask::~CloudConnectTask()
+{
+    cancel();
+}
+
 std::string CloudConnectTask::title() const
 {
     return brls::getStr("akira/connection/connecting_to", game.name);
@@ -51,20 +56,39 @@ std::string CloudConnectTask::title() const
 
 void CloudConnectTask::start(akira::views::ConnectSink& s)
 {
-    sink = &s;
+    {
+        std::lock_guard<std::mutex> lock(callbackState->mutex);
+        callbackState->sink = &s;
+        callbackState->cancelled.store(false);
+    }
     s.progressStep(0, 0, "");
     provision();
 }
 
+void CloudConnectTask::cancel()
+{
+    callbackState->cancelled.store(true);
+    std::lock_guard<std::mutex> lock(callbackState->mutex);
+    callbackState->sink = nullptr;
+}
+
 void CloudConnectTask::provision()
 {
-    auto* s = sink;
+    auto state = callbackState;
 
     Service::instance().launchGame(
         game,
-        [s](std::shared_ptr<Host> host) { s->succeeded(host.get(), host); },
-        [s](const std::string& error) { s->failed(error); },
-        [s](const std::string& stage) {
+        [state](std::shared_ptr<Host> host) {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            if (!state->cancelled.load() && state->sink)
+                state->sink->succeeded(host.get(), host);
+        },
+        [state](const std::string& error) {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            if (!state->cancelled.load() && state->sink)
+                state->sink->failed(error);
+        },
+        [state](const std::string& stage) {
             if (stage.empty())
                 return;
 
@@ -73,12 +97,16 @@ void CloudConnectTask::provision()
             int index = 0;
             int total = 0;
             std::string label;
+            std::lock_guard<std::mutex> lock(state->mutex);
+            if (state->cancelled.load() || !state->sink)
+                return;
             if (parseProvisionStep(stage, index, total, label))
-                s->progressStep(index, total, label);
+                state->sink->progressStep(index, total, label);
             else
-                s->progressStep(0, 0, stage);
+                state->sink->progressStep(0, 0, stage);
         },
-        skipAttr);
+        skipAttr,
+        [state]() { return state->cancelled.load(); });
 }
 
 bool CloudConnectTask::presentFailure(const std::string& error,

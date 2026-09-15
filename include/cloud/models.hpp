@@ -6,6 +6,23 @@
 
 namespace cloud {
 
+enum class PlusMembership {
+    Unknown,
+    None,
+    SomeTier
+};
+
+inline PlusMembership observePlusMembership(bool isPlus)
+{
+    return isPlus ? PlusMembership::SomeTier : PlusMembership::None;
+}
+
+enum class StreamabilityStatus {
+    Unknown,
+    Streamable,
+    NotStreamable
+};
+
 struct Game {
     std::string productId;
     std::string name;
@@ -22,6 +39,7 @@ struct Game {
     std::string storeProductId;
     std::string conceptUrl;
     bool plusCatalog = false;
+    StreamabilityStatus streamabilityStatus = StreamabilityStatus::Unknown;
 
     bool launchable() const { return !streamServiceType.empty() && !streamIdentifier.empty(); }
     bool streamableNow() const { return launchable() && (isOwned || category != "purchaseable"); }
@@ -52,6 +70,7 @@ enum class LaunchFailureKind {
     None,
     AuthorizationFailed,
     PsPlusRequired,
+    GameNotStreamable,
     PrivacySettings,
     NetworkError,
     PingTimeout,

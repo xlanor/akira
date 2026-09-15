@@ -74,12 +74,51 @@ TEST(catalog_warning_and_launch_errors_are_classified)
 
     CHECK(classifyLaunchFailure("AUTHORIZATION_FAILED") == LaunchFailureKind::AuthorizationFailed);
     CHECK(classifyLaunchFailure("PS_PLUS_SUBSCRIPTION_REQUIRED") == LaunchFailureKind::PsPlusRequired);
+    CHECK(classifyLaunchFailure(R"({"name":"noGameForEntitlementId"})")
+        == LaunchFailureKind::GameNotStreamable);
     CHECK(classifyLaunchFailure("PING_TIMEOUT") == LaunchFailureKind::PingTimeout);
     CHECK(classifyLaunchFailure("Couldn't reach the cloud server (network error). Please try again.")
         == LaunchFailureKind::NetworkError);
     CHECK(classifyLaunchFailure("Selected datacenter 'Tokyo' not available")
         == LaunchFailureKind::DatacenterUnavailable);
     CHECK(classifyLaunchFailure("odd failure") == LaunchFailureKind::Other);
+}
+
+TEST(parse_catalog_preserves_distinct_games_that_share_a_concept)
+{
+    Catalog catalog;
+    CHECK(parseCatalog(R"({
+        "schemaVersion": 9,
+        "total": 3,
+        "games": [
+            {"productId":"PPSA11111","name":"TimeSplitters","conceptId":"9000001","platform":"ps5","serviceType":"pscloud","streamServiceType":"pscloud","streamIdentifier":"PPSA11111"},
+            {"productId":"PPSA22222","name":"TimeSplitters 2","conceptId":"9000001","platform":"ps5","serviceType":"pscloud","streamServiceType":"pscloud","streamIdentifier":"PPSA22222"},
+            {"productId":"PPSA33333","name":"TimeSplitters: Future Perfect","conceptId":"9000001","platform":"ps5","serviceType":"pscloud","streamServiceType":"pscloud","streamIdentifier":"PPSA33333"}
+        ]
+    })", catalog));
+    CHECK_EQ(catalog.games.size(), size_t(3));
+}
+
+TEST(parse_catalog_uses_public_catalog_match_as_initial_streamability_hint)
+{
+    Catalog catalog;
+    CHECK(parseCatalog(R"({
+        "schemaVersion": 9,
+        "total": 2,
+        "games": [
+            {"productId":"PPSA1","name":"Matched","platform":"ps5","serviceType":"pscloud","isOwned":true,"streamingSupported":true,"streamServiceType":"pscloud","streamIdentifier":"PPSA1"},
+            {"productId":"PPSA2","name":"Unmatched","platform":"ps5","serviceType":"pscloud","isOwned":true,"streamingSupported":false,"streamServiceType":"pscloud","streamIdentifier":"PPSA2"}
+        ]
+    })", catalog));
+    CHECK(catalog.games[0].streamabilityStatus == StreamabilityStatus::Streamable);
+    CHECK(catalog.games[1].streamabilityStatus == StreamabilityStatus::Unknown);
+}
+
+TEST(psn_plus_membership_is_only_a_definitive_negative_gate)
+{
+    CHECK(observePlusMembership(false) == PlusMembership::None);
+    CHECK(observePlusMembership(true) == PlusMembership::SomeTier);
+    CHECK(observePlusMembership(true) != PlusMembership::Unknown);
 }
 
 TEST(datacenters_round_trip_through_json)

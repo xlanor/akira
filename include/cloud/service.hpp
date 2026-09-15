@@ -19,6 +19,8 @@ enum class Availability {
     NoProfile,
     NeedsPairing,
     Checking,
+    CatalogAvailable,
+    SubscriptionRequired,
     Ready,
     Warning,
     Empty,
@@ -34,6 +36,7 @@ struct Status {
     bool canPair = false;
     bool degraded = false;
     int gameCount = 0;
+    PlusMembership plusMembership = PlusMembership::Unknown;
 };
 
 struct Snapshot {
@@ -48,6 +51,7 @@ public:
     using HostCallback = std::function<void(std::shared_ptr<Host>)>;
     using ErrorCallback = std::function<void(const std::string&)>;
     using ProgressCallback = std::function<void(const std::string&)>;
+    using CancelCallback = std::function<bool()>;
 
     static Service& instance();
 
@@ -57,13 +61,17 @@ public:
     void clearCatalogCache();
     void refreshActiveProfile(bool force, SnapshotCallback onDone = {});
     void launchGame(const Game& game, HostCallback onSuccess, ErrorCallback onError,
-        ProgressCallback onProgress = {}, bool forceSkipAttrCheck = false);
+        ProgressCallback onProgress = {}, bool forceSkipAttrCheck = false,
+        CancelCallback isCancelled = {});
 
 private:
     struct Entry {
         Snapshot snapshot;
         bool refreshing = false;
         int generation = 0;
+        PlusMembership plusMembership = PlusMembership::Unknown;
+        bool streamabilityLoaded = false;
+        std::map<std::string, bool> streamability;
         std::vector<SnapshotCallback> pending;
         std::string psnowDatacentersJson;
         std::string pscloudDatacentersJson;
@@ -80,10 +88,11 @@ private:
     void noteSettledLocale(const std::string& settled) const;
     std::string cacheRoot() const;
     std::string cacheDirForProfile(int64_t profileId) const;
+    std::string streamabilityCachePath(int64_t profileId) const;
     void ensureCacheDirsForProfile(int64_t profileId) const;
 
     void storeSnapshot(int64_t profileId, const Snapshot& snapshot);
-    void storeLaunchError(int64_t profileId, const std::string& errorMessage);
+    void storeLaunchOutcome(int64_t profileId, const std::string& productId, bool streamable);
 
     SettingsManager* settings = nullptr;
 

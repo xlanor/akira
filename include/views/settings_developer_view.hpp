@@ -18,6 +18,7 @@ private:
     BRLS_BIND(brls::SelectorCell, takionVersionSelector, "settings/devTakionVersion");
     BRLS_BIND(brls::DetailCell, simulateUpdateCell, "settings/simulateUpdate");
     BRLS_BIND(brls::DetailCell, tlsVerifyProbeCell, "settings/tlsVerifyProbe");
+    BRLS_BIND(brls::DetailCell, logBrowserCell, "settings/logBrowser");
 
     SettingsManager* settings = nullptr;
 };

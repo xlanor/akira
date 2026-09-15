@@ -822,6 +822,16 @@ public:
                 pillColor = pal.success;
                 subText = brls::getStr("akira/cloud/card_count", snapshot.status.gameCount);
                 break;
+            case cloud::Availability::CatalogAvailable:
+                pillText = "akira/cloud/pill_catalog"_i18n;
+                pillColor = pal.warning;
+                subText = "akira/cloud/card_eligibility"_i18n;
+                break;
+            case cloud::Availability::SubscriptionRequired:
+                pillText = "akira/cloud/pill_unavailable"_i18n;
+                pillColor = pal.danger;
+                subText = "akira/cloud/card_subscription"_i18n;
+                break;
             case cloud::Availability::Checking:
                 pillText = "akira/cloud/pill_checking"_i18n;
                 pillColor = pal.accent;
@@ -1008,8 +1018,13 @@ HostListTab::HostListTab() {
                 TrophyManager::getInstance()->onActiveProfileChanged();
                 cloud::Service::instance().refreshActiveProfile(false,
                     [](const cloud::Snapshot&) {
-                        if (HostListTab::currentInstance)
-                            HostListTab::currentInstance->syncHostList();
+                        if (!HostListTab::currentInstance)
+                            return;
+                        HostListTab::currentInstance->syncHostList();
+                        if (HostListTab::currentInstance->profileChip)
+                            HostListTab::currentInstance->profileChip->refresh();
+                        if (HostListTab::currentInstance->shortcutsRail)
+                            HostListTab::currentInstance->shortcutsRail->refresh();
                     });
                 brls::sync([]() {
                     if (HostListTab::currentInstance) {
@@ -1056,6 +1071,14 @@ void HostListTab::applyProfileMode() {
 
     shortcutsRail = new CloudShortcutsRail();
     shortcutsRail->setLaunchHandler([](const cloud::Game& game) {
+        const cloud::Snapshot snapshot = cloud::Service::instance().snapshotForActiveProfile();
+        if (snapshot.status.plusMembership == cloud::PlusMembership::None)
+        {
+            auto* dialog = new brls::Dialog("akira/cloud/status_subscription_detail"_i18n);
+            dialog->addButton("akira/common/ok"_i18n, [dialog]() { dialog->close(); });
+            dialog->open();
+            return;
+        }
         bool skipAttr = SettingsManager::getInstance()->getCloudAttrPassed();
         HostListTab::connectionActive = true;
         akira::views::startConnecting(std::make_unique<cloud::CloudConnectTask>(game, skipAttr));
@@ -1070,6 +1093,8 @@ void HostListTab::applyProfileMode() {
             HostListTab::currentInstance->syncHostList();
             if (HostListTab::currentInstance->profileChip)
                 HostListTab::currentInstance->profileChip->refresh();
+            if (HostListTab::currentInstance->shortcutsRail)
+                HostListTab::currentInstance->shortcutsRail->refresh();
         });
 }
 
@@ -1203,6 +1228,8 @@ void HostListTab::willAppear(bool resetState) {
             HostListTab::currentInstance->syncHostList();
             if (HostListTab::currentInstance->profileChip)
                 HostListTab::currentInstance->profileChip->refresh();
+            if (HostListTab::currentInstance->shortcutsRail)
+                HostListTab::currentInstance->shortcutsRail->refresh();
         });
     syncHostList();
 }

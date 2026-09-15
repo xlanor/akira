@@ -180,6 +180,15 @@ public:
         }
         if (game.plusCatalog)
             pillRow->addView(makePill("akira/cloud/badge_plus"_i18n, pal.gold));
+        if (game.serviceType == "pscloud")
+        {
+            if (game.streamabilityStatus == StreamabilityStatus::Streamable)
+                pillRow->addView(makePill("akira/cloud/badge_verified"_i18n, pal.success));
+            else if (game.streamabilityStatus == StreamabilityStatus::NotStreamable)
+                pillRow->addView(makePill("akira/cloud/badge_unavailable"_i18n, pal.danger));
+            else
+                pillRow->addView(makePill("akira/cloud/badge_unverified"_i18n, pal.textMuted));
+        }
         std::string category = categoryBadge(game);
         if (!category.empty())
         {
@@ -485,6 +494,14 @@ void LibraryView::renderSnapshot(const Snapshot& snapshot)
         case Availability::Ready:
             chipText = "akira/cloud/chip_ready"_i18n;
             chipColor = pal.success;
+            break;
+        case Availability::CatalogAvailable:
+            chipText = "akira/cloud/chip_catalog"_i18n;
+            chipColor = pal.warning;
+            break;
+        case Availability::SubscriptionRequired:
+            chipText = "akira/cloud/chip_unavailable"_i18n;
+            chipColor = pal.danger;
             break;
         case Availability::Warning:
         case Availability::LaunchBlocked:
@@ -1094,6 +1111,15 @@ void LibraryView::launchGame(const Game& game, bool forceSkipAttr)
 {
     if (launching)
         return;
+
+    const Snapshot snapshot = Service::instance().snapshotForActiveProfile();
+    if (snapshot.status.plusMembership == PlusMembership::None)
+    {
+        auto* dialog = new brls::Dialog("akira/cloud/status_subscription_detail"_i18n);
+        dialog->addButton("akira/common/ok"_i18n, [dialog]() { dialog->close(); });
+        dialog->open();
+        return;
+    }
 
     launching = true;
 

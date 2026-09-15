@@ -5,13 +5,17 @@
 
 #include <chiaki/cloudcatalog.h>
 #include <chiaki/cloudsession.h>
+#include <json-c/json.h>
 
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "core/host.hpp"
 #include "core/settings_manager.hpp"
+#include "core/trophy_manager.hpp"
 
 using namespace brls::literals;
 
@@ -26,7 +30,56 @@ struct CatalogFetchResult {
 
 struct ProvisionBridge {
     Service::ProgressCallback onProgress;
+    Service::CancelCallback isCancelled;
 };
+
+std::map<std::string, bool> loadStreamabilityCache(const std::string& path)
+{
+    std::map<std::string, bool> values;
+    json_object* root = json_object_from_file(path.c_str());
+    if (!root || !json_object_is_type(root, json_type_object))
+    {
+        if (root)
+            json_object_put(root);
+        return values;
+    }
+
+    json_object_object_foreach(root, productId, value)
+    {
+        if (value && json_object_is_type(value, json_type_boolean))
+            values[productId] = json_object_get_boolean(value);
+    }
+    json_object_put(root);
+    return values;
+}
+
+void saveStreamabilityCache(const std::string& path, const std::map<std::string, bool>& values)
+{
+    json_object* root = json_object_new_object();
+    for (const auto& [productId, streamable] : values)
+        json_object_object_add(root, productId.c_str(), json_object_new_boolean(streamable));
+
+    const std::string temp = path + ".tmp";
+    if (json_object_to_file_ext(temp.c_str(), root, JSON_C_TO_STRING_PRETTY) == 0)
+        rename(temp.c_str(), path.c_str());
+    else
+        unlink(temp.c_str());
+    json_object_put(root);
+}
+
+void applyStreamability(Catalog& catalog, const std::map<std::string, bool>& values)
+{
+    for (Game& game : catalog.games)
+    {
+        if (game.serviceType != "pscloud")
+            continue;
+        auto it = values.find(game.productId);
+        if (it != values.end())
+            game.streamabilityStatus = it->second
+                ? StreamabilityStatus::Streamable
+                : StreamabilityStatus::NotStreamable;
+    }
+}
 
 static void provisionProgress(const char* stage, void* user)
 {
@@ -36,9 +89,10 @@ static void provisionProgress(const char* stage, void* user)
     bridge->onProgress(stage ? stage : "");
 }
 
-static bool provisionCancelled(void*)
+static bool provisionCancelled(void* user)
 {
-    return false;
+    auto* bridge = static_cast<ProvisionBridge*>(user);
+    return bridge && bridge->isCancelled && bridge->isCancelled();
 }
 
 ChiakiServiceType chiakiServiceFor(const std::string& value)
@@ -125,6 +179,8 @@ std::string launchErrorText(LaunchFailureKind kind, const std::string& raw)
             return "akira/cloud/launch_not_enabled"_i18n;
         case LaunchFailureKind::PsPlusRequired:
             return "akira/cloud/launch_ps_plus"_i18n;
+        case LaunchFailureKind::GameNotStreamable:
+            return "akira/cloud/launch_unavailable"_i18n;
         case LaunchFailureKind::PrivacySettings:
             return privacyLaunchMessage(raw);
         case LaunchFailureKind::NetworkError:
@@ -141,10 +197,11 @@ std::string launchErrorText(LaunchFailureKind kind, const std::string& raw)
     }
 }
 
-Status statusForCatalog(const Catalog& catalog)
+Status statusForCatalog(const Catalog& catalog, PlusMembership plusMembership)
 {
     Status status;
     status.gameCount = catalog.launchableCount();
+    status.plusMembership = plusMembership;
 
     WarningKind warningKind = classifyWarning(catalog.warning);
     if (warningKind == WarningKind::SessionExpired)
@@ -168,24 +225,48 @@ Status statusForCatalog(const Catalog& catalog)
         return status;
     }
 
-    if (status.gameCount > 0)
+    if (status.gameCount == 0)
     {
-        status.availability = Availability::Ready;
-        status.title = brls::getStr("akira/cloud/status_ready_title", status.gameCount);
-        status.detail = "akira/cloud/status_ready_detail"_i18n;
+        status.availability = Availability::Empty;
+        status.title = "akira/cloud/status_empty_title"_i18n;
+        status.detail = "akira/cloud/status_empty_detail"_i18n;
         status.canBrowse = true;
         return status;
     }
 
-    status.availability = Availability::Empty;
-    status.title = "akira/cloud/status_empty_title"_i18n;
-    status.detail = "akira/cloud/status_empty_detail"_i18n;
+    if (plusMembership == PlusMembership::None)
+    {
+        status.availability = Availability::SubscriptionRequired;
+        status.title = "akira/cloud/status_subscription_title"_i18n;
+        status.detail = "akira/cloud/status_subscription_detail"_i18n;
+        status.canBrowse = true;
+        status.degraded = true;
+        return status;
+    }
+
+    if (!catalog.nativeMode)
+    {
+        status.availability = Availability::Warning;
+        status.title = "akira/cloud/status_fallback_title"_i18n;
+        status.detail = "akira/cloud/status_fallback_detail"_i18n;
+        status.canBrowse = true;
+        status.degraded = true;
+        return status;
+    }
+
+    // CloudPad deliberately does not infer Premium from the PSN profile's
+    // generic isPlus bit. Sony validates access for the selected title during
+    // Kamaji/Gaikai provisioning, so a loaded catalog is only a catalog.
+    status.availability = Availability::CatalogAvailable;
+    status.title = brls::getStr("akira/cloud/status_catalog_title", status.gameCount);
+    status.detail = "akira/cloud/status_catalog_detail"_i18n;
     status.canBrowse = true;
     return status;
 }
 
 CatalogFetchResult fetchCatalogBlocking(SettingsManager* settings, const Profile& profile,
-    const std::string& locale, const std::string& cacheDir, bool force)
+    const std::string& locale, const std::string& cacheDir, bool force,
+    PlusMembership plusMembership)
 {
     CatalogFetchResult result;
 
@@ -202,10 +283,8 @@ CatalogFetchResult fetchCatalogBlocking(SettingsManager* settings, const Profile
     if (raw.json && parseCatalog(raw.json, result.snapshot.catalog))
     {
         const Catalog& catalog = result.snapshot.catalog;
-        result.snapshot.status = statusForCatalog(catalog);
+        result.snapshot.status = statusForCatalog(result.snapshot.catalog, plusMembership);
         result.ok = true;
-
-        bool expired = classifyWarning(catalog.warning) == WarningKind::SessionExpired;
 
         /*
          * Whether there is a catalog, not whether it came from a storefront.
@@ -220,23 +299,6 @@ CatalogFetchResult fetchCatalogBlocking(SettingsManager* settings, const Profile
          * hundred of them.
          */
         result.snapshot.hasCatalog = !catalog.games.empty();
-
-        if (!catalog.nativeMode && !expired && !catalog.games.empty())
-        {
-            /*
-             * Shown, and labelled. The merge skipped the streamability gate, so
-             * these titles are real but nothing has checked which of them can
-             * actually be streamed here - which is worth saying rather than
-             * leaving to be discovered one launch at a time.
-             */
-            result.snapshot.status = Status{};
-            result.snapshot.status.availability = Availability::Ready;
-            result.snapshot.status.title = "akira/cloud/status_fallback_title"_i18n;
-            result.snapshot.status.detail = "akira/cloud/status_fallback_detail"_i18n;
-            result.snapshot.status.canBrowse = true;
-            result.snapshot.status.degraded = true;
-            result.snapshot.status.gameCount = (int)catalog.games.size();
-        }
     }
     else
     {
@@ -403,6 +465,7 @@ void Service::clearCatalogCache()
 
     const int64_t profileId = profile->id;
     chiaki_cloudcatalog_invalidate_cache(cacheDirForProfile(profileId).c_str());
+    unlink(streamabilityCachePath(profileId).c_str());
 
     std::lock_guard<std::mutex> lock(mutex);
     auto it = entries.find(profileId);
@@ -420,6 +483,11 @@ std::string Service::cacheDirForProfile(int64_t profileId) const
     return cacheRoot() + "/profile-" + std::to_string(profileId);
 }
 
+std::string Service::streamabilityCachePath(int64_t profileId) const
+{
+    return cacheDirForProfile(profileId) + "/streamability.json";
+}
+
 void Service::ensureCacheDirsForProfile(int64_t profileId) const
 {
     mkdir("sdmc:/switch/akira/cache", 0755);
@@ -435,15 +503,25 @@ void Service::storeSnapshot(int64_t profileId, const Snapshot& snapshot)
     entries[profileId].refreshing = false;
 }
 
-void Service::storeLaunchError(int64_t profileId, const std::string& errorMessage)
+void Service::storeLaunchOutcome(int64_t profileId, const std::string& productId, bool streamable)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    auto& entry = entries[profileId];
-    entry.snapshot.status.availability = Availability::LaunchBlocked;
-    entry.snapshot.status.title = "akira/cloud/status_blocked_title"_i18n;
-    entry.snapshot.status.detail = errorMessage;
-    entry.snapshot.status.canBrowse = true;
-    entry.snapshot.status.canPair = true;
+    std::map<std::string, bool> cached = loadStreamabilityCache(streamabilityCachePath(profileId));
+    std::map<std::string, bool> updated;
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        Entry& entry = entries[profileId];
+        if (!entry.streamabilityLoaded)
+        {
+            entry.streamability = std::move(cached);
+            entry.streamabilityLoaded = true;
+        }
+        entry.streamability[productId] = streamable;
+        applyStreamability(entry.snapshot.catalog, entry.streamability);
+        updated = entry.streamability;
+    }
+
+    saveStreamabilityCache(streamabilityCachePath(profileId), updated);
 }
 
 void Service::refreshActiveProfile(bool force, SnapshotCallback onDone)
@@ -489,36 +567,61 @@ void Service::refreshActiveProfile(bool force, SnapshotCallback onDone)
             entry.pending.push_back(std::move(onDone));
     }
 
-    ensureCacheDirsForProfile(profileId);
-
-    brls::async([this, profileId, locale, cacheDir, force, npsso]() {
-        Profile copy;
-        copy.id = profileId;
-        copy.npsso = npsso;
-
-        CatalogFetchResult fetched = fetchCatalogBlocking(settings, copy, locale, cacheDir, force);
-
-        std::vector<SnapshotCallback> callbacks;
+    auto fetchCatalog = [this, profileId, locale, cacheDir, force, npsso](std::optional<bool> hasPlus) {
+        PlusMembership plusMembership = PlusMembership::Unknown;
         {
             std::lock_guard<std::mutex> lock(mutex);
             Entry& entry = entries[profileId];
-            entry.snapshot = fetched.snapshot;
-            entry.refreshing = false;
-            callbacks.swap(entry.pending);
+            if (hasPlus.has_value())
+                entry.plusMembership = observePlusMembership(*hasPlus);
+            plusMembership = entry.plusMembership;
         }
 
-        Snapshot snapshot = fetched.snapshot;
-        brls::sync([this, callbacks, snapshot]() {
-            noteSettledLocale(snapshot.catalog.settledLocale);
-            for (const SnapshotCallback& cb : callbacks)
-                if (cb)
-                    cb(snapshot);
+        ensureCacheDirsForProfile(profileId);
+
+        brls::async([this, profileId, locale, cacheDir, force, npsso, plusMembership]() {
+            Profile copy;
+            copy.id = profileId;
+            copy.npsso = npsso;
+
+            CatalogFetchResult fetched = fetchCatalogBlocking(
+                settings, copy, locale, cacheDir, force, plusMembership);
+            std::map<std::string, bool> streamability =
+                loadStreamabilityCache(streamabilityCachePath(profileId));
+            applyStreamability(fetched.snapshot.catalog, streamability);
+
+            std::vector<SnapshotCallback> callbacks;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                Entry& entry = entries[profileId];
+                entry.snapshot = fetched.snapshot;
+                entry.streamability = std::move(streamability);
+                entry.streamabilityLoaded = true;
+                entry.refreshing = false;
+                callbacks.swap(entry.pending);
+            }
+
+            Snapshot snapshot = fetched.snapshot;
+            brls::sync([this, callbacks, snapshot]() {
+                noteSettledLocale(snapshot.catalog.settledLocale);
+                for (const SnapshotCallback& cb : callbacks)
+                    if (cb)
+                        cb(snapshot);
+            });
         });
-    });
+    };
+
+    TrophyManager::getInstance()->fetchProfile(false,
+        [fetchCatalog](const psn::PsnProfile& psnProfile) {
+            fetchCatalog(psnProfile.isPlus);
+        },
+        [fetchCatalog](psn::Status, const std::string&) {
+            fetchCatalog(std::nullopt);
+        });
 }
 
 void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback onError,
-    ProgressCallback onProgress, bool forceSkipAttrCheck)
+    ProgressCallback onProgress, bool forceSkipAttrCheck, CancelCallback isCancelled)
 {
     const Profile* profile = settings->getActiveProfile();
     if (!profile || profile->npsso.empty())
@@ -535,12 +638,37 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
     const std::string gameLanguage = streamLanguage();
     const std::string cacheDir = cacheDirForProfile(profileId);
 
-    brls::async([this, game, profileId, npsso, locale, gameLanguage, cacheDir, skipAttrCheck, onSuccess, onError, onProgress]() {
+    bool noPlus = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto it = entries.find(profileId);
+        noPlus = it != entries.end() && it->second.plusMembership == PlusMembership::None;
+    }
+    if (noPlus)
+    {
+        if (onError)
+            onError("akira/cloud/status_subscription_detail"_i18n);
+        return;
+    }
+
+    brls::async([this, game, profileId, npsso, locale, gameLanguage, cacheDir, skipAttrCheck,
+                 onSuccess, onError, onProgress, isCancelled]() {
+        if (isCancelled && isCancelled())
+            return;
+
         Profile profileCopy;
         profileCopy.id = profileId;
         profileCopy.npsso = npsso;
 
-        CatalogFetchResult catalogResult = fetchCatalogBlocking(settings, profileCopy, locale, cacheDir, false);
+        PlusMembership plusMembership = PlusMembership::Unknown;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            auto it = entries.find(profileId);
+            if (it != entries.end())
+                plusMembership = it->second.plusMembership;
+        }
+        CatalogFetchResult catalogResult = fetchCatalogBlocking(
+            settings, profileCopy, locale, cacheDir, false, plusMembership);
         if (!catalogResult.ok || !catalogResult.snapshot.hasCatalog)
         {
             std::string message = catalogResult.snapshot.status.detail.empty()
@@ -551,7 +679,10 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
             return;
         }
 
-        ProvisionBridge bridge{onProgress};
+        if (isCancelled && isCancelled())
+            return;
+
+        ProvisionBridge bridge{onProgress, isCancelled};
         const bool pscloud = game.streamServiceType == "pscloud";
         const std::string forcedDatacenter = settings->getCloudDatacenter(pscloud);
         const std::string priorDatacenters = serializeDatacenters(settings->getCloudDatacenters(pscloud));
@@ -580,6 +711,12 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
         ChiakiErrorCode err = chiaki_cloud_provision_session(&cfg, &result, settings->getLogger());
         (void)err;
 
+        if (isCancelled && isCancelled())
+        {
+            chiaki_cloud_provision_result_fini(&result);
+            return;
+        }
+
         brls::Logger::info("CloudLaunch: provision returned err={} server={}:{} spec={} pings={}",
             static_cast<int>(result.err),
             result.server_ip ? result.server_ip : "(null)",
@@ -599,8 +736,10 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
         if (result.err != CHIAKI_ERR_SUCCESS)
         {
             std::string raw = result.error_message ? result.error_message : "";
-            std::string message = launchErrorText(classifyLaunchFailure(raw), raw);
-            storeLaunchError(profileId, message);
+            LaunchFailureKind kind = classifyLaunchFailure(raw);
+            std::string message = launchErrorText(kind, raw);
+            if (game.serviceType == "pscloud")
+                storeLaunchOutcome(profileId, game.productId, false);
             chiaki_cloud_provision_result_fini(&result);
             if (onError)
                 brls::sync([onError, message]() { onError(message); });
@@ -626,13 +765,8 @@ void Service::launchGame(const Game& game, HostCallback onSuccess, ErrorCallback
         cloudCfg.platform = result.platform;
         host->setCloudSessionConfig(cloudCfg);
 
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            auto& entry = entries[profileId];
-            entry.snapshot.status = statusForCatalog(catalogResult.snapshot.catalog);
-            entry.snapshot.catalog = catalogResult.snapshot.catalog;
-            entry.snapshot.hasCatalog = true;
-        }
+        if (game.serviceType == "pscloud")
+            storeLaunchOutcome(profileId, game.productId, true);
 
         chiaki_cloud_provision_result_fini(&result);
 
