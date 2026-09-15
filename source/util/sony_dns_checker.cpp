@@ -10,6 +10,7 @@
 
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <cstring>
 
 namespace akira::net {
@@ -57,22 +58,31 @@ bool encodeQuestion(std::array<uint8_t, 512>& query, size_t& length,
 
 DnsVerdict queryServer(uint32_t serverIp, const char* domain)
 {
+    const auto fail = [serverIp, domain](const char* step, int osErrno = 0) {
+        brls::Logger::error(
+            "[NET] dns_probe_fail domain={} server={} step={} os_errno={} os_error=\"{}\"",
+            domain, ipv4String(serverIp), step, osErrno,
+            osErrno ? std::strerror(osErrno) : "-");
+        return DnsVerdict::Inconclusive;
+    };
+
     static std::atomic<uint16_t> nextId{0x5a00};
     const uint16_t id = nextId.fetch_add(1, std::memory_order_relaxed);
     std::array<uint8_t, 512> query{};
     size_t queryLength = 0;
     if (!encodeQuestion(query, queryLength, id, domain))
-        return DnsVerdict::Inconclusive;
+        return fail("encode_question");
 
     const int socketFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (socketFd < 0)
-        return DnsVerdict::Inconclusive;
+        return fail("socket", errno);
 
     const timeval timeout{ .tv_sec = 0, .tv_usec = 500000 };
     if (setsockopt(socketFd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0 ||
         setsockopt(socketFd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0) {
+        const int socketErrno = errno;
         close(socketFd);
-        return DnsVerdict::Inconclusive;
+        return fail("socket_timeout", socketErrno);
     }
 
     sockaddr_in destination{};
@@ -83,8 +93,9 @@ DnsVerdict queryServer(uint32_t serverIp, const char* domain)
     const ssize_t sent = sendto(socketFd, query.data(), queryLength, 0,
         reinterpret_cast<const sockaddr*>(&destination), sizeof(destination));
     if (sent != static_cast<ssize_t>(queryLength)) {
+        const int sendErrno = sent < 0 ? errno : 0;
         close(socketFd);
-        return DnsVerdict::Inconclusive;
+        return fail("send_query", sendErrno);
     }
 
     std::array<uint8_t, 512> response{};
@@ -92,12 +103,22 @@ DnsVerdict queryServer(uint32_t serverIp, const char* domain)
     socklen_t sourceLength = sizeof(source);
     const ssize_t received = recvfrom(socketFd, response.data(), response.size(), 0,
         reinterpret_cast<sockaddr*>(&source), &sourceLength);
+    const int receiveErrno = received < 0 ? errno : 0;
     close(socketFd);
-    if (received <= 0 || sourceLength < sizeof(sockaddr_in) ||
+    if (received <= 0)
+        return fail("receive_answer", receiveErrno);
+    if (sourceLength < sizeof(sockaddr_in) ||
         source.sin_family != AF_INET || source.sin_addr.s_addr != serverIp ||
         source.sin_port != htons(53))
-        return DnsVerdict::Inconclusive;
-    return classifyDnsAResponse(response.data(), static_cast<size_t>(received), id);
+        return fail("unexpected_answer_source");
+    const DnsVerdict verdict = classifyDnsAResponse(
+        response.data(), static_cast<size_t>(received), id);
+    if (verdict == DnsVerdict::Blocked)
+        brls::Logger::error("[NET] dns_probe_fail domain={} server={} step=blocked_answer",
+            domain, ipv4String(serverIp));
+    else if (verdict == DnsVerdict::Inconclusive)
+        return fail("invalid_or_empty_answer");
+    return verdict;
 }
 
 const char* verdictName(DnsVerdict verdict)

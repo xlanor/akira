@@ -589,7 +589,13 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    const CURLcode curlInit = curl_global_init(CURL_GLOBAL_DEFAULT);
+    if (curlInit != CURLE_OK)
+    {
+        brls::Logger::error("[NET] curl_global_init failed code={} reason=\"{}\"",
+            static_cast<int>(curlInit), curl_easy_strerror(curlInit));
+        return EXIT_FAILURE;
+    }
 
     ChiakiErrorCode err = chiaki_lib_init();
     if (err != CHIAKI_ERR_SUCCESS)
@@ -621,6 +627,16 @@ int main(int argc, char* argv[])
     }
 
     brls::Logger::setAsyncLogging(true);
+    if (const curl_version_info_data* curlInfo = curl_version_info(CURLVERSION_NOW))
+    {
+        brls::Logger::info(
+            "[NET] curl_runtime version={} ssl={} features=0x{:x} ipv6={} async_dns={}",
+            curlInfo->version ? curlInfo->version : "-",
+            curlInfo->ssl_version ? curlInfo->ssl_version : "-",
+            static_cast<unsigned long long>(curlInfo->features),
+            (curlInfo->features & CURL_VERSION_IPV6) != 0,
+            (curlInfo->features & CURL_VERSION_ASYNCHDNS) != 0);
+    }
     brls::Application::getRunLoopEvent()->subscribe([]() {
         using namespace std::chrono_literals;
         static auto nextFlush = std::chrono::steady_clock::now();
