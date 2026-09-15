@@ -35,6 +35,8 @@ RUN dkp-pacman -Syu --noconfirm && \
 WORKDIR /build/ffmpeg
 COPY library/ffmpeg /build/ffmpeg
 
+# Akira only opens H.264 and HEVC video streams. Keep their parsers and
+# Switch nvtegra paths, not FFmpeg's full codec registry.
 RUN bash -c '\
     source /opt/devkitpro/switchvars.sh && \
     ./configure \
@@ -58,19 +60,17 @@ RUN bash -c '\
         --enable-asm \
         --enable-neon \
         --disable-autodetect \
-        --enable-mbedtls \
+        --disable-everything \
         --enable-version3 \
         --disable-avdevice \
         --disable-encoders \
         --disable-muxers \
+        --enable-decoder=h264,hevc \
+        --enable-hwaccel=h264_nvtegra,hevc_nvtegra \
+        --enable-parser=h264,hevc \
         --enable-swscale \
         --enable-swresample \
-        --enable-network \
-        --enable-libssh2 \
-        --enable-zlib \
-        --enable-bzlib \
-        --enable-libass \
-        --enable-libdav1d \
+        --disable-network \
         --enable-nvtegra && \
     make -j$(nproc) && \
     make install'

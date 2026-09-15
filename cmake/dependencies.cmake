@@ -25,12 +25,20 @@ if (PLATFORM_SWITCH)
     find_library(ZSTD_LIB zstd)
     message(STATUS "  zstd: ${ZSTD_LIB}")
 
+    # Curl's gzip content encoding also needs zlib. Do not rely on FFmpeg's
+    # optional zlib support to accidentally supply this transitive dependency.
+    find_library(ZLIB_LIB z)
+    if(NOT ZLIB_LIB)
+        message(FATAL_ERROR "zlib is required by curl content encoding")
+    endif()
+    message(STATUS "  zlib: ${ZLIB_LIB}")
+
     # Create CURL::libcurl imported target for chiaki-lib compatibility
     add_library(CURL::libcurl STATIC IMPORTED)
     set_target_properties(CURL::libcurl PROPERTIES
         IMPORTED_LOCATION "${CURL_LIBRARY}"
         INTERFACE_INCLUDE_DIRECTORIES "${CURL_INCLUDE_DIRS}"
-        INTERFACE_LINK_LIBRARIES "${ZSTD_LIB}"
+        INTERFACE_LINK_LIBRARIES "${ZSTD_LIB};${ZLIB_LIB}"
     )
 
     list(APPEND APP_PLATFORM_INCLUDE ${CURL_INCLUDE_DIRS})

@@ -67,6 +67,15 @@ add_subdirectory(library/tomlplusplus EXCLUDE_FROM_ALL)
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 23)
 
+# Borealis uses DEBUG only to attach nxlinkStdio() in its Switch wrapper.
+# Keep that capture path in optimized builds without compiling the whole app
+# (or its libraries) with debug-only behavior. Runtime log levels and file
+# logging are configured independently in source/main.cpp.
+set_source_files_properties(
+    ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c
+    PROPERTIES COMPILE_DEFINITIONS DEBUG
+)
+
 target_sources(${PROJECT_NAME} PRIVATE ${LWIP_SRCS} ${LWIP_RELAY_SRCS})
 
 target_include_directories(${PROJECT_NAME} PRIVATE

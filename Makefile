@@ -13,12 +13,22 @@
 
 .PHONY: help build deploy crash test rebuild shell clean-libs docker-image submodules backup
 
-DOCKER_IMAGE := akira-builder
+# A distinct tag prevents an existing builder with the broad FFmpeg codec set
+# from silently producing a larger binary after this Dockerfile change.
+DOCKER_IMAGE ?= akira-builder-lean-ffmpeg
 NRO_FILE     := $(CURDIR)/build/akira.nro
 ELF_FILE     := build/akira.elf
 FTP_PORT     ?= 5000
 MUTE_CHIAKI  ?= false
 SWITCH_IP    ?=
+
+# Linked worktrees store .git as a file pointing at the main repository's
+# metadata. Mount that metadata read-only at its original absolute path so
+# Git/version stamping works in the build container without touching master.
+ifeq ($(shell test -f "$(CURDIR)/.git" && echo yes),yes)
+GIT_COMMON_DIR := $(shell git rev-parse --path-format=absolute --git-common-dir)
+WORKTREE_DOCKER_MOUNTS := -v "$(CURDIR):$(CURDIR)" -v "$(GIT_COMMON_DIR):$(GIT_COMMON_DIR):ro"
+endif
 
 # The psn package is plain C++ over json-c with no libnx or borealis dependency, so it
 # builds and runs natively. Everything else in the app needs the Switch toolchain.
@@ -122,6 +132,7 @@ build: docker-image
 	@printf "$(GREEN)[*]$(NC) Building...\n"
 	@docker run --rm \
 		-v "$(CURDIR):/build" \
+		$(WORKTREE_DOCKER_MOUNTS) \
 		-w /build \
 		-e "MUTE_CHIAKI=$(MUTE_CHIAKI)" \
 		$(DOCKER_IMAGE) \

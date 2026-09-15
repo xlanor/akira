@@ -125,7 +125,7 @@ build_akira() {
 
     cmake -G Ninja -B build \
         -DPLATFORM_SWITCH=ON \
-        -DCMAKE_BUILD_TYPE=Debug \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DBUILD_CHANNEL="${AKIRA_CHANNEL}" \
         -DVERSION_PRERELEASE="${AKIRA_PRERELEASE}" \
         $CMAKE_EXTRA_ARGS
