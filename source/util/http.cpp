@@ -1,11 +1,17 @@
 #include "util/http.hpp"
 
+#include <borealis.hpp>
 #include <curl/curl.h>
+#include <switch.h>
+
+#include <arpa/inet.h>
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cctype>
+#include <cstring>
 #include <mutex>
 
 #include "util/curl_wrappers.hpp"
@@ -64,6 +70,137 @@ static bool isSonyHost(const std::string& url)
             return true;
     }
     return false;
+}
+
+static std::string ipv4String(uint32_t value)
+{
+    if (value == 0)
+        return "0.0.0.0";
+
+    in_addr address{};
+    address.s_addr = value;
+    char text[INET_ADDRSTRLEN]{};
+    return inet_ntop(AF_INET, &address, text, sizeof(text)) ? text : "?";
+}
+
+static std::string safeDiagnosticText(const char* value)
+{
+    if (!value || !value[0])
+        return "-";
+
+    std::string out(value);
+    if (out.size() > 240)
+        out.resize(240);
+    for (char& c : out)
+    {
+        if (c == '\r' || c == '\n' || static_cast<unsigned char>(c) < 0x20)
+            c = ' ';
+    }
+
+    // Curl's error buffer can include an effective URL. Hide query strings
+    // so account tokens never enter production logs.
+    size_t scheme = 0;
+    while ((scheme = out.find("://", scheme)) != std::string::npos)
+    {
+        const size_t urlEnd = out.find_first_of(" \t\"'", scheme + 3);
+        const size_t query = out.find('?', scheme + 3);
+        if (query != std::string::npos && (urlEnd == std::string::npos || query < urlEnd))
+        {
+            const size_t queryEnd = urlEnd == std::string::npos ? out.size() : urlEnd;
+            std::fill(out.begin() + query, out.begin() + queryEnd, '*');
+        }
+        scheme += 3;
+    }
+    return out;
+}
+
+static long long curlTimeUs(CURL* curl, CURLINFO info)
+{
+    curl_off_t value = -1;
+    if (curl_easy_getinfo(curl, info, &value) != CURLE_OK)
+        return -1;
+    return static_cast<long long>(value);
+}
+
+static void logNetworkStateThrottled(const std::string& host)
+{
+    using Clock = std::chrono::steady_clock;
+    static std::mutex mutex;
+    static Clock::time_point lastLog;
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        const auto now = Clock::now();
+        if (lastLog.time_since_epoch().count() != 0 && now - lastLog < std::chrono::seconds(5))
+            return;
+        lastLog = now;
+    }
+
+    const Result initRc = nifmInitialize(NifmServiceType_User);
+    if (R_FAILED(initRc))
+    {
+        brls::Logger::warning("[NET] state host={} nifm_init=0x{:08x}", host,
+            static_cast<unsigned int>(initRc));
+        return;
+    }
+
+    NifmInternetConnectionType type = NifmInternetConnectionType_WiFi;
+    NifmInternetConnectionStatus status = NifmInternetConnectionStatus_ConnectingUnknown1;
+    uint32_t strength = 0;
+    uint32_t address = 0;
+    uint32_t mask = 0;
+    uint32_t gateway = 0;
+    uint32_t dns1 = 0;
+    uint32_t dns2 = 0;
+
+    const Result statusRc = nifmGetInternetConnectionStatus(&type, &strength, &status);
+    const Result configRc = nifmGetCurrentIpConfigInfo(&address, &mask, &gateway, &dns1, &dns2);
+    nifmExit();
+
+    brls::Logger::warning(
+        "[NET] state host={} status_rc=0x{:08x} config_rc=0x{:08x} type={} status={} strength={} "
+        "ip={} mask={} gateway={} dns1={} dns2={}",
+        host, static_cast<unsigned int>(statusRc), static_cast<unsigned int>(configRc),
+        static_cast<int>(type), static_cast<int>(status), strength,
+        ipv4String(address), ipv4String(mask), ipv4String(gateway),
+        ipv4String(dns1), ipv4String(dns2));
+}
+
+static void logCurlFailure(CURL* curl, CURLcode result, const char* detail,
+    const HttpRequest& request)
+{
+    long osErrno = 0;
+    long responseCode = 0;
+    long primaryPort = 0;
+    long localPort = 0;
+    long connections = 0;
+    char* primaryIp = nullptr;
+    char* localIp = nullptr;
+
+    curl_easy_getinfo(curl, CURLINFO_OS_ERRNO, &osErrno);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
+    curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &primaryIp);
+    curl_easy_getinfo(curl, CURLINFO_PRIMARY_PORT, &primaryPort);
+    curl_easy_getinfo(curl, CURLINFO_LOCAL_IP, &localIp);
+    curl_easy_getinfo(curl, CURLINFO_LOCAL_PORT, &localPort);
+    curl_easy_getinfo(curl, CURLINFO_NUM_CONNECTS, &connections);
+
+    const std::string host = urlHost(request.url);
+    const std::string osText = osErrno != 0
+        ? safeDiagnosticText(std::strerror(static_cast<int>(osErrno))) : "-";
+    brls::Logger::error(
+        "[NET] curl_fail host={} code={} reason=\"{}\" detail=\"{}\" os_errno={} os_error=\"{}\" "
+        "http={} primary={}:{} local={}:{} reused={} fresh={} new_connections={} "
+        "dns_us={} tcp_us={} tls_us={} total_us={}",
+        host, static_cast<int>(result), curl_easy_strerror(result), safeDiagnosticText(detail),
+        osErrno, osText, responseCode, primaryIp ? primaryIp : "-", primaryPort,
+        localIp ? localIp : "-", localPort, request.reuseHandle != nullptr,
+        request.freshConnect, connections,
+        curlTimeUs(curl, CURLINFO_NAMELOOKUP_TIME_T),
+        curlTimeUs(curl, CURLINFO_CONNECT_TIME_T),
+        curlTimeUs(curl, CURLINFO_APPCONNECT_TIME_T),
+        curlTimeUs(curl, CURLINFO_TOTAL_TIME_T));
+    logNetworkStateThrottled(host);
 }
 
 void httpMarkConnectionsStale()
@@ -235,6 +372,7 @@ HttpResponse httpPerform(const HttpRequest& request)
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK)
     {
+        logCurlFailure(curl, res, errorBuffer, request);
         response.error = errorBuffer[0] != '\0'
             ? std::string(errorBuffer)
             : std::string(curl_easy_strerror(res));
