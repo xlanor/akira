@@ -7,6 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
+#include <charconv>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -62,6 +63,7 @@ bool WireGuardManager::parseConfigFile(const std::string& path, WgConfig& cfg) {
     std::string privateKey, publicKey, endpoint, address, presharedKey;
     uint16_t port = 51820;
     uint16_t keepalive = 25;
+    uint16_t mtu = WG_DEFAULT_MTU;
 
     while (std::getline(file, line)) {
         if (line.empty() || line[0] == '#')
@@ -74,7 +76,25 @@ bool WireGuardManager::parseConfigFile(const std::string& path, WgConfig& cfg) {
             continue;
         }
 
-        if (line.find("PrivateKey") != std::string::npos) {
+        std::string key = line.substr(0, line.find('='));
+        size_t keyStart = key.find_first_not_of(" \t");
+        size_t keyEnd = key.find_last_not_of(" \t");
+        if (keyStart != std::string::npos)
+            key = key.substr(keyStart, keyEnd - keyStart + 1);
+
+        if (section == "Interface" && key == "MTU") {
+            std::string value = parseValue(line);
+            int parsed = 0;
+            auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
+            if (error != std::errc{} || end != value.data() + value.size() ||
+                parsed < WG_MIN_MTU || parsed > WG_MAX_MTU) {
+                lastError = std::format("Invalid MTU: expected {}-{}", WG_MIN_MTU, WG_MAX_MTU);
+                brls::Logger::error("WG: {}", lastError);
+                return false;
+            }
+            mtu = static_cast<uint16_t>(parsed);
+            brls::Logger::info("WG: configured MTU: {}", mtu);
+        } else if (line.find("PrivateKey") != std::string::npos) {
             privateKey = parseValue(line);
             brls::Logger::info("WG: found PrivateKey");
         } else if (line.find("PublicKey") != std::string::npos) {
@@ -159,6 +179,7 @@ bool WireGuardManager::parseConfigFile(const std::string& path, WgConfig& cfg) {
     strncpy(cfg.endpoint_host, endpoint.c_str(), sizeof(cfg.endpoint_host) - 1);
     cfg.endpoint_port = port;
     cfg.keepalive_interval = keepalive;
+    cfg.mtu = mtu;
     if (!presharedKey.empty()) {
         if (wg_key_from_base64(cfg.preshared_key, presharedKey.c_str()) != 0) {
             lastError = "Invalid PresharedKey format";
