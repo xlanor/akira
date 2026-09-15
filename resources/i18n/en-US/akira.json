@@ -765,6 +765,8 @@
     "install_failed": "Update install failed"
   },
   "network": {
+    "dns_failed": "Failed to lookup {} using DNS server {}. Remote and Cloud Features may not work. Please check your DNS settings.",
+    "dns_ok_in": "OK in {}s",
     "check_nat": "Check NAT Type",
     "testing": "Testing...",
     "nat_type": "NAT Type",

@@ -7,6 +7,7 @@
 #include <borealis.hpp>
 #include <borealis/core/thread_pool.hpp>
 #include <borealis/views/hint.hpp>
+#include <borealis/views/dialog.hpp>
 #include <borealis/views/widgets/battery.hpp>
 #include <borealis/views/widgets/wireless.hpp>
 #include <SDL2/SDL.h>
@@ -19,6 +20,7 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <memory>
 
 #include <chiaki/common.h>
 #include <chiaki/log.h>
@@ -27,6 +29,7 @@
 #include "ui/theme.hpp"
 #include "util/http.hpp"
 #include "util/http_pool.hpp"
+#include "util/sony_dns_checker.hpp"
 
 #include "views/host_list_tab.hpp"
 #include "views/vendored/switchfin/recycling_grid.hpp"
@@ -101,6 +104,98 @@ static std::string getAppVersion() {
         }
     }
     return "";
+}
+
+// Borealis dismisses a Dialog before invoking its button callback. Disable
+// the actual A/touch action until the deadline, not merely the button style.
+class DelayedDnsWarningDialog final : public brls::Dialog {
+    struct LiveState {
+        DelayedDnsWarningDialog* dialog = nullptr;
+    };
+
+    std::shared_ptr<LiveState> liveState = std::make_shared<LiveState>();
+    std::chrono::steady_clock::time_point openedAt;
+    int lastRemaining = -1;
+
+    int remainingSeconds() const {
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - openedAt).count();
+        return akira::net::secondsUntilDnsWarningOk(elapsed);
+    }
+
+    void updateCountdown() {
+        const int remaining = remainingSeconds();
+        if (remaining == lastRemaining)
+            return;
+        lastRemaining = remaining;
+        button1->setText(remaining > 0
+            ? brls::getStr("akira/network/dns_ok_in", remaining)
+            : brls::getStr("akira/common/ok"));
+        button1->setState(remaining > 0
+            ? brls::ButtonState::DISABLED : brls::ButtonState::ENABLED);
+        button1->setActionAvailable(brls::BUTTON_A, remaining == 0);
+    }
+
+public:
+    explicit DelayedDnsWarningDialog(std::string message)
+        : brls::Dialog(std::move(message)) {
+        liveState->dialog = this;
+        setCancelable(false);
+        addButton(brls::getStr("akira/common/ok"), [] {});
+        button1->setActionAvailable(brls::BUTTON_A, false);
+        button1->setState(brls::ButtonState::DISABLED);
+    }
+
+    ~DelayedDnsWarningDialog() override { liveState->dialog = nullptr; }
+
+    void show() {
+        openedAt = std::chrono::steady_clock::now();
+        updateCountdown();
+        const std::weak_ptr<LiveState> weakState = liveState;
+        brls::Application::getRunLoopEvent()->subscribe([weakState] {
+            if (const auto state = weakState.lock(); state && state->dialog)
+                state->dialog->updateCountdown();
+        });
+        open();
+    }
+};
+
+static void startSonyDnsStartupCheck() {
+    if (SettingsManager::getInstance()->isLegacyProfileActive())
+        return;
+
+    brls::async([] {
+        const auto report = akira::net::checkSonyDnsAtStartup();
+        if (!report.failed())
+            return;
+
+        std::string failedDomain;
+        std::string failedServer;
+        // Prefer a concrete poisoned DNS answer over an ambiguous timeout.
+        for (const auto verdict : {akira::net::DnsVerdict::Blocked,
+                                   akira::net::DnsVerdict::Inconclusive}) {
+            for (const auto& server : report.servers) {
+                for (size_t i = 0; i < server.domains.size(); ++i) {
+                    if (server.domains[i] != verdict)
+                        continue;
+                    failedDomain = akira::net::SonyDnsDomains[i];
+                    failedServer = server.address;
+                    break;
+                }
+                if (!failedDomain.empty())
+                    break;
+            }
+            if (!failedDomain.empty())
+                break;
+        }
+        brls::Logger::warning("[NET] Sony DNS check failed domain={} server={}",
+            failedDomain, failedServer);
+        brls::sync([failedDomain = std::move(failedDomain),
+                    failedServer = std::move(failedServer)] {
+            (new DelayedDnsWarningDialog(
+                brls::getStr("akira/network/dns_failed", failedDomain, failedServer)))->show();
+        });
+    }, true);
 }
 
 void initCustomTheme()
@@ -573,6 +668,7 @@ int main(int argc, char* argv[])
     if (appletType == AppletType_Application)
     {
         brls::Application::pushActivity(new MainActivity());
+        startSonyDnsStartupCheck();
         psn::TokenRefresher::instance().start();
     }
     else
