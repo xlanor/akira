@@ -584,9 +584,7 @@ int Host::initSessionWithHolepunch(Session* streamSession, ChiakiHolepunchSessio
             success = success && udp9302Port;
             brls::Logger::info("Host::initSession: PS5 relays TCP:{} UDP9295:{} UDP9296:{} UDP9297:{} UDP9302:{}", tcpPort, udp9295Port, udp9296Port, udp9297Port, udp9302Port);
         } else {
-            uint16_t udp987Port = wg.startUdpRelay(hostAddr, 987, 987);
-            success = success && udp987Port;
-            brls::Logger::info("Host::initSession: PS4 relays TCP:{} UDP987:{} UDP9295:{} UDP9296:{} UDP9297:{}", tcpPort, udp987Port, udp9295Port, udp9296Port, udp9297Port);
+            brls::Logger::info("Host::initSession: PS4 relays TCP:{} UDP9295:{} UDP9296:{} UDP9297:{}", tcpPort, udp9295Port, udp9296Port, udp9297Port);
         }
         if (success) {
             effectiveHost = "127.0.0.1";
