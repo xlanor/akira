@@ -1,6 +1,6 @@
 # Akira
 
-![HOS-Supported](https://img.shields.io/badge/HOS_Version-22.5.0-green) ![Atmosphere](https://img.shields.io/badge/Atmosphere-1.11.2-cyan) ![libnx](https://img.shields.io/badge/libnx-4.12.0-magenta)
+![HOS-Supported](https://img.shields.io/badge/HOS_Version-22.5.0-green) ![Atmosphere](https://img.shields.io/badge/Atmosphere-1.11.2-cyan) ![libnx](https://img.shields.io/badge/libnx-4.12.0-magenta) [![chiaki-ng discord](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2FtAMbRuwXDH%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&label=chiaki-ng%20discord&logo=discord&color=5865F2)](https://discord.gg/tAMbRuwXDH)
 
 Akira is a hombrew application built with xfangfang's fork of [borealis](https://github.com/xfangfang/borealis) that utilises a forked variant of [chiaki-ng](https://github.com/streetpea/chiaki-ng) on the Nintendo Switch.
 
@@ -76,14 +76,13 @@ Please read the docs at [xlanor.github.io/akira](https://xlanor.github.io/akira)
 </p>
 
 <p align="center" width="100%">
-  <img src="readme/akira_ingame_debug.jpg" width="49%" alt="Debug overlay during a stream showing requested versus rendered 1080p60 HEVC, dropped and faked frames, and live packet loss">
-  <img src="readme/akira_ingame_debug_2.jpg" width="49%" alt="Debug overlay showing 1080p60 HEVC at 20000 kbps with zero dropped frames">
+  <img src="readme/akira_ingame_ac_odyssey_20260915.jpg" width="49%" alt="Akira streaming Assassin's Creed Odyssey with the in-game stats overlay">
+  <img src="readme/akira_ingame_hogwarts_1_20260915.jpg" width="49%" alt="Akira streaming Hogwarts Legacy while flying toward the castle">
 </p>
 
 <p align="center" width="100%">
-  <img src="readme/akira_ingame_spiderman_1.jpg" width="32%" alt="Marvel's Spider-Man 2 streaming over Downtown Queens">
-  <img src="readme/akira_ingame_jedi_1.jpg" width="32%" alt="Star Wars Jedi: Survivor at sunset">
-  <img src="readme/akira_ingame_ac_1.jpg" width="32%" alt="Assassin's Creed Syndicate above the London rooftops">
+  <img src="readme/akira_ingame_hogwarts_2_20260915.jpg" width="49%" alt="Akira streaming Hogwarts Legacy above Hogwarts castle">
+  <img src="readme/akira_ingame_spiderman_20260915.jpg" width="49%" alt="Akira streaming Marvel's Spider-Man 2 over Greenwich">
 </p>
 
 <p align="center">
@@ -119,4 +118,3 @@ This software was built with reference/code from:
 - H0neyBadger for the initial switch port, as well as all switch/chiaki contributors especially Egoistically and kkwong
 - [micro-ecc](https://github.com/kmackay/micro-ecc) for the ECDH implementation that was vendored in.
 - [vecteezy](https://www.vecteezy.com/vector-art/67445984-adorable-capybara-illustration-enjoying-a-drink) for the capybara logo.
-
