@@ -13,6 +13,10 @@ std::string cloudSummary(const cloud::Status& status)
     {
         case cloud::Availability::Ready:
             return "akira/cloud/chip_ready"_i18n;
+        case cloud::Availability::CatalogAvailable:
+            return "akira/cloud/chip_catalog"_i18n;
+        case cloud::Availability::SubscriptionRequired:
+            return "akira/cloud/chip_unavailable"_i18n;
         case cloud::Availability::Warning:
             return "akira/cloud/chip_warning"_i18n;
         case cloud::Availability::Empty:
@@ -107,8 +111,10 @@ void ProfileChipView::refresh() {
     {
         case cloud::Availability::Ready: dotColor = pal.success; break;
         case cloud::Availability::Checking: dotColor = pal.accent; break;
+        case cloud::Availability::CatalogAvailable:
         case cloud::Availability::Warning:
         case cloud::Availability::LaunchBlocked: dotColor = pal.warning; break;
+        case cloud::Availability::SubscriptionRequired: dotColor = pal.danger; break;
         case cloud::Availability::Error: dotColor = pal.danger; break;
         default: dotColor = pal.textDim; break;
     }

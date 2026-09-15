@@ -30,6 +30,11 @@ bool parseGame(json_object* obj, Game& out)
     out.storeProductId = psn::jsonString(obj, "storeProductId");
     out.conceptUrl = psn::jsonString(obj, "conceptUrl");
     out.plusCatalog = psn::jsonBool(obj, "plusCatalog");
+    // A PS5 entitlement matched to Sony's main streaming catalog is a strong
+    // initial signal. Confirmed per-profile launch outcomes are applied later by
+    // Service and still override this hint in either direction.
+    if (out.isOwned && out.serviceType == "pscloud" && psn::jsonBool(obj, "streamingSupported"))
+        out.streamabilityStatus = StreamabilityStatus::Streamable;
 
     return !out.productId.empty() && !out.name.empty();
 }
@@ -164,19 +169,17 @@ bool parseCatalog(const std::string& json, Catalog& out)
 
     std::vector<Game> deduped;
     deduped.reserve(out.games.size());
-    std::unordered_map<std::string, size_t> byConcept;
+    std::unordered_map<std::string, size_t> byIdentity;
     for (Game& game : out.games)
     {
-        if (game.conceptId.empty())
+        // conceptId alone is not a game identity: Sony assigns one concept to
+        // distinct releases such as TimeSplitters 1, 2 and Future Perfect. Mirror
+        // CloudPad's adapter identity and only collapse an exact route duplicate.
+        std::string identity = game.productId + "|" + game.platform + "|" + game.serviceType;
+        auto it = byIdentity.find(identity);
+        if (it == byIdentity.end())
         {
-            deduped.push_back(std::move(game));
-            continue;
-        }
-
-        auto it = byConcept.find(game.conceptId);
-        if (it == byConcept.end())
-        {
-            byConcept.emplace(game.conceptId, deduped.size());
+            byIdentity.emplace(std::move(identity), deduped.size());
             deduped.push_back(std::move(game));
         }
         else if (!deduped[it->second].launchable() && game.launchable())
@@ -206,6 +209,8 @@ LaunchFailureKind classifyLaunchFailure(const std::string& errorMessage)
         return LaunchFailureKind::AuthorizationFailed;
     if (errorMessage == "PS_PLUS_SUBSCRIPTION_REQUIRED")
         return LaunchFailureKind::PsPlusRequired;
+    if (errorMessage.find("noGameForEntitlement") != std::string::npos)
+        return LaunchFailureKind::GameNotStreamable;
     if (errorMessage.rfind("ACCOUNT_PRIVACY_SETTINGS", 0) == 0)
         return LaunchFailureKind::PrivacySettings;
     if (errorMessage == "PING_TIMEOUT")

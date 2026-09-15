@@ -1,6 +1,9 @@
 #ifndef AKIRA_CLOUD_CONNECT_TASK_HPP
 #define AKIRA_CLOUD_CONNECT_TASK_HPP
 
+#include <atomic>
+#include <memory>
+#include <mutex>
 #include <string>
 
 #include "cloud/models.hpp"
@@ -16,19 +19,27 @@ namespace cloud {
 class CloudConnectTask : public akira::views::ConnectTask {
 public:
     CloudConnectTask(const Game& game, bool skipAttr);
+    ~CloudConnectTask() override;
 
     std::string title() const override;
     const char* logKind() const override { return "cloud"; }
 
     void start(akira::views::ConnectSink& sink) override;
+    void cancel() override;
 
     bool presentFailure(const std::string& error,
                         akira::views::ConnectSink& sink) override;
 
 private:
+    struct CallbackState {
+        std::mutex mutex;
+        akira::views::ConnectSink* sink = nullptr;
+        std::atomic<bool> cancelled{false};
+    };
+
     Game game;
     bool skipAttr = false;
-    akira::views::ConnectSink* sink = nullptr;
+    std::shared_ptr<CallbackState> callbackState = std::make_shared<CallbackState>();
 
     void provision();
 };

@@ -56,6 +56,12 @@
                     marginLeft="15"
                     marginRight="15"/>
 
+                <brls:DetailCell
+                    id="settings/logBrowser"
+                    title="@i18n/akira/settings/dev_logs"
+                    marginLeft="15"
+                    marginRight="15"/>
+
             </brls:Box>
 
         </brls:Box>
